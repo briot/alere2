@@ -4,11 +4,16 @@ use alere_lib::kmymoney::KmyMoneyImporter;
 use alere_lib::multi_values::MultiValue;
 use std::path::Path;
 
-fn truncate(s: &str, max_width: usize) -> &str {
+fn trunc_keep_last(s: &str, max_width: usize) -> &str {
     s.char_indices()
         .rev()
         .nth(max_width - 1)
         .map_or_else(|| s, |(i, _)| &s[i..])
+}
+fn trunc_keep_first(s: &str, max_width: usize) -> &str {
+    s.char_indices()
+        .nth(max_width)
+        .map_or_else(|| s, |(i, _)| &s[..i])
 }
 
 fn main() {
@@ -18,10 +23,10 @@ fn main() {
             println!("Error {:?}", e);
         }
         Ok(repo) => {
-            const MAX_WIDTH: usize = 30;
-            let mut market = repo.market_prices(
-                repo.find_commodity("Euro")
-            );
+            const COL_ACCOUNT: usize = 30;
+            const COL_VALUE: usize = 17;
+
+            let mut market = repo.market_prices(repo.find_commodity("Euro"));
             let bal = repo.balance();
 
             let mut lines = vec![];
@@ -40,19 +45,24 @@ fn main() {
             for (acc, val, market_val) in lines {
                 total += &market_val;
                 println!(
-                    "{:<0width$} {:>17} {:>17}",
-                    truncate(&acc, MAX_WIDTH),
-                    repo.display_multi_value(val),
-                    repo.display_multi_value(&market_val),
-                    width = MAX_WIDTH,
+                    "{:<0awidth$} {:>0vwidth$} {:>0vwidth$}",
+                    trunc_keep_last(&acc, COL_ACCOUNT),
+                    trunc_keep_first(&repo.display_multi_value(val), COL_VALUE),
+                    trunc_keep_first(
+                        &repo.display_multi_value(&market_val),
+                        COL_VALUE
+                    ),
+                    awidth = COL_ACCOUNT,
+                    vwidth = COL_VALUE,
                 );
             }
             println!(
-                "{:<0width$} {:>17} {:>17}",
+                "{:<0awidth$} {:>0vwidth$} {:>0vwidth$}",
                 "== Total ==",
                 "",
-                repo.display_multi_value(&total),
-                width = MAX_WIDTH
+                trunc_keep_first(&repo.display_multi_value(&total), COL_VALUE),
+                awidth = COL_ACCOUNT,
+                vwidth = COL_VALUE,
             );
         }
     }

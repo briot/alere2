@@ -54,6 +54,11 @@ impl MultiValue {
             commodity: *c,
         })
     }
+
+    pub fn split(&mut self, ratio: Decimal, commodity: &CommodityId) {
+        let mut v = self.values.get_mut(commodity).unwrap();
+        v *= ratio;
+    }
 }
 
 impl core::ops::Add<Value> for MultiValue {

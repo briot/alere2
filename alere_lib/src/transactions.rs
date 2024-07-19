@@ -65,9 +65,7 @@ pub enum Quantity {
 
     // There were some dividends for one of the stocks   The amount will be
     // visible in other splits.
-    Dividend {
-        commodity: CommodityId,
-    },
+    Dividend(Value),
 
     // Used for stock splits.  The number of shares is multiplied by the ratio,
     // and their value divided by the same ratio.

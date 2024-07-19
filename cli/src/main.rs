@@ -1,7 +1,8 @@
 use alere_lib::accounts::AccountNameKind;
 use alere_lib::importers::Importer;
 use alere_lib::kmymoney::KmyMoneyImporter;
-use alere_lib::multi_values::MultiValue;
+use alere_lib::multi_values::{MultiValue, Value};
+use rust_decimal::Decimal;
 use std::path::Path;
 
 fn trunc_keep_last(s: &str, max_width: usize) -> &str {
@@ -45,12 +46,20 @@ fn main() {
             for (acc, val, market_val) in lines {
                 total += &market_val;
                 println!(
-                    "{:<0awidth$} {:>0vwidth$} {:>0vwidth$}",
+                    "{:<0awidth$} {:>0vwidth$} {:>0vwidth$} {:>0vwidth$}",
                     trunc_keep_last(&acc, COL_ACCOUNT),
                     trunc_keep_first(&repo.display_multi_value(val), COL_VALUE),
                     trunc_keep_first(
                         &repo.display_multi_value(&market_val),
                         COL_VALUE
+                    ),
+                    trunc_keep_first(
+                        &market.get_prices(val)
+                            .iter()
+                            .map(|v| repo.display_value(v))
+                            .collect::<Vec<String>>()
+                            .join(" + "),
+                        COL_VALUE,
                     ),
                     awidth = COL_ACCOUNT,
                     vwidth = COL_VALUE,

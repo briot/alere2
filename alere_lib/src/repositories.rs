@@ -227,6 +227,9 @@ impl Repository {
     pub fn display_multi_value(&self, value: &MultiValue) -> String {
         value.display(&self.commodities)
     }
+    pub fn display_value(&self, value: &Value) -> String {
+        value.display(&self.commodities)
+    }
 
     pub fn market_prices(
         &self,
@@ -259,6 +262,12 @@ impl Repository {
                             .and_modify(|v| *v += shares)
                             .or_insert_with(|| MultiValue::from_value(shares));
                     }
+//                    Quantity::Dividend(value) => {
+//                        println!("MANU dividend {:?}", value);
+//                        bal.entry(s.account)
+//                            .and_modify(|v| *v += value)
+//                            .or_insert_with(|| MultiValue::from_value(value));
+//                    }
                     _ => {}
                 };
             }
@@ -322,5 +331,16 @@ impl<'a> MarketPrices<'a> {
             result += self.convert_value(&v);
         }
         result
+    }
+
+    pub fn get_prices(&mut self, value: &MultiValue) -> Vec<Value> {
+        match self.to_commodity {
+            None    => vec![],
+            Some(c) =>
+                value.iter()
+                    .filter(|v| v.commodity != c)
+                    .map(|v| self.convert_value(&Value::new(Decimal::ONE, v.commodity)))
+                    .collect()
+        }
     }
 }

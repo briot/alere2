@@ -19,7 +19,10 @@ impl CommodityCollection {
     }
 
     pub fn find(&self, name: &str) -> Option<CommodityId> {
-        self.0.iter().enumerate().find(|(_, c)| c.name == name)
+        self.0
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.name == name)
             .map(|(id, _)| CommodityId(id as u16 + 1))
     }
 }
@@ -75,7 +78,7 @@ pub struct Commodity {
     pub quote_currency: Option<CommodityId>,
 
     /// Number of digits in the fractional part
-    pub precision: u8,
+    pub display_precision: u8,
 }
 
 impl Commodity {
@@ -85,7 +88,7 @@ impl Commodity {
         symbol_after: &str,
         is_currency: bool,
         quote_symbol: Option<&str>,
-        precision: u8,
+        display_precision: u8,
     ) -> Self {
         Commodity {
             name: name.into(),
@@ -95,7 +98,7 @@ impl Commodity {
             quote_symbol: quote_symbol.map(str::to_string),
             quote_source: None,
             quote_currency: None,
-            precision,
+            display_precision,
         }
     }
 
@@ -109,7 +112,7 @@ impl Commodity {
             } else {
                 " "
             },
-            value,
+            value.trunc_with_scale(self.display_precision as u32),
             if self.symbol_after.is_empty() {
                 ""
             } else {

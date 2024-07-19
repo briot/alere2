@@ -182,6 +182,9 @@ impl Repository {
     pub fn get_account_mut(&mut self, id: AccountId) -> Option<&mut Account> {
         self.accounts.get_mut(id)
     }
+    pub fn get_account(&self, id: AccountId) -> Option<&Account> {
+        self.accounts.get(id)
+    }
     pub fn get_account_name(
         &self,
         id: AccountId,
@@ -197,13 +200,16 @@ impl Repository {
     pub fn add_commodity(&mut self, comm: Commodity) -> CommodityId {
         self.commodities.add(comm)
     }
+    pub fn get_commodity(&self, id: CommodityId) -> Option<&Commodity> {
+        self.commodities.get(id)
+    }
     pub fn find_commodity(&self, name: &str) -> Option<CommodityId> {
         self.commodities.find(name)
     }
 
     /// Returns the display precision for a given commodity.
-    pub fn get_precision(&self, id: &CommodityId) -> u8 {
-        self.commodities.get(*id).unwrap().precision
+    pub fn get_display_precision(&self, id: &CommodityId) -> u8 {
+        self.commodities.get(*id).unwrap().display_precision
     }
 
     pub fn add_payee(&mut self, id: PayeeId, payee: Payee) {
@@ -222,7 +228,10 @@ impl Repository {
         value.display(&self.commodities)
     }
 
-    pub fn market_prices(&self, to_commodity: Option<CommodityId>) -> MarketPrices {
+    pub fn market_prices(
+        &self,
+        to_commodity: Option<CommodityId>,
+    ) -> MarketPrices {
         MarketPrices::new(self, to_commodity)
     }
 
@@ -276,23 +285,22 @@ impl<'a> MarketPrices<'a> {
     /// Return the current market price for commodity, given in to_commodity.
     /// Market acts as a cache.
     /// If to_commodity is None, no conversion is made.
-    pub fn convert_value(
-        &mut self,
-        value: &Value,
-    ) -> Value {
+    pub fn convert_value(&mut self, value: &Value) -> Value {
         match self.to_commodity {
             None => *value,
             Some(c) if c == value.commodity => *value,
             Some(c) => {
-                let m = self.cache
-                    .entry(value.commodity)
-                    .or_insert_with(|| {
-                        println!("MANU search for xrate {:?}", self.to_commodity);
-                        self.repo.prices.iter()
+                let m =
+                    self.cache.entry(value.commodity).or_insert_with(|| {
+                        self.repo
+                            .prices
+                            .iter()
                             .rev()
-                            .filter(|p|
+                            .filter(|p| {
                                 (p.target == c && p.origin == value.commodity)
-                                || (p.origin == c && p.target == value.commodity))
+                                    || (p.origin == c
+                                        && p.target == value.commodity)
+                            })
                             .nth(0)
                             .map(|p| {
                                 if p.target == c {
@@ -302,21 +310,17 @@ impl<'a> MarketPrices<'a> {
                                 }
                             })
                             .unwrap_or(Decimal::ZERO)
-                     });
+                    });
                 Value::new(*m * value.value, c)
             }
         }
     }
 
-    pub fn convert_multi_value(
-        &mut self,
-        value: &MultiValue,
-    ) -> MultiValue {
+    pub fn convert_multi_value(&mut self, value: &MultiValue) -> MultiValue {
         let mut result = MultiValue::default();
         for v in value.iter() {
             result += self.convert_value(&v);
         }
         result
     }
-
 }

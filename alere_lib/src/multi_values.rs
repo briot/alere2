@@ -41,10 +41,11 @@ impl MultiValue {
         result
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=Value> + '_ {
-        self.values
-            .iter()
-            .map(|(c, v)| Value {value: *v, commodity: *c})
+    pub fn iter(&self) -> impl Iterator<Item = Value> + '_ {
+        self.values.iter().map(|(c, v)| Value {
+            value: *v,
+            commodity: *c,
+        })
     }
 }
 

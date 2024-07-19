@@ -72,8 +72,8 @@ pub struct KmyMoneyImporter {
     account_kinds: HashMap<String, AccountKindId>,
     commodities: HashMap<String, CommodityId>,
     payees: HashMap<String, PayeeId>,
-    qty_scales: HashMap<CommodityId, i32>,
     price_precisions: HashMap<CommodityId, u8>,
+    account_currency: HashMap<String, CommodityId>,
     price_sources: HashMap<String, PriceSourceId>,
     repo: Repository,
 }
@@ -210,22 +210,28 @@ impl KmyMoneyImporter {
         let mut stream = query("SELECT * FROM kmmCurrencies").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             assert_eq!(row.get::<&str, _>("typeString"), "Currency");
+
+            // pricePrecision is used for the price of securities given in that
+            //    currency.  For instance, if we use pricePrecision=4 for EUR,
+            //    and have a price 13687/35, then we use 391.0571 and not
+            //    391.05.
+            // smallestAccountFraction (e.g. 100) is used for display purposes
+            //    so that we show only two fractional digits.
+
             let precision = row.get_unchecked::<u8, _>("pricePrecision");
+            let display_precision = row
+                .get_unchecked::<u32, _>("smallestAccountFraction")
+                .ilog10();
+
             let id = self.repo.add_commodity(Commodity::new(
                 row.get("name"),
                 "",                      // symbol_before
                 row.get("symbolString"), // symbol_after (could be symbol2)
                 true,                    // is_currency
                 row.get("ISOcode"),
-                precision,
+                display_precision as u8,
             ));
             self.commodities.insert(row.get("ISOcode"), id);
-            self.qty_scales.insert(
-                id,
-                row.get::<&str, _>("smallestAccountFraction")
-                    .parse()
-                    .unwrap(),
-            );
             self.price_precisions.insert(id, precision);
 
             // ??? Not imported
@@ -244,27 +250,23 @@ impl KmyMoneyImporter {
         let mut stream = query("SELECT * FROM kmmSecurities").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             let precision = row.get_unchecked::<u8, _>("pricePrecision");
-            let account_fraction =
-                row.get_unchecked::<u32, _>("smallestAccountFraction");
+            let display_precision = row
+                .get_unchecked::<u32, _>("smallestAccountFraction")
+                .ilog10();
+            let prec = if row.get::<&str, _>("typeString") == "Stock" {
+                display_precision as u8
+            } else {
+                precision
+            };
             let id = self.repo.add_commodity(Commodity::new(
                 row.get("name"),
                 "",                // symbol_before
                 row.get("symbol"), // symbol_after
                 false,             // is_currency
                 row.get("symbol"),
-                if row.get::<&str, _>("typeString") == "Stock" {
-                    f32::log10(account_fraction as f32) as u8
-                } else {
-                    precision
-                },
+                prec,
             ));
-            self.qty_scales.insert(
-                id,
-                row.get::<&str, _>("smallestAccountFraction")
-                    .parse()
-                    .unwrap(),
-            );
-            self.price_precisions.insert(id, precision);
+            self.price_precisions.insert(id, prec);
             let kmm_id: String = row.get("id");
             self.commodities.insert(kmm_id, id);
 
@@ -386,7 +388,8 @@ impl KmyMoneyImporter {
                 // (not needed) transactionCount
             ));
 
-            self.accounts.insert(row.get("id"), id);
+            self.accounts.insert(kmm_id.into(), id);
+            self.account_currency.insert(kmm_id.into(), currency);
 
             // Store the account's currency.  We do not have the same notion
             // in alere, where an account can contain multiple commodities.
@@ -559,9 +562,11 @@ impl KmyMoneyImporter {
             let account = *self.accounts.get(k_account).unwrap();
             let t = tx.get_mut(tid).unwrap();
             let account_currency_id = self.commodities.get(k_account).unwrap();
-            let account_precision =
-                self.repo.get_precision(account_currency_id);
-            let tx_precision = self.repo.get_precision(&t.0);
+            let account_precision = *self
+                .price_precisions
+                .get(self.account_currency.get(k_account).unwrap())
+                .unwrap();
+            let tx_precision = *self.price_precisions.get(&t.0).unwrap();
 
             match row.get::<Option<&str>, _>("checkNumber") {
                 None | Some("") => {}

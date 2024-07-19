@@ -242,6 +242,10 @@ impl Repository {
     /// commodity, using today's market prices, or in the original commodity.
     pub fn balance(&self) -> HashMap<AccountId, MultiValue> {
         let mut bal: HashMap<AccountId, MultiValue> = HashMap::new();
+
+        // ??? Transactions must be sorted, otherwise Split might multiply the
+        // wrong number of shares.
+
         for t in &self.transactions {
             for s in &t.splits {
                 let acc = self.accounts.get(s.account).unwrap();
@@ -262,6 +266,12 @@ impl Repository {
                             .and_modify(|v| *v += shares)
                             .or_insert_with(|| MultiValue::from_value(shares));
                     }
+                    Quantity::Split { ratio, commodity } => {
+                        bal.entry(s.account)
+                            .and_modify(|v| v.split(ratio, &commodity))
+                            .or_default();  // ??? Should be an error
+                    }
+
                     //                    Quantity::Dividend(value) => {
                     //                        println!("MANU dividend {:?}", value);
                     //                        bal.entry(s.account)

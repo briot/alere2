@@ -54,7 +54,8 @@ fn main() {
                         COL_VALUE
                     ),
                     trunc_keep_first(
-                        &market.get_prices(val)
+                        &market
+                            .get_prices(val)
                             .iter()
                             .map(|v| repo.display_value(v))
                             .collect::<Vec<String>>()

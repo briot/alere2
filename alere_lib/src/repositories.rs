@@ -6,7 +6,7 @@ use crate::institutions::{Institution, InstitutionId};
 use crate::multi_values::{MultiValue, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
-use crate::prices::Price;
+use crate::prices::{Price, PriceCollection};
 use crate::transactions::{Quantity, Transaction};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ pub struct Repository {
     commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
-    prices: Vec<Price>,
+    prices: PriceCollection,
     transactions: Vec<Transaction>,
 }
 
@@ -31,7 +31,7 @@ impl Default for Repository {
             commodities: Default::default(),
             payees: Default::default(),
             price_sources: Default::default(),
-            prices: Default::default(),
+            prices: PriceCollection::default(),
             transactions: Default::default(),
         };
         repo.add_account_kind(
@@ -217,7 +217,7 @@ impl Repository {
     }
 
     pub fn add_price(&mut self, price: Price) {
-        self.prices.push(price);
+        self.prices.add_historical(price);
     }
 
     pub fn add_transaction(&mut self, tx: Transaction) {
@@ -262,12 +262,12 @@ impl Repository {
                             .and_modify(|v| *v += shares)
                             .or_insert_with(|| MultiValue::from_value(shares));
                     }
-//                    Quantity::Dividend(value) => {
-//                        println!("MANU dividend {:?}", value);
-//                        bal.entry(s.account)
-//                            .and_modify(|v| *v += value)
-//                            .or_insert_with(|| MultiValue::from_value(value));
-//                    }
+                    //                    Quantity::Dividend(value) => {
+                    //                        println!("MANU dividend {:?}", value);
+                    //                        bal.entry(s.account)
+                    //                            .and_modify(|v| *v += value)
+                    //                            .or_insert_with(|| MultiValue::from_value(value));
+                    //                    }
                     _ => {}
                 };
             }
@@ -277,7 +277,7 @@ impl Repository {
 }
 
 pub struct MarketPrices<'a> {
-    cache: HashMap<CommodityId, Decimal>,
+    cache: HashMap<CommodityId, Option<Decimal>>,
     repo: &'a Repository,
     to_commodity: Option<CommodityId>,
 }
@@ -301,26 +301,16 @@ impl<'a> MarketPrices<'a> {
             Some(c) => {
                 let m =
                     self.cache.entry(value.commodity).or_insert_with(|| {
-                        self.repo
-                            .prices
-                            .iter()
-                            .rev()
-                            .filter(|p| {
-                                (p.target == c && p.origin == value.commodity)
-                                    || (p.origin == c
-                                        && p.target == value.commodity)
-                            })
-                            .nth(0)
-                            .map(|p| {
-                                if p.target == c {
-                                    p.price
-                                } else {
-                                    Decimal::ONE / p.price
-                                }
-                            })
-                            .unwrap_or(Decimal::ZERO)
+                        self.repo.prices.latest_price(
+                            value.commodity,
+                            c,
+                            self.repo.commodities.list_currencies(),
+                        )
                     });
-                Value::new(*m * value.value, c)
+                match m {
+                    None => *value,
+                    Some(m) => Value::new(*m * value.value, c),
+                }
             }
         }
     }
@@ -335,12 +325,14 @@ impl<'a> MarketPrices<'a> {
 
     pub fn get_prices(&mut self, value: &MultiValue) -> Vec<Value> {
         match self.to_commodity {
-            None    => vec![],
-            Some(c) =>
-                value.iter()
-                    .filter(|v| v.commodity != c)
-                    .map(|v| self.convert_value(&Value::new(Decimal::ONE, v.commodity)))
-                    .collect()
+            None => vec![],
+            Some(c) => value
+                .iter()
+                .filter(|v| v.commodity != c)
+                .map(|v| {
+                    self.convert_value(&Value::new(Decimal::ONE, v.commodity))
+                })
+                .collect(),
         }
     }
 }

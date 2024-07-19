@@ -2,24 +2,36 @@ use crate::price_sources::PriceSourceId;
 use rust_decimal::Decimal;
 
 #[derive(Default)]
-pub struct CommodityCollection(Vec<Commodity>);
+pub struct CommodityCollection {
+    commodities: Vec<Commodity>,
+    currencies: Vec<CommodityId>, // duplicates some of those in commodities
+}
 
 impl CommodityCollection {
     pub fn add(&mut self, commodity: Commodity) -> CommodityId {
-        self.0.push(commodity);
-        CommodityId(self.0.len() as u16)
+        let is_currency = commodity.is_currency;
+        self.commodities.push(commodity);
+        let id = CommodityId(self.commodities.len() as u16);
+        if is_currency {
+            self.currencies.push(id);
+        }
+        id
     }
 
     pub fn get_mut(&mut self, id: CommodityId) -> Option<&mut Commodity> {
-        self.0.get_mut(id.0 as usize - 1)
+        self.commodities.get_mut(id.0 as usize - 1)
     }
 
     pub fn get(&self, id: CommodityId) -> Option<&Commodity> {
-        self.0.get(id.0 as usize - 1)
+        self.commodities.get(id.0 as usize - 1)
+    }
+
+    pub fn list_currencies(&self) -> &Vec<CommodityId> {
+        &self.currencies
     }
 
     pub fn find(&self, name: &str) -> Option<CommodityId> {
-        self.0
+        self.commodities
             .iter()
             .enumerate()
             .find(|(_, c)| c.name == name)

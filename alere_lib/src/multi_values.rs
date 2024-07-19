@@ -14,9 +14,11 @@ impl Value {
     }
 
     pub fn display(&self, commodities: &CommodityCollection) -> String {
-        commodities.get(self.commodity).unwrap().display(&self.value)
+        commodities
+            .get(self.commodity)
+            .unwrap()
+            .display(&self.value)
     }
-
 }
 
 #[derive(Debug, Clone, Default)]

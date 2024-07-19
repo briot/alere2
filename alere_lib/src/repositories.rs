@@ -261,7 +261,7 @@ impl Repository {
                             .and_modify(|v| *v += value)
                             .or_insert_with(|| MultiValue::from_value(value));
                     }
-                    Quantity::Buy(shares) => {
+                    Quantity::Buy(shares) | Quantity::Reinvest(shares) => {
                         bal.entry(s.account)
                             .and_modify(|v| *v += shares)
                             .or_insert_with(|| MultiValue::from_value(shares));

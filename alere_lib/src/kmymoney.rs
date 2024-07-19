@@ -708,10 +708,10 @@ impl KmyMoneyImporter {
                             value,
                             *account_currency_id,
                         ))),
-                        Quantity::Reinvest {
+                        Quantity::Reinvest(Value::new(
                             shares,
-                            commodity: *account_currency_id,
-                        },
+                            *account_currency_id,
+                        )),
                     )
                 }
                 (None, _) => {

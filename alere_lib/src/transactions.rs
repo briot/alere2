@@ -58,10 +58,7 @@ pub enum Quantity {
     Buy(Value),
 
     // Reinvest dividends and buy shares
-    Reinvest {
-        shares: Decimal,
-        commodity: CommodityId,
-    },
+    Reinvest(Value),
 
     // There were some dividends for one of the stocks   The amount will be
     // visible in other splits.

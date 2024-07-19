@@ -112,7 +112,7 @@ impl Commodity {
             } else {
                 " "
             },
-            value.trunc_with_scale(self.display_precision as u32),
+            value.round_dp(self.display_precision as u32),
             if self.symbol_after.is_empty() {
                 ""
             } else {

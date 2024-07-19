@@ -640,9 +640,10 @@ impl KmyMoneyImporter {
                     //                    Decimal::ZERO
                     (
                         None,
-                        Quantity::Dividend {
-                            commodity: *account_currency_id,
-                        },
+                        Quantity::Dividend(Value::new(
+                            value,
+                            *account_currency_id,
+                        )),
                     )
                 }
                 (Some("Add"), None) => {

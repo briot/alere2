@@ -12,6 +12,11 @@ impl Value {
     pub fn new(value: Decimal, commodity: CommodityId) -> Self {
         Value { value, commodity }
     }
+
+    pub fn display(&self, commodities: &CommodityCollection) -> String {
+        commodities.get(self.commodity).unwrap().display(&self.value)
+    }
+
 }
 
 #[derive(Debug, Clone, Default)]

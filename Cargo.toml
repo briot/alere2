@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = [ "alere_lib", "cli" ]
+
+[workspace.dependencies]
+rust_decimal = "1.35"

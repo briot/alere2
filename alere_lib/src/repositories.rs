@@ -164,6 +164,15 @@ impl Default for Repository {
 }
 
 impl Repository {
+    // Re-arrange internal data structure for faster queries.  For instance
+    // ensures that things are sorted by dates when appropriate.
+    pub fn postprocess(&mut self) {
+
+        // ??? We should sort transactions, but they have no timestamps.  In
+        // fact, what counts is sorting the splits themselves, when we compute
+        // an account's balance at some point in time, for instance.
+    }
+
     pub fn add_account_kind(&mut self, kind: AccountKind) -> AccountKindId {
         self.account_kinds.add(kind)
     }
@@ -243,8 +252,8 @@ impl Repository {
     pub fn balance(&self) -> HashMap<AccountId, MultiValue> {
         let mut bal: HashMap<AccountId, MultiValue> = HashMap::new();
 
-        // ??? Transactions must be sorted, otherwise Split might multiply the
-        // wrong number of shares.
+        // ??? Splits must be sorted, for each account, otherwise Split might
+        // multiply the wrong number of shares.
 
         for t in &self.transactions {
             for s in &t.splits {
@@ -269,16 +278,13 @@ impl Repository {
                     Quantity::Split { ratio, commodity } => {
                         bal.entry(s.account)
                             .and_modify(|v| v.split(ratio, &commodity))
-                            .or_default();  // ??? Should be an error
+                            .or_default(); // ??? Should be an error
                     }
-
-                    //                    Quantity::Dividend(value) => {
-                    //                        println!("MANU dividend {:?}", value);
-                    //                        bal.entry(s.account)
-                    //                            .and_modify(|v| *v += value)
-                    //                            .or_insert_with(|| MultiValue::from_value(value));
-                    //                    }
-                    _ => {}
+                    Quantity::Dividend(value) => {
+                        bal.entry(s.account)
+                            .and_modify(|v| *v += value)
+                            .or_insert_with(|| MultiValue::from_value(value));
+                    }
                 };
             }
         }

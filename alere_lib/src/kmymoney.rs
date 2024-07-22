@@ -498,9 +498,7 @@ impl KmyMoneyImporter {
     ) -> Result<HashMap<String, (CommodityId, Transaction)>, Error> {
         let mut tx = HashMap::new();
 
-        let mut stream =
-            query("SELECT * FROM kmmTransactions ORDER BY postDate ASC")
-                .fetch(conn);
+        let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             assert_eq!(row.get::<&str, _>("txType"), "N");
             tx.insert(
@@ -566,7 +564,8 @@ impl KmyMoneyImporter {
                 .price_precisions
                 .get(self.account_currency.get(k_account).unwrap())
                 .unwrap();
-            let tx_precision = *self.price_precisions.get(&t.0).unwrap();
+            let tx_currency = &t.0;
+            let tx_precision = *self.price_precisions.get(tx_currency).unwrap();
 
             match row.get::<Option<&str>, _>("checkNumber") {
                 None | Some("") => {}
@@ -627,22 +626,27 @@ impl KmyMoneyImporter {
             let price = parse_price(row.get("price"), tx_precision)?;
             let value =
                 parse_price(row.get("value"), account_precision)?.unwrap();
+            let shares =
+                parse_price(row.get("shares"), account_precision)?.unwrap();
 
             let action: Option<&str> = row.get("action");
             let (value, orig_value) = match (action, price) {
                 (Some("Dividend" | "IntIncome"), _) => {
-                    // kmymoney sets "1.00" for the price, which does
-                    // not reflect the current price of the share at the
-                    // time, so better have nothing.
-                    // In kmymoney, foreign currencies are not supported
-                    // in transactions.
-                    //                    assert_eq!(value, shares);
-                    //                    Decimal::ZERO
+                    // kmymoney has three splits/accounts involved for dividends:
+                    // - the "Stock" account itself, which only registers there
+                    //   was a dividend, but has no relevant information.  This
+                    //   is the split marked as "action=Dividend".  The price is
+                    //   always marked as "1.00".
+                    // - the "Income" account which has a negative value equal
+                    //   to the total value of the dividend.  It also sets the
+                    //   "shares" column with the same value, not clear why.
+                    // - the user account into which the dividend is credit.
+                    //   Same information as above but positive value.
                     (
                         None,
                         Quantity::Dividend(Value::new(
-                            value,
-                            *account_currency_id,
+                            Decimal::ZERO,
+                            *tx_currency,
                         )),
                     )
                 }
@@ -652,9 +656,6 @@ impl KmyMoneyImporter {
                     //    if qty.is_sign_positive() { "Add shares" }
                     //    else { "Remove shared" }
                     //);
-                    let shares =
-                        parse_price(row.get("shares"), account_precision)?
-                            .unwrap();
                     (
                         None,
                         Quantity::Credit(Value::new(
@@ -664,14 +665,11 @@ impl KmyMoneyImporter {
                     )
                 }
                 (Some("Buy"), Some(p)) => {
-                    let shares =
-                        parse_price(row.get("shares"), account_precision)?
-                            .unwrap();
                     assert!((p * shares - value).abs() < dec!(0.01));
                     (
                         Some(Quantity::Credit(Value::new(
                             value,
-                            *account_currency_id,
+                            *tx_currency,
                         ))),
                         Quantity::Buy(Value::new(shares, *account_currency_id)),
                     )
@@ -700,13 +698,10 @@ impl KmyMoneyImporter {
                     )
                 }
                 (Some("Reinvest"), Some(_)) => {
-                    let shares =
-                        parse_price(row.get("shares"), account_precision)?
-                            .unwrap();
                     (
                         Some(Quantity::Credit(Value::new(
                             value,
-                            *account_currency_id,
+                            *tx_currency,
                         ))),
                         Quantity::Reinvest(Value::new(
                             shares,
@@ -719,10 +714,10 @@ impl KmyMoneyImporter {
                     (
                         Some(Quantity::Credit(Value::new(
                             value,
-                            *account_currency_id,
+                            *tx_currency,
                         ))),
                         Quantity::Credit(Value::new(
-                            value,
+                            shares,
                             *account_currency_id,
                         )),
                     )
@@ -786,6 +781,9 @@ impl KmyMoneyImporter {
         self.import_prices(&mut conn).await?;
         let tx = self.import_transactions(&mut conn).await?;
         self.import_splits(&mut conn, tx).await?;
+
+        self.repo.postprocess();
+
         Ok(self.repo)
     }
 }

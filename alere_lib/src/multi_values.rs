@@ -40,10 +40,12 @@ impl MultiValue {
     pub fn display(&self, commodities: &CommodityCollection) -> String {
         let mut result = String::new();
         for c in &self.values {
-            if !result.is_empty() {
-                result.push_str(" + ");
+            if *c.1 != Decimal::ZERO {
+                if !result.is_empty() {
+                    result.push_str(" + ");
+                }
+                result.push_str(&commodities.get(*c.0).unwrap().display(c.1));
             }
-            result.push_str(&commodities.get(*c.0).unwrap().display(c.1));
         }
         result
     }

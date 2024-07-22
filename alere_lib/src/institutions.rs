@@ -9,12 +9,12 @@ impl InstitutionId {
 
 #[derive(Debug)]
 pub struct Institution {
-    name: String, // Display name
-    manager: Option<String>,
-    street: Option<String>,
-    zip: Option<String>,
-    city: Option<String>,
-    phone: Option<String>,
+    _name: String, // Display name
+    _manager: Option<String>,
+    _street: Option<String>,
+    _zip: Option<String>,
+    _city: Option<String>,
+    _phone: Option<String>,
     icon: Option<String>, // URL to the icon
 }
 
@@ -28,12 +28,12 @@ impl Institution {
         phone: Option<&str>,
     ) -> Self {
         Institution {
-            name: name.into(),
-            manager: manager.map(|s| s.into()),
-            street: street.map(|s| s.into()),
-            zip: zip.map(|s| s.into()),
-            city: city.map(|s| s.into()),
-            phone: phone.map(|s| s.into()),
+            _name: name.into(),
+            _manager: manager.map(|s| s.into()),
+            _street: street.map(|s| s.into()),
+            _zip: zip.map(|s| s.into()),
+            _city: city.map(|s| s.into()),
+            _phone: phone.map(|s| s.into()),
             icon: None,
         }
     }

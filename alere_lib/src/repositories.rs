@@ -226,7 +226,7 @@ impl Repository {
     }
 
     pub fn add_price(&mut self, price: Price) {
-        self.prices.add_historical(price);
+        self.prices.add(price);
     }
 
     pub fn add_transaction(&mut self, tx: Transaction) {

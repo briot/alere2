@@ -3,4 +3,6 @@ resolver = "2"
 members = [ "alere_lib", "cli" ]
 
 [workspace.dependencies]
+chrono = { version = "0.4.23", features = ["serde"] }
+chrono-tz = "0.6.1"
 rust_decimal = "1.35"

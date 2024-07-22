@@ -471,9 +471,10 @@ impl KmyMoneyImporter {
                     .price_sources
                     .get(row.get::<&str, _>("priceSource"))
                     .unwrap();
-                self.repo.add_price(Price::new(
-                    *origin, *dest, timestamp, price, *source,
-                ));
+                self.repo.add_price(
+                    *origin,
+                    *dest,
+                    Price::new(timestamp, price, *source));
             }
         }
         Ok(())

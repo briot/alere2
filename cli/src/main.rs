@@ -2,6 +2,7 @@ use alere_lib::accounts::AccountNameKind;
 use alere_lib::importers::Importer;
 use alere_lib::kmymoney::KmyMoneyImporter;
 use alere_lib::multi_values::MultiValue;
+use chrono::Local;
 use std::path::Path;
 
 fn trunc_keep_last(s: &str, max_width: usize) -> &str {
@@ -26,6 +27,8 @@ fn main() {
             const COL_ACCOUNT: usize = 30;
             const COL_VALUE: usize = 17;
 
+            let now = Local::now();
+
             let mut market = repo.market_prices(repo.find_commodity("Euro"));
             let bal = repo.balance();
 
@@ -35,7 +38,7 @@ fn main() {
                     lines.push((
                         repo.get_account_name(*account, AccountNameKind::Full),
                         value,
-                        market.convert_multi_value(value),
+                        market.convert_multi_value(value, &now),
                     ));
                 }
             }
@@ -54,7 +57,7 @@ fn main() {
                     ),
                     trunc_keep_first(
                         &market
-                            .get_prices(val)
+                            .get_prices(val, &now)
                             .iter()
                             .map(|v| repo.display_value(v))
                             .collect::<Vec<String>>()

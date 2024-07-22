@@ -8,6 +8,7 @@ use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
 use crate::transactions::{Quantity, Transaction};
+use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -167,6 +168,7 @@ impl Repository {
     // Re-arrange internal data structure for faster queries.  For instance
     // ensures that things are sorted by dates when appropriate.
     pub fn postprocess(&mut self) {
+        self.prices.postprocess();
 
         // ??? We should sort transactions, but they have no timestamps.  In
         // fact, what counts is sorting the splits themselves, when we compute
@@ -225,8 +227,13 @@ impl Repository {
         self.payees.insert(id, payee);
     }
 
-    pub fn add_price(&mut self, price: Price) {
-        self.prices.add(price);
+    pub fn add_price(
+        &mut self,
+        origin: CommodityId,
+        target: CommodityId,
+        price: Price,
+    ) {
+        self.prices.add(origin, target, price);
     }
 
     pub fn add_transaction(&mut self, tx: Transaction) {
@@ -237,12 +244,13 @@ impl Repository {
                     if v.commodity != ov.commodity =>
                 {
                     // Register the price we paid
-                    self.add_price(Price::new(
+                    self.add_price(
                         ov.commodity,
                         v.commodity,
-                        s.post_ts,
-                        v.value / ov.value,
-                        PriceSourceId::Transaction,
+                        Price::new(
+                            s.post_ts,
+                            v.value / ov.value,
+                            PriceSourceId::Transaction,
                     ));
                 }
                 _ => {}
@@ -312,7 +320,7 @@ impl Repository {
 }
 
 pub struct MarketPrices<'a> {
-    cache: HashMap<CommodityId, Option<Decimal>>,
+    cache: HashMap<CommodityId, Option<Price>>,
     repo: &'a Repository,
     to_commodity: Option<CommodityId>,
 }
@@ -329,43 +337,52 @@ impl<'a> MarketPrices<'a> {
     /// Return the current market price for commodity, given in to_commodity.
     /// Market acts as a cache.
     /// If to_commodity is None, no conversion is made.
-    pub fn convert_value(&mut self, value: &Value) -> Value {
+    pub fn convert_value(&mut self, value: &Value, as_of: &DateTime<Local>) -> Value {
         match self.to_commodity {
             None => *value,
             Some(c) if c == value.commodity => *value,
             Some(c) => {
                 let m =
                     self.cache.entry(value.commodity).or_insert_with(|| {
-                        self.repo.prices.latest_price(
+                        self.repo.prices.price_as_of(
                             value.commodity,
                             c,
                             self.repo.commodities.list_currencies(),
+                            as_of,
                         )
                     });
                 match m {
-                    None => *value,
-                    Some(m) => Value::new(*m * value.value, c),
+                    None    => *value,
+                    Some(m) => Value::new(m.price * value.value, c),
                 }
             }
         }
     }
 
-    pub fn convert_multi_value(&mut self, value: &MultiValue) -> MultiValue {
+    pub fn convert_multi_value(
+        &mut self,
+        value: &MultiValue,
+        as_of: &DateTime<Local>,
+    ) -> MultiValue {
         let mut result = MultiValue::default();
         for v in value.iter() {
-            result += self.convert_value(&v);
+            result += self.convert_value(&v, as_of);
         }
         result
     }
 
-    pub fn get_prices(&mut self, value: &MultiValue) -> Vec<Value> {
+    pub fn get_prices(
+        &mut self,
+        value: &MultiValue,
+        as_of: &DateTime<Local>,
+    ) -> Vec<Value> {
         match self.to_commodity {
             None => vec![],
             Some(c) => value
                 .iter()
                 .filter(|v| v.commodity != c)
                 .map(|v| {
-                    self.convert_value(&Value::new(Decimal::ONE, v.commodity))
+                    self.convert_value(&Value::new(Decimal::ONE, v.commodity), as_of)
                 })
                 .collect(),
         }

@@ -3,6 +3,9 @@ pub enum PriceSourceId {
     // The price was computed from a transaction
     Transaction,
 
+    // Computing using a turnkey
+    Turnkey,
+
     // The price was downloaded from an external price source
     External(u16),
 }
@@ -10,7 +13,7 @@ pub enum PriceSourceId {
 impl PriceSourceId {
     pub fn inc(&self) -> PriceSourceId {
         match self {
-            PriceSourceId::Transaction => {
+            PriceSourceId::Turnkey | PriceSourceId::Transaction => {
                 panic!("Cannot increase PriceSource::Transaction")
             }
             PriceSourceId::External(id) => PriceSourceId::External(id + 1),

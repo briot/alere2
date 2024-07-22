@@ -230,6 +230,25 @@ impl Repository {
     }
 
     pub fn add_transaction(&mut self, tx: Transaction) {
+        // Register prices from transactions
+        for s in &tx.splits {
+            match (s.value, &s.original_value) {
+                (Some(v), Quantity::Buy(ov) | Quantity::Credit(ov))
+                    if v.commodity != ov.commodity =>
+                {
+                    // Register the price we paid
+                    self.add_price(Price::new(
+                        ov.commodity,
+                        v.commodity,
+                        s.post_ts,
+                        v.value / ov.value,
+                        PriceSourceId::Transaction,
+                    ));
+                }
+                _ => {}
+            }
+        }
+
         self.transactions.push(tx);
     }
 

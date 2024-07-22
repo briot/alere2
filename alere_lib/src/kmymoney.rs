@@ -193,7 +193,7 @@ impl KmyMoneyImporter {
     ) -> Result<(), Error> {
         let mut stream =
             query("SELECT DISTINCT priceSource FROM kmmPrices").fetch(conn);
-        let mut id = PriceSourceId::default();
+        let mut id = PriceSourceId::External(0);
         while let Some(row) = stream.try_next().await? {
             id = id.inc();
             let name: String = row.get("priceSource");
@@ -662,17 +662,8 @@ impl KmyMoneyImporter {
                 ),
                 (Some("Buy"), Some(p)) => {
                     assert!((p * shares - value).abs() < dec!(0.01));
-
-                    // Register the price we paid
-                    self.repo.add_price(Price::new(
-                        *account_currency_id,
-                        *tx_currency,
-                        post_ts,
-                        p,
-                        PriceSourceId::Transaction,
-                    ));
                     (
-                        Some(Quantity::Credit(Value::new(value, *tx_currency))),
+                        Some(Value::new(value, *tx_currency)),
                         Quantity::Buy(Value::new(shares, *account_currency_id)),
                     )
                 }
@@ -700,27 +691,16 @@ impl KmyMoneyImporter {
                     )
                 }
                 (Some("Reinvest"), Some(_)) => (
-                    Some(Quantity::Credit(Value::new(value, *tx_currency))),
+                    Some(Value::new(value, *tx_currency)),
                     Quantity::Reinvest(Value::new(
                         shares,
                         *account_currency_id,
                     )),
                 ),
                 (None, _) => {
-                    // Register the price we paid
-                    if tx_currency != account_currency_id {
-                        self.repo.add_price(Price::new(
-                            *account_currency_id,
-                            *tx_currency,
-                            post_ts,
-                            value / shares,
-                            PriceSourceId::Transaction,
-                        ));
-                    }
-
                     // Standard transaction, not for shares
                     (
-                        Some(Quantity::Credit(Value::new(value, *tx_currency))),
+                        Some(Value::new(value, *tx_currency)),
                         Quantity::Credit(Value::new(
                             shares,
                             *account_currency_id,

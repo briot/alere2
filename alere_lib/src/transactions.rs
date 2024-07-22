@@ -143,5 +143,5 @@ pub struct Split {
     //   split for the same transaction:
     //       split1: account=stock       value=1200 USD   original=10 AAPL
     //       split2: account=investment  value=-1200 USD  original=-1020 EUR
-    pub value: Option<Quantity>,
+    pub value: Option<Value>,
 }

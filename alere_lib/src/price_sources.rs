@@ -1,7 +1,6 @@
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum PriceSourceId {
     // The price was computed from a transaction
-    #[default]
     Transaction,
 
     // The price was downloaded from an external price source

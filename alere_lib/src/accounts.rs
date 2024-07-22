@@ -69,7 +69,7 @@ impl AccountId {
 #[derive(Debug)]
 pub struct Account {
     // Short name as displayed to users
-    name: String,
+    pub name: String,
 
     institution: Option<InstitutionId>,
     parent: Option<AccountId>,

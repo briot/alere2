@@ -1,8 +1,7 @@
 use alere_lib::accounts::AccountNameKind;
 use alere_lib::importers::Importer;
 use alere_lib::kmymoney::KmyMoneyImporter;
-use alere_lib::multi_values::{MultiValue, Value};
-use rust_decimal::Decimal;
+use alere_lib::multi_values::MultiValue;
 use std::path::Path;
 
 fn trunc_keep_last(s: &str, max_width: usize) -> &str {

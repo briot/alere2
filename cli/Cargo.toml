@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 alere_lib = { path = "../alere_lib", features = [ "kmymoney" ] }
-rust_decimal = "1.35"
+rust_decimal = { workspace = true }

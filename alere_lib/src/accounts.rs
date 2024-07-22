@@ -1,5 +1,6 @@
 use crate::account_kinds::AccountKindId;
 use crate::institutions::InstitutionId;
+// use crate::transactions::Split;
 use chrono::{DateTime, Local};
 
 pub enum AccountNameKind {
@@ -71,25 +72,28 @@ pub struct Account {
     // Short name as displayed to users
     pub name: String,
 
-    institution: Option<InstitutionId>,
+    _institution: Option<InstitutionId>,
     parent: Option<AccountId>,
-    description: Option<String>,
+    _description: Option<String>,
 
     // Only for actual IBAN, not free-form
-    iban: Option<String>,
+    _iban: Option<String>,
 
     // Any code used by the bank to identify the account
-    number: Option<String>,
+    _number: Option<String>,
 
     pub closed: bool,
 
     // When the account was opened
-    opened_on: Option<DateTime<Local>>,
+    _opened_on: Option<DateTime<Local>>,
 
     pub kind: AccountKindId,
+    // The chronologically-sorted list of splits for this account.
+    //    splits: Vec<std::rc::Rc<Split>>,
 }
 
 impl Account {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: &str,
         kind: AccountKindId,
@@ -105,12 +109,13 @@ impl Account {
             name: name.into(),
             kind,
             parent,
-            institution,
-            description: description.map(str::to_string),
-            iban: iban.map(str::to_string),
-            number: number.map(str::to_string),
+            _institution: institution,
+            _description: description.map(str::to_string),
+            _iban: iban.map(str::to_string),
+            _number: number.map(str::to_string),
             closed,
-            opened_on,
+            _opened_on: opened_on,
+            //            splits: vec![],
         }
     }
 

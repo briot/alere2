@@ -566,6 +566,12 @@ impl KmyMoneyImporter {
                 .unwrap();
             let tx_currency = &t.0;
             let tx_precision = *self.price_precisions.get(tx_currency).unwrap();
+            let post_ts = row
+                .get::<NaiveDate, _>("postDate")
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap();
 
             match row.get::<Option<&str>, _>("checkNumber") {
                 None | Some("") => {}
@@ -650,27 +656,23 @@ impl KmyMoneyImporter {
                         )),
                     )
                 }
-                (Some("Add"), None) => {
-                    //                    assert_eq!(value.value, Decimal::ZERO);
-                    //extra_msg.push_str(
-                    //    if qty.is_sign_positive() { "Add shares" }
-                    //    else { "Remove shared" }
-                    //);
-                    (
-                        None,
-                        Quantity::Credit(Value::new(
-                            shares,
-                            *account_currency_id,
-                        )),
-                    )
-                }
+                (Some("Add"), None) => (
+                    None,
+                    Quantity::Credit(Value::new(shares, *account_currency_id)),
+                ),
                 (Some("Buy"), Some(p)) => {
                     assert!((p * shares - value).abs() < dec!(0.01));
+
+                    // Register the price we paid
+                    self.repo.add_price(Price::new(
+                        *account_currency_id,
+                        *tx_currency,
+                        post_ts,
+                        p,
+                        PriceSourceId::Transaction,
+                    ));
                     (
-                        Some(Quantity::Credit(Value::new(
-                            value,
-                            *tx_currency,
-                        ))),
+                        Some(Quantity::Credit(Value::new(value, *tx_currency))),
                         Quantity::Buy(Value::new(shares, *account_currency_id)),
                     )
                 }
@@ -697,25 +699,28 @@ impl KmyMoneyImporter {
                         },
                     )
                 }
-                (Some("Reinvest"), Some(_)) => {
-                    (
-                        Some(Quantity::Credit(Value::new(
-                            value,
-                            *tx_currency,
-                        ))),
-                        Quantity::Reinvest(Value::new(
-                            shares,
-                            *account_currency_id,
-                        )),
-                    )
-                }
+                (Some("Reinvest"), Some(_)) => (
+                    Some(Quantity::Credit(Value::new(value, *tx_currency))),
+                    Quantity::Reinvest(Value::new(
+                        shares,
+                        *account_currency_id,
+                    )),
+                ),
                 (None, _) => {
+                    // Register the price we paid
+                    if tx_currency != account_currency_id {
+                        self.repo.add_price(Price::new(
+                            *account_currency_id,
+                            *tx_currency,
+                            post_ts,
+                            value / shares,
+                            PriceSourceId::Transaction,
+                        ));
+                    }
+
                     // Standard transaction, not for shares
                     (
-                        Some(Quantity::Credit(Value::new(
-                            value,
-                            *tx_currency,
-                        ))),
+                        Some(Quantity::Credit(Value::new(value, *tx_currency))),
                         Quantity::Credit(Value::new(
                             shares,
                             *account_currency_id,
@@ -735,12 +740,7 @@ impl KmyMoneyImporter {
                     2 => ReconcileKind::RECONCILED(rec_date),
                     _ => panic!("Invalid reconcile flag"),
                 },
-                post_ts: row
-                    .get::<NaiveDate, _>("postDate")
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap()
-                    .and_local_timezone(Local)
-                    .unwrap(),
+                post_ts,
                 original_value: orig_value,
                 value,
             };

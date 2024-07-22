@@ -17,7 +17,7 @@ pub struct PriceCollection {
 }
 
 impl PriceCollection {
-    pub fn add_historical(&mut self, price: Price) {
+    pub fn add(&mut self, price: Price) {
         self.latest
             .entry((price.origin, price.target))
             .and_modify(|(ts, v)| {
@@ -74,7 +74,7 @@ pub struct Price {
     pub target: CommodityId,
     timestamp: DateTime<Local>,
     pub price: Decimal,
-    source: PriceSourceId,
+    _source: PriceSourceId,
 }
 
 impl Price {
@@ -90,7 +90,7 @@ impl Price {
             target,
             timestamp,
             price,
-            source,
+            _source: source,
         }
     }
 }

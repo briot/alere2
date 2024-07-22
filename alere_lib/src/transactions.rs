@@ -34,16 +34,22 @@ pub struct Transaction {
 
     // The payee.  Though a transaction is made of multiple splits, users
     // typically think of it as applying to a single payee, even though extra
-    // splits might for instance involve taxes for instance.
+    // splits might involve taxes for instance.
     pub payee: Option<PayeeId>,
 
-    // When was the transaction entered in the database.
+    // When was the transaction entered in the database.  This might be totally
+    // different from the split's timestamp (which are when the split impacted
+    // the corresponding account).
     pub entry_date: DateTime<Local>,
 
     // ??? how does this apply to splits, which contain the timestamp
     //    pub scheduled: Option<String>,
     //    pub last_occurrence: Option<DateTime<Local>>,
     //    pub scenario_id: Scenario,
+
+    // The splits that make up the transaction.  The sum of these splits must
+    // always be balanced.
+    //    pub splits: Vec<std::rc::Weak<Split>>,
     pub splits: Vec<Split>,
 }
 
@@ -76,6 +82,9 @@ pub enum Quantity {
 /// Beancount and Ledger call these postings.
 #[derive(Debug)]
 pub struct Split {
+    // The transaction this belongs to
+    //    transaction: std::rc::Rc<Transaction>,
+
     // Which account is impacted bu this split.
     pub account: AccountId,
 

@@ -1,5 +1,5 @@
 use crate::price_sources::PriceSourceId;
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, RoundingStrategy};
 
 #[derive(Default)]
 pub struct CommodityCollection {
@@ -26,7 +26,7 @@ impl CommodityCollection {
         self.commodities.get(id.0 as usize - 1)
     }
 
-    pub fn list_currencies(&self) -> &Vec<CommodityId> {
+    pub fn list_currencies(&self) -> &[CommodityId] {
         &self.currencies
     }
 
@@ -117,20 +117,95 @@ impl Commodity {
     //  Display a given value for a commodity
     pub fn display(&self, value: &Decimal) -> String {
         format!(
-            "{}{}{}{}{}",
+            "{}{}{:.width$}{}{}",
             self.symbol_before,
             if self.symbol_before.is_empty() {
                 ""
             } else {
                 " "
             },
-            value.round_dp(self.display_precision as u32),
+            value.round_dp_with_strategy(
+                self.display_precision as u32,
+                RoundingStrategy::MidpointTowardZero),
             if self.symbol_after.is_empty() {
                 ""
             } else {
                 " "
             },
-            self.symbol_after
+            self.symbol_after,
+            width=self.display_precision as usize,
         )
     }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::commodities::{CommodityId, CommodityCollection, Commodity};
+    use rust_decimal_macros::dec;
+
+    pub fn create_currency(coll: &mut CommodityCollection, name: &str) -> CommodityId {
+        let commodity = Commodity::new(
+            name,
+            "",
+            name,
+            true,
+            None,
+            2,
+        );
+        coll.add(commodity)
+    }
+
+    pub fn create_security(coll: &mut CommodityCollection, name: &str) -> CommodityId {
+        let commodity = Commodity::new(
+            name,
+            "",
+            name,
+            false,
+            None,
+            2,
+        );
+        coll.add(commodity)
+    }
+
+    #[test]
+    fn test_commodity() {
+        let mut coll = CommodityCollection::default();
+        let eur = create_currency(&mut coll, "EUR");
+        let aapl = create_security(&mut coll, "AAPL");
+        assert_eq!(coll.list_currencies(), &[eur]);
+        assert_eq!(coll.find("EUR"), Some(eur));
+        assert_eq!(coll.find("AAPL"), Some(aapl));
+        assert_eq!(coll.find("FOO"), None);
+    }
+
+    #[test]
+    fn test_display() {
+        let mut coll = CommodityCollection::default();
+        let eur = create_currency(&mut coll, "EUR");
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(0.238)),
+            "0.24 EUR"
+        );
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(0.234)),
+            "0.23 EUR"
+        );
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(0.235)),
+            "0.23 EUR"
+        );
+        assert_eq!( // round to nearest even
+            coll.get(eur).unwrap().display(&dec!(0.245)),
+            "0.24 EUR"
+        );
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(1.00)),
+            "1.00 EUR"
+        );
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(1)),
+            "1.00 EUR"
+        );
+    }
+
 }

@@ -88,6 +88,7 @@ pub struct Account {
     _opened_on: Option<DateTime<Local>>,
 
     pub kind: AccountKindId,
+
     // The chronologically-sorted list of splits for this account.
     //    splits: Vec<std::rc::Rc<Split>>,
 }

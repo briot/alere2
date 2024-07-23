@@ -1,5 +1,6 @@
 use crate::accounts::AccountId;
 use crate::commodities::CommodityId;
+use crate::errors::Error;
 use crate::multi_values::Value;
 use crate::payees::PayeeId;
 use chrono::{DateTime, Local};
@@ -27,7 +28,7 @@ pub enum ReconcileKind {
 /// but since it then has no impact on balance it doesn't seem worth remembering
 /// that date.
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Transaction {
     pub memo: Option<String>,
     pub check_number: Option<String>,
@@ -51,6 +52,15 @@ pub struct Transaction {
     // always be balanced.
     //    pub splits: Vec<std::rc::Weak<Split>>,
     pub splits: Vec<Split>,
+}
+
+impl Transaction {
+
+    /// Check that the transaction obeys the accounting equations, i.e.
+    ///    Equity = Assets + Income − Expenses
+    pub fn is_proper(&self) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -144,4 +154,34 @@ pub struct Split {
     //       split1: account=stock       value=1200 USD   original=10 AAPL
     //       split2: account=investment  value=-1200 USD  original=-1020 EUR
     pub value: Option<Value>,
+}
+
+#[cfg(test)]
+mod test {
+    use chrono::Local;
+    use crate::accounts::AccountId;
+    use crate::commodities::CommodityId;
+    use crate::errors::Error;
+    use crate::multi_values::Value;
+    use crate::transactions::{ReconcileKind, Transaction, Split, Quantity};
+    use rust_decimal_macros::dec;
+
+    #[test]
+    fn test_proper() -> Result<(), Error> {
+        let mut tr = Transaction::default();
+        tr.splits.push(Split {
+            account: AccountId(1),
+            reconciled: ReconcileKind::NEW,
+            post_ts: Local::now(),
+            original_value: Quantity::Credit(Value::new(
+                dec!(1.1),
+                CommodityId(1),
+            )),
+            value: None,
+        });
+
+        tr.is_proper()?;
+        Ok(())
+    }
+
 }

@@ -11,7 +11,6 @@ use crate::prices::Price;
 use crate::repositories::Repository;
 use crate::transactions::{Quantity, ReconcileKind, Split, Transaction};
 use chrono::{DateTime, Local, NaiveDate};
-use futures::executor::block_on;
 use log::error;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
@@ -75,13 +74,13 @@ pub struct KmyMoneyImporter {
     price_precisions: HashMap<CommodityId, u8>,
     account_currency: HashMap<String, CommodityId>,
     price_sources: HashMap<String, PriceSourceId>,
-    repo: Repository,
 }
 
 #[cfg(feature = "kmymoney")]
 impl KmyMoneyImporter {
     async fn import_institutions(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream = query("SELECT * FROM kmmInstitutions").fetch(conn);
@@ -89,7 +88,7 @@ impl KmyMoneyImporter {
         while let Some(row) = stream.try_next().await? {
             id = id.inc();
             self.institutions.insert(row.get("id"), id);
-            self.repo.add_institution(
+            repo.add_institution(
                 id,
                 Institution::new(
                     row.get("name"),
@@ -105,9 +104,9 @@ impl KmyMoneyImporter {
         Ok(())
     }
 
-    fn import_account_kinds(&mut self) {
+    fn import_account_kinds(&mut self, repo: &mut Repository) {
         self.account_kinds = HashMap::new();
-        for (id, k) in self.repo.get_account_kinds().0.iter().enumerate() {
+        for (id, k) in repo.get_account_kinds().0.iter().enumerate() {
             self.account_kinds
                 .insert(k.name.to_lowercase(), AccountKindId(id as u32 + 1));
         }
@@ -189,6 +188,7 @@ impl KmyMoneyImporter {
 
     async fn import_price_sources(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream =
@@ -197,7 +197,7 @@ impl KmyMoneyImporter {
         while let Some(row) = stream.try_next().await? {
             id = id.inc();
             let name: String = row.get("priceSource");
-            self.repo.add_price_source(id, PriceSource::new(&name));
+            repo.add_price_source(id, PriceSource::new(&name));
             self.price_sources.insert(name, id);
         }
         Ok(())
@@ -205,6 +205,7 @@ impl KmyMoneyImporter {
 
     async fn import_currencies(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream = query("SELECT * FROM kmmCurrencies").fetch(conn);
@@ -223,7 +224,7 @@ impl KmyMoneyImporter {
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10();
 
-            let id = self.repo.add_commodity(Commodity::new(
+            let id = repo.add_commodity(Commodity::new(
                 row.get("name"),
                 "",                      // symbol_before
                 row.get("symbolString"), // symbol_after (could be symbol2)
@@ -245,6 +246,7 @@ impl KmyMoneyImporter {
 
     async fn import_securities(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream = query("SELECT * FROM kmmSecurities").fetch(conn);
@@ -258,7 +260,7 @@ impl KmyMoneyImporter {
             } else {
                 precision
             };
-            let id = self.repo.add_commodity(Commodity::new(
+            let id = repo.add_commodity(Commodity::new(
                 row.get("name"),
                 "",                // symbol_before
                 row.get("symbol"), // symbol_after
@@ -281,13 +283,14 @@ impl KmyMoneyImporter {
 
     async fn import_payees(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream = query("SELECT * FROM kmmPayees").fetch(conn);
         let mut id = PayeeId::default();
         while let Some(row) = stream.try_next().await? {
             id = id.inc();
-            self.repo.add_payee(id, Payee::new(row.get("name")));
+            repo.add_payee(id, Payee::new(row.get("name")));
             self.payees.insert(row.get("id"), id);
 
             // ??? Not imported
@@ -343,6 +346,7 @@ impl KmyMoneyImporter {
     /// Import all accounts.
     async fn import_accounts(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream = query("SELECT * FROM kmmAccounts").fetch(conn);
@@ -353,7 +357,7 @@ impl KmyMoneyImporter {
             let kmm_currency: &str = row.get::<&str, _>("currencyId");
             let currency = *self.commodities.get(kmm_currency).unwrap();
             let name: &str = row.get("accountName");
-            let id = self.repo.add_account(Account::new(
+            let id = repo.add_account(Account::new(
                 name,
                 self.guess_account_kind(
                     name,
@@ -403,6 +407,7 @@ impl KmyMoneyImporter {
     /// create the parent->child relationships
     async fn import_account_parents(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream =
@@ -413,7 +418,7 @@ impl KmyMoneyImporter {
                 let parent_id = self.accounts.get(pid).unwrap();
                 let kmm_id: &str = row.get("id");
                 let id = self.accounts.get(kmm_id).unwrap();
-                self.repo
+                repo
                     .get_account_mut(*id)
                     .unwrap()
                     .set_parent(*parent_id);
@@ -445,6 +450,7 @@ impl KmyMoneyImporter {
 
     async fn import_prices(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<(), Error> {
         let mut stream =
@@ -471,7 +477,7 @@ impl KmyMoneyImporter {
                     .price_sources
                     .get(row.get::<&str, _>("priceSource"))
                     .unwrap();
-                self.repo.add_price(
+                repo.add_price(
                     *origin,
                     *dest,
                     Price::new(timestamp, price, *source));
@@ -549,6 +555,7 @@ impl KmyMoneyImporter {
 
     async fn import_splits(
         &mut self,
+        repo: &mut Repository,
         conn: &mut SqliteConnection,
         mut tx: HashMap<String, (CommodityId, Transaction)>,
     ) -> Result<(), Error> {
@@ -736,42 +743,70 @@ impl KmyMoneyImporter {
         }
 
         for t in tx.into_iter() {
-            self.repo.add_transaction(t.1 .1);
+            repo.add_transaction(t.1 .1);
         }
         Ok(())
     }
 
-    async fn import_from_path(
-        mut self,
-        path: &Path,
-    ) -> Result<Repository, Error> {
-        self.repo = Repository::default();
-        let mut conn = SqliteConnection::connect(path.to_str().ok_or(
-            Error::Str("Cannot convert path to a valid string".into()),
-        )?)
-        .await?;
-        self.import_key_values(&mut conn).await?;
-        self.import_institutions(&mut conn).await?;
-        self.import_account_kinds();
-        self.import_price_sources(&mut conn).await?;
-        self.import_currencies(&mut conn).await?;
-        self.import_securities(&mut conn).await?;
-        self.import_payees(&mut conn).await?;
-        self.import_accounts(&mut conn).await?;
-        self.import_account_parents(&mut conn).await?;
-        self.import_prices(&mut conn).await?;
-        let tx = self.import_transactions(&mut conn).await?;
-        self.import_splits(&mut conn, tx).await?;
-
-        self.repo.postprocess();
-
-        Ok(self.repo)
-    }
 }
 
 #[cfg(feature = "kmymoney")]
 impl Importer for KmyMoneyImporter {
-    fn import_file(self, path: &Path) -> Result<Repository, Error> {
-        block_on(self.import_from_path(path))
+
+    async fn import_file(
+        &mut self,
+        path: &Path,
+        report_progress: impl Fn(u64, u64),
+    ) -> Result<Repository, Error> {
+        const MAX_PROGRESS: u64 = 14;
+
+        let mut repo = Repository::default();
+        report_progress(1, MAX_PROGRESS);
+
+        let mut conn = SqliteConnection::connect(path.to_str().ok_or(
+            Error::Str("Cannot convert path to a valid string".into()),
+        )?)
+        .await?;
+        report_progress(2, MAX_PROGRESS);
+
+        self.import_key_values(&mut conn).await?;
+        report_progress(3, MAX_PROGRESS);
+
+        self.import_institutions(&mut repo, &mut conn).await?;
+        report_progress(4, MAX_PROGRESS);
+
+        self.import_account_kinds(&mut repo);
+        report_progress(5, MAX_PROGRESS);
+
+        self.import_price_sources(&mut repo, &mut conn).await?;
+        report_progress(6, MAX_PROGRESS);
+
+        self.import_currencies(&mut repo, &mut conn).await?;
+        report_progress(7, MAX_PROGRESS);
+
+        self.import_securities(&mut repo, &mut conn).await?;
+        report_progress(8, MAX_PROGRESS);
+
+        self.import_payees(&mut repo, &mut conn).await?;
+        report_progress(9, MAX_PROGRESS);
+
+        self.import_accounts(&mut repo, &mut conn).await?;
+        report_progress(10, MAX_PROGRESS);
+
+        self.import_account_parents(&mut repo, &mut conn).await?;
+        report_progress(11, MAX_PROGRESS);
+
+        self.import_prices(&mut repo, &mut conn).await?;
+        report_progress(12, MAX_PROGRESS);
+
+        let tx = self.import_transactions(&mut conn).await?;
+        report_progress(13, MAX_PROGRESS);
+
+        self.import_splits(&mut repo, &mut conn, tx).await?;
+        report_progress(14, MAX_PROGRESS);
+
+        repo.postprocess();
+
+        Ok(repo)
     }
 }

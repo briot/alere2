@@ -61,7 +61,6 @@ impl PriceCollection {
             let p1 = self.price_as_of(from, *turnkey, &[], as_of);
             let p2 = self.price_as_of(*turnkey, to, &[], as_of);
 
-            println!("MANU turnkey={:?} {:?}", p1, p2);
             match (p1, p2) {
                 (None, _) | (_, None) => {},
                 (Some(p1), Some(p2)) => {

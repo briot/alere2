@@ -16,7 +16,7 @@ bitmask = "0.5.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 thiserror = "1.0.50"
-futures = "0.3"
+futures = { workspace = true }
 log = "0.4"
 rust_decimal = { workspace = true }
 rust_decimal_macros = "1.35"

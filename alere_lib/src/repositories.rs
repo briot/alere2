@@ -3,11 +3,11 @@ use crate::account_kinds::{AccountKind, AccountKindCollection, AccountKindId};
 use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
 use crate::commodities::{Commodity, CommodityCollection, CommodityId};
 use crate::institutions::{Institution, InstitutionId};
-use crate::multi_values::{MultiValue, Value};
+use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
-use crate::transactions::{Quantity, Transaction};
+use crate::transactions::TransactionRc;
 use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ pub struct Repository {
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
     prices: PriceCollection,
-    transactions: Vec<Transaction>,
+    transactions: Vec<TransactionRc>,
 }
 
 impl Default for Repository {
@@ -169,6 +169,7 @@ impl Repository {
     // ensures that things are sorted by dates when appropriate.
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
+        self.accounts.postprocess();
 
         // ??? We should sort transactions, but they have no timestamps.  In
         // fact, what counts is sorting the splits themselves, when we compute
@@ -236,11 +237,19 @@ impl Repository {
         self.prices.add(origin, target, price);
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) {
-        // Register prices from transactions
-        for s in &tx.splits {
+    pub fn add_transaction(&mut self, tx: &TransactionRc) {
+        self.transactions.push(tx.clone());
+
+        for s in tx.iter_splits() {
+            // Add the transaction to each account it applies to
+            self.accounts
+                .get_mut(s.account)
+                .unwrap()
+                .add_transaction(tx);
+
+            // Register prices from transactions
             match (s.value, &s.original_value) {
-                (Some(v), Quantity::Buy(ov) | Quantity::Credit(ov))
+                (Some(v), Operation::Buy(ov) | Operation::Credit(ov))
                     if v.commodity != ov.commodity =>
                 {
                     // Register the price we paid
@@ -251,13 +260,12 @@ impl Repository {
                             s.post_ts,
                             v.value / ov.value,
                             PriceSourceId::Transaction,
-                    ));
+                        ),
+                    );
                 }
                 _ => {}
             }
         }
-
-        self.transactions.push(tx);
     }
 
     pub fn display_multi_value(&self, value: &MultiValue) -> String {
@@ -277,45 +285,24 @@ impl Repository {
     /// Show the balance for each account, either converted to the given
     /// commodity, using today's market prices, or in the original commodity.
     pub fn balance(&self) -> HashMap<AccountId, MultiValue> {
-        let mut bal: HashMap<AccountId, MultiValue> = HashMap::new();
+        self.accounts
+            .iter_accounts()
+            .filter(|(_, acc)|
+                !acc.closed
+                && self.account_kinds.get(acc.kind).unwrap().is_networth
+            )
+            .map(|(acc_id, acc)| {
+                let mut acc_balance = MultiValue::default();
 
-        // ??? Splits must be sorted, for each account, otherwise Split might
-        // multiply the wrong number of shares.
-
-        for t in &self.transactions {
-            for s in &t.splits {
-                let acc = self.accounts.get(s.account).unwrap();
-                if acc.closed
-                    || !self.account_kinds.get(acc.kind).unwrap().is_networth
-                {
-                    continue;
-                }
-
-                match s.original_value {
-                    Quantity::Credit(value) => {
-                        bal.entry(s.account)
-                            .and_modify(|v| *v += value)
-                            .or_insert_with(|| MultiValue::from_value(value));
-                    }
-                    Quantity::Buy(shares) | Quantity::Reinvest(shares) => {
-                        bal.entry(s.account)
-                            .and_modify(|v| *v += shares)
-                            .or_insert_with(|| MultiValue::from_value(shares));
-                    }
-                    Quantity::Split { ratio, commodity } => {
-                        bal.entry(s.account)
-                            .and_modify(|v| v.split(ratio, &commodity))
-                            .or_default(); // ??? Should be an error
-                    }
-                    Quantity::Dividend(value) => {
-                        bal.entry(s.account)
-                            .and_modify(|v| *v += value)
-                            .or_insert_with(|| MultiValue::from_value(value));
-                    }
-                };
-            }
-        }
-        bal
+                //  ??? Could we use fold() here, though we are applying in
+                //  place.
+                acc.iter_transactions()
+                    .flat_map(|tx| tx.iter_splits())
+                    .filter(|s| s.account == acc_id)
+                    .for_each(|s| acc_balance.apply(&s.original_value));
+                (acc_id, acc_balance)
+            })
+            .collect()
     }
 }
 
@@ -337,7 +324,11 @@ impl<'a> MarketPrices<'a> {
     /// Return the current market price for commodity, given in to_commodity.
     /// Market acts as a cache.
     /// If to_commodity is None, no conversion is made.
-    pub fn convert_value(&mut self, value: &Value, as_of: &DateTime<Local>) -> Value {
+    pub fn convert_value(
+        &mut self,
+        value: &Value,
+        as_of: &DateTime<Local>,
+    ) -> Value {
         match self.to_commodity {
             None => *value,
             Some(c) if c == value.commodity => *value,
@@ -352,7 +343,7 @@ impl<'a> MarketPrices<'a> {
                         )
                     });
                 match m {
-                    None    => *value,
+                    None => *value,
                     Some(m) => Value::new(m.price * value.value, c),
                 }
             }
@@ -382,7 +373,10 @@ impl<'a> MarketPrices<'a> {
                 .iter()
                 .filter(|v| v.commodity != c)
                 .map(|v| {
-                    self.convert_value(&Value::new(Decimal::ONE, v.commodity), as_of)
+                    self.convert_value(
+                        &Value::new(Decimal::ONE, v.commodity),
+                        as_of,
+                    )
                 })
                 .collect(),
         }

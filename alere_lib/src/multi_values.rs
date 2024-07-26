@@ -2,6 +2,31 @@ use crate::commodities::{CommodityCollection, CommodityId};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub enum Operation {
+    // The amount of the transaction, as seen on the bank statement.
+    // This could be a number of shares when the account is a Stock account, for
+    // instance, or a number of EUR for a checking account.
+    Credit(Value),
+
+    // Buying shares
+    Buy(Value),
+
+    // Reinvest dividends and buy shares
+    Reinvest(Value),
+
+    // There were some dividends for one of the stocks   The amount will be
+    // visible in other splits.
+    Dividend(Value),
+
+    // Used for stock splits.  The number of shares is multiplied by the ratio,
+    // and their value divided by the same ratio.
+    Split {
+        ratio: Decimal,
+        commodity: CommodityId,
+    },
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Value {
     pub value: Decimal,
@@ -57,9 +82,22 @@ impl MultiValue {
         })
     }
 
-    pub fn split(&mut self, ratio: Decimal, commodity: &CommodityId) {
-        let mut v = self.values.get_mut(commodity).unwrap();
-        v *= ratio;
+    pub fn apply(&mut self, op: &Operation) {
+        match op {
+            Operation::Credit(value) => {
+                *self += *value;
+            }
+            Operation::Buy(shares) | Operation::Reinvest(shares) => {
+                *self += *shares;
+            }
+            Operation::Split { ratio, commodity } => {
+                let mut v = self.values.get_mut(commodity).unwrap();
+                v *= ratio;
+            }
+            Operation::Dividend(value) => {
+                *self += *value;
+            }
+        };
     }
 }
 

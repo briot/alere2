@@ -4,9 +4,9 @@ use alere_lib::importers::Importer;
 use alere_lib::kmymoney::KmyMoneyImporter;
 use alere_lib::multi_values::MultiValue;
 use chrono::Local;
+use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
-use futures::executor::block_on;
 
 fn trunc_keep_last(s: &str, max_width: usize) -> &str {
     s.char_indices()
@@ -23,21 +23,22 @@ fn trunc_keep_first(s: &str, max_width: usize) -> &str {
 fn main() -> Result<(), Error> {
     let mut kmy = KmyMoneyImporter::default();
 
-    let progress = ProgressBar::new(1)  //  we do not know the length
-        .with_style(ProgressStyle::with_template(
-            "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}"
-            // "[{elapsed_precise}] {bar} {pos:>7}/{len:7} {msg}"
-        ).unwrap())
+    let progress = ProgressBar::new(1) //  we do not know the length
+        .with_style(
+            ProgressStyle::with_template(
+                "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}", // "[{elapsed_precise}] {bar} {pos:>7}/{len:7} {msg}"
+            )
+            .unwrap(),
+        )
         .with_message("importing kmy");
 
-    let repo = block_on(
-        kmy.import_file(
-            Path::new("./Comptes.kmy"),
-            |current, max| {
-                progress.set_length(max);
-                progress.set_position(current);
-            })
-    )?;
+    let repo = block_on(kmy.import_file(
+        Path::new("./Comptes.kmy"),
+        |current, max| {
+            progress.set_length(max);
+            progress.set_position(current);
+        },
+    ))?;
 
     const COL_ACCOUNT: usize = 30;
     const COL_VALUE: usize = 17;
@@ -68,10 +69,7 @@ fn main() -> Result<(), Error> {
             "{:<0awidth$} {:>0vwidth$} {:>0vwidth$} {:>0vwidth$}",
             trunc_keep_last(&acc, COL_ACCOUNT),
             trunc_keep_first(&repo.display_multi_value(val), COL_VALUE),
-            trunc_keep_first(
-                &repo.display_multi_value(&market_val),
-                COL_VALUE
-            ),
+            trunc_keep_first(&repo.display_multi_value(&market_val), COL_VALUE),
             trunc_keep_first(
                 &market
                     .get_prices(val, &now)

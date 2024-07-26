@@ -1,6 +1,6 @@
 use crate::account_kinds::AccountKindId;
 use crate::institutions::InstitutionId;
-// use crate::transactions::Split;
+use crate::transactions::TransactionRc;
 use chrono::{DateTime, Local};
 
 pub enum AccountNameKind {
@@ -40,6 +40,19 @@ impl AccountCollection {
                 }
             }
         }
+    }
+
+    pub fn postprocess(&mut self) {
+        for (id, acc) in self.0.iter_mut().enumerate() {
+            acc.postprocess(AccountId(id as u16 + 1));
+        }
+    }
+
+    pub fn iter_accounts(&self) -> impl Iterator<Item = (AccountId, &Account)> {
+        self.0
+            .iter()
+            .enumerate()
+            .map(|(idx, acc)| (AccountId(idx as u16 + 1), acc))
     }
 }
 
@@ -89,8 +102,9 @@ pub struct Account {
 
     pub kind: AccountKindId,
 
-    // The chronologically-sorted list of splits for this account.
-    //    splits: Vec<std::rc::Rc<Split>>,
+    // The chronologically sorted list of transactions for which at least one
+    // split applies to the account.
+    transactions: Vec<TransactionRc>,
 }
 
 impl Account {
@@ -116,11 +130,24 @@ impl Account {
             _number: number.map(str::to_string),
             closed,
             _opened_on: opened_on,
-            //            splits: vec![],
+            transactions: Vec::new(),
         }
     }
 
     pub fn set_parent(&mut self, parent: AccountId) {
         self.parent = Some(parent);
+    }
+
+    pub fn add_transaction(&mut self, transaction: &TransactionRc) {
+        self.transactions.push(transaction.clone());
+    }
+
+    pub fn postprocess(&mut self, self_id: AccountId) {
+        self.transactions
+            .sort_by(|tr1, tr2| tr1.earlier_than_for_account(tr2, self_id))
+    }
+
+    pub fn iter_transactions(&self) -> impl Iterator<Item=&TransactionRc> {
+        self.transactions.iter()
     }
 }

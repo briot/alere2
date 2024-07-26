@@ -1,37 +1,41 @@
 use crate::accounts::AccountId;
-use crate::commodities::CommodityId;
-use crate::errors::Error;
-use crate::multi_values::Value;
+use crate::multi_values::{Operation, Value};
 use crate::payees::PayeeId;
 use chrono::{DateTime, Local};
-use rust_decimal::Decimal;
-
-//  type Scenario = u32;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum ReconcileKind {
     // A newly added transaction
-    NEW,
+    New,
 
     // When the split has been seen on a bank statement
-    CLEARED,
+    Cleared,
 
     // When the split has been checked by the user, and the overall result of
     // a bank statement matches all previously reconciled + currently cleared
     // transactions.
-    RECONCILED(Option<DateTime<Local>>),
+    Reconciled(Option<DateTime<Local>>),
 }
 
+/// Details used to build a new transaction.
+/// Such objects are short-lived.  All fields are made public and with default,
+/// so one can use
+///     TransactionRc::new(TransactionDetails {
+///         memo: Some("ssdsd"),
+///         ..Default::default()
+///     })
+///
 /// The transaction has no timestamp of its own.  Instead, it should use the
 /// earliest timestamp among all its splits.
 /// TODO The transaction could be entered before any of its splits takes effect,
 /// but since it then has no impact on balance it doesn't seem worth remembering
 /// that date.
 
-#[derive(Debug, Default)]
-pub struct Transaction {
-    pub memo: Option<String>,
-    pub check_number: Option<String>,
+#[derive(Default)]
+pub struct TransactionDetails<'a> {
+    pub memo: Option<&'a str>,
+    pub check_number: Option<&'a str>,
 
     // The payee.  Though a transaction is made of multiple splits, users
     // typically think of it as applying to a single payee, even though extra
@@ -42,59 +46,180 @@ pub struct Transaction {
     // different from the split's timestamp (which are when the split impacted
     // the corresponding account).
     pub entry_date: DateTime<Local>,
-
     // ??? how does this apply to splits, which contain the timestamp
     //    pub scheduled: Option<String>,
     //    pub last_occurrence: Option<DateTime<Local>>,
     //    pub scenario_id: Scenario,
+}
+
+#[derive(Debug, Default)]
+pub struct Transaction {
+    memo: Option<String>,
+    check_number: Option<String>,
+    payee: Option<PayeeId>,
+    _entry_date: DateTime<Local>,
 
     // The splits that make up the transaction.  The sum of these splits must
-    // always be balanced.
-    //    pub splits: Vec<std::rc::Weak<Split>>,
-    pub splits: Vec<Split>,
+    // always be balanced.  The transaction owns the splits.
+    splits: Vec<Split>,
 }
 
 impl Transaction {
-
     /// Check that the transaction obeys the accounting equations, i.e.
     ///    Equity = Assets + Income − Expenses
-    pub fn is_proper(&self) -> Result<(), Error> {
-        Ok(())
+    pub fn is_balanced(&self) -> bool {
+        true
     }
 }
 
-#[derive(Debug)]
-pub enum Quantity {
-    // The amount of the transaction, as seen on the bank statement.
-    // This could be a number of shares when the account is a Stock account, for
-    // instance, or a number of EUR for a checking account.
-    Credit(Value),
+#[derive(Debug, Clone)]
+pub struct TransactionRc(Rc<Transaction>);
 
-    // Buying shares
-    Buy(Value),
+impl TransactionRc {
+    // Create a new transaction with default fields
 
-    // Reinvest dividends and buy shares
-    Reinvest(Value),
+    pub fn new_with_details(details: TransactionDetails) -> Self {
+        TransactionRc(Rc::new(Transaction {
+            memo: details.memo.and_then(|m| {
+                if m.is_empty() {
+                    None
+                } else {
+                    Some(m.into())
+                }
+            }),
+            check_number: details.check_number.map(str::to_string),
+            payee: details.payee,
+            _entry_date: details.entry_date,
+            splits: Vec::default(),
+        }))
+    }
 
-    // There were some dividends for one of the stocks   The amount will be
-    // visible in other splits.
-    Dividend(Value),
+    pub fn new_with_default() -> Self {
+        TransactionRc(Rc::new(Transaction {
+            ..Default::default()
+        }))
+    }
 
-    // Used for stock splits.  The number of shares is multiplied by the ratio,
-    // and their value divided by the same ratio.
-    Split {
-        ratio: Decimal,
-        commodity: CommodityId,
-    },
+    /// Create a new split for this transaction
+    pub fn add_split(
+        &mut self,
+        account: AccountId,
+        reconciled: ReconcileKind,
+        post_ts: DateTime<Local>,
+        original_value: Operation,
+        value: Option<Value>,
+    ) -> &mut Split {
+        let split = Split {
+            account,
+            reconciled,
+            post_ts,
+            original_value,
+            value,
+        };
+        let tr = Rc::get_mut(&mut self.0)
+            .expect("Couldn'get get mut ref to transation");
+        tr.splits.push(split);
+        tr.splits.last_mut().unwrap()
+    }
+
+    pub fn is_balanced(&self) -> bool {
+        self.0.is_balanced()
+    }
+
+    pub fn set_check_number(
+        &mut self,
+        check_number: Option<&str>,
+    ) -> Result<(), String> {
+        match check_number {
+            None | Some("") => {}
+            Some(num) => match &self.0.check_number {
+                None => {
+                    Rc::get_mut(&mut self.0).unwrap().check_number =
+                        Some(num.into())
+                }
+                Some(old) if old == num => {}
+                Some(old) => {
+                    Err(format!(
+                        "Non-matching check number, had {old:?}, now {num}"
+                    ))?;
+                }
+            },
+        }
+        Ok(())
+    }
+
+    pub fn set_memo(&mut self, memo: Option<&str>) {
+        match memo {
+            None | Some("") => {}
+            Some(memo) => match &self.0.memo {
+                None => {
+                    Rc::get_mut(&mut self.0).unwrap().memo = Some(memo.into())
+                }
+                Some(old) if old == memo => {}
+                Some(_) => {
+                    // ??? kmymoney has memo for the transaction (which
+                    // seems to be the initial payee as downloaded), then
+                    // one memory per split.  The transaction's memo doesn't
+                    // to be editable, so we keep the memo from the split
+                    // instead.
+                    Rc::get_mut(&mut self.0).unwrap().memo = Some(memo.into());
+                }
+            },
+        }
+    }
+
+    pub fn set_payee(&mut self, payee: Option<&PayeeId>) {
+        match payee {
+            None => {}
+            Some(payee) => {
+                match &self.0.payee {
+                    None => {
+                        Rc::get_mut(&mut self.0).unwrap().payee = Some(*payee)
+                    }
+                    Some(old) if old == payee => {}
+                    Some(_) => {
+                        // ??? kmymoney allows different payees for each
+                        // split.  We only keep the first one.
+                        // println!(
+                        //     "{tid}/{sid}: Non-matching payee, had {old:?}, now {p:?}"
+                        // );
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn iter_splits(&self) -> impl std::iter::Iterator<Item = &Split> {
+        self.0.splits.iter()
+    }
+
+    fn timestamp_for_account(
+        &self,
+        account: AccountId,
+    ) -> Option<DateTime<Local>> {
+        for s in &self.0.splits {
+            if s.account == account {
+                return Some(s.post_ts);
+            }
+        }
+        None
+    }
+
+    pub fn earlier_than_for_account(
+        &self,
+        right: &TransactionRc,
+        account: AccountId,
+    ) -> std::cmp::Ordering {
+        let t1 = self.timestamp_for_account(account);
+        let t2 = right.timestamp_for_account(account);
+        t1.cmp(&t2)
+    }
 }
 
 /// GnuCash and Kmymoney call these splits.
 /// Beancount and Ledger call these postings.
 #[derive(Debug)]
 pub struct Split {
-    // The transaction this belongs to
-    //    transaction: std::rc::Rc<Transaction>,
-
     // Which account is impacted bu this split.
     pub account: AccountId,
 
@@ -125,7 +250,7 @@ pub struct Split {
 
     // The amount of the split, in the original currency
     // This is potentially given in another currency or commodity.
-    pub original_value: Quantity,
+    pub original_value: Operation,
 
     // The amount of the transaction as made originally.
     // The goal is to support multi-currency transactions.
@@ -158,30 +283,26 @@ pub struct Split {
 
 #[cfg(test)]
 mod test {
-    use chrono::Local;
     use crate::accounts::AccountId;
     use crate::commodities::CommodityId;
     use crate::errors::Error;
     use crate::multi_values::Value;
-    use crate::transactions::{ReconcileKind, Transaction, Split, Quantity};
+    use crate::transactions::{Operation, ReconcileKind, TransactionRc};
+    use chrono::Local;
     use rust_decimal_macros::dec;
 
     #[test]
     fn test_proper() -> Result<(), Error> {
-        let mut tr = Transaction::default();
-        tr.splits.push(Split {
-            account: AccountId(1),
-            reconciled: ReconcileKind::NEW,
-            post_ts: Local::now(),
-            original_value: Quantity::Credit(Value::new(
-                dec!(1.1),
-                CommodityId(1),
-            )),
-            value: None,
-        });
+        let mut tr = TransactionRc::new_with_default();
+        tr.add_split(
+            AccountId(1),
+            ReconcileKind::New,
+            Local::now(),
+            Operation::Credit(Value::new(dec!(1.1), CommodityId(1))),
+            None,
+        );
 
-        tr.is_proper()?;
+        assert!(tr.is_balanced());
         Ok(())
     }
-
 }

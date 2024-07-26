@@ -126,44 +126,37 @@ impl Commodity {
             },
             value.round_dp_with_strategy(
                 self.display_precision as u32,
-                RoundingStrategy::MidpointTowardZero),
+                RoundingStrategy::MidpointTowardZero
+            ),
             if self.symbol_after.is_empty() {
                 ""
             } else {
                 " "
             },
             self.symbol_after,
-            width=self.display_precision as usize,
+            width = self.display_precision as usize,
         )
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::{CommodityId, CommodityCollection, Commodity};
+    use crate::commodities::{Commodity, CommodityCollection, CommodityId};
     use rust_decimal_macros::dec;
 
-    pub fn create_currency(coll: &mut CommodityCollection, name: &str) -> CommodityId {
-        let commodity = Commodity::new(
-            name,
-            "",
-            name,
-            true,
-            None,
-            2,
-        );
+    pub fn create_currency(
+        coll: &mut CommodityCollection,
+        name: &str,
+    ) -> CommodityId {
+        let commodity = Commodity::new(name, "", name, true, None, 2);
         coll.add(commodity)
     }
 
-    pub fn create_security(coll: &mut CommodityCollection, name: &str) -> CommodityId {
-        let commodity = Commodity::new(
-            name,
-            "",
-            name,
-            false,
-            None,
-            2,
-        );
+    pub fn create_security(
+        coll: &mut CommodityCollection,
+        name: &str,
+    ) -> CommodityId {
+        let commodity = Commodity::new(name, "", name, false, None, 2);
         coll.add(commodity)
     }
 
@@ -182,30 +175,15 @@ mod test {
     fn test_display() {
         let mut coll = CommodityCollection::default();
         let eur = create_currency(&mut coll, "EUR");
+        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.238)), "0.24 EUR");
+        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.234)), "0.23 EUR");
+        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.235)), "0.23 EUR");
         assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(0.238)),
-            "0.24 EUR"
-        );
-        assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(0.234)),
-            "0.23 EUR"
-        );
-        assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(0.235)),
-            "0.23 EUR"
-        );
-        assert_eq!( // round to nearest even
+            // round to nearest even
             coll.get(eur).unwrap().display(&dec!(0.245)),
             "0.24 EUR"
         );
-        assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(1.00)),
-            "1.00 EUR"
-        );
-        assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(1)),
-            "1.00 EUR"
-        );
+        assert_eq!(coll.get(eur).unwrap().display(&dec!(1.00)), "1.00 EUR");
+        assert_eq!(coll.get(eur).unwrap().display(&dec!(1)), "1.00 EUR");
     }
-
 }

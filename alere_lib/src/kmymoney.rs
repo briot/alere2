@@ -4,12 +4,12 @@ use crate::commodities::{Commodity, CommodityId};
 use crate::errors::Error;
 use crate::importers::Importer;
 use crate::institutions::{Institution, InstitutionId};
-use crate::multi_values::Value;
+use crate::multi_values::{Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
 use crate::repositories::Repository;
-use crate::transactions::{Quantity, ReconcileKind, Split, Transaction};
+use crate::transactions::{ReconcileKind, TransactionDetails, TransactionRc};
 use chrono::{DateTime, Local, NaiveDate};
 use log::error;
 use rust_decimal::Decimal;
@@ -418,10 +418,7 @@ impl KmyMoneyImporter {
                 let parent_id = self.accounts.get(pid).unwrap();
                 let kmm_id: &str = row.get("id");
                 let id = self.accounts.get(kmm_id).unwrap();
-                repo
-                    .get_account_mut(*id)
-                    .unwrap()
-                    .set_parent(*parent_id);
+                repo.get_account_mut(*id).unwrap().set_parent(*parent_id);
             }
         }
         Ok(())
@@ -480,7 +477,8 @@ impl KmyMoneyImporter {
                 repo.add_price(
                     *origin,
                     *dest,
-                    Price::new(timestamp, price, *source));
+                    Price::new(timestamp, price, *source),
+                );
             }
         }
         Ok(())
@@ -502,7 +500,7 @@ impl KmyMoneyImporter {
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,
-    ) -> Result<HashMap<String, (CommodityId, Transaction)>, Error> {
+    ) -> Result<HashMap<String, (CommodityId, TransactionRc)>, Error> {
         let mut tx = HashMap::new();
 
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
@@ -515,21 +513,16 @@ impl KmyMoneyImporter {
                         .commodities
                         .get(row.get::<&str, _>("currencyId"))
                         .unwrap(),
-                    Transaction {
-                        memo: match row.get::<Option<&str>, _>("memo") {
-                            None | Some("") => None,
-                            Some(m) => Some(m.into()),
-                        },
-                        check_number: None,
-                        payee: None,
+                    TransactionRc::new_with_details(TransactionDetails {
+                        memo: row.get("memo"),
                         entry_date: row
                             .get::<NaiveDate, _>("entryDate")
                             .and_hms_opt(0, 0, 0)
                             .unwrap()
                             .and_local_timezone(Local)
                             .unwrap(),
-                        splits: vec![],
-                    },
+                        ..Default::default()
+                    }),
                 ),
             );
             // ??? Not imported from kmmTransactions
@@ -557,7 +550,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-        mut tx: HashMap<String, (CommodityId, Transaction)>,
+        mut tx: HashMap<String, (CommodityId, TransactionRc)>,
     ) -> Result<(), Error> {
         let mut stream =
             query("SELECT * FROM kmmSplits ORDER BY transactionId").fetch(conn);
@@ -581,53 +574,13 @@ impl KmyMoneyImporter {
                 .and_local_timezone(Local)
                 .unwrap();
 
-            match row.get::<Option<&str>, _>("checkNumber") {
-                None | Some("") => {}
-                Some(num) => match &t.1.check_number {
-                    None => t.1.check_number = Some(num.into()),
-                    Some(old) if old == num => {}
-                    Some(old) => {
-                        println!(
-                            "{tid}/{sid}: Non-matching check number, had {old:?}, now {num:?}"
-                        );
-                    }
-                },
-            }
-            match row.get::<Option<&str>, _>("memo") {
-                None | Some("") => {}
-                Some(memo) => match &t.1.memo {
-                    None => t.1.memo = Some(memo.into()),
-                    Some(old) if old == memo => {}
-                    Some(_) => {
-                        // ??? kmymoney has memo for the transaction (which
-                        // seems to be the initial payee as downloaded), then
-                        // one memory per split.  The transaction's memo doesn't
-                        // to be editable, so we keep the memo from the split
-                        // instead.
-                        t.1.memo = Some(memo.into());
-                        // println!(
-                        //     "{tid}/{sid}: Non-matching memo, had {old:?}, now {memo:?}"
-                        // );
-                    }
-                },
-            }
-            match row.get::<Option<&str>, _>("payeeId") {
-                None | Some("") => {}
-                Some(payee) => {
-                    let p = self.payees.get(payee).unwrap();
-                    match &t.1.payee {
-                        None => t.1.payee = Some(*p),
-                        Some(old) if old == p => {}
-                        Some(_) => {
-                            // ??? kmymoney allows different payees for each
-                            // split.  We only keep the first one.
-                            // println!(
-                            //     "{tid}/{sid}: Non-matching payee, had {old:?}, now {p:?}"
-                            // );
-                        }
-                    }
-                }
-            }
+            t.1.set_check_number(row.get("checkNumber"))
+                .map_err(|e| Error::Str(format!("{tid}/{sid} {e}")))?;
+            t.1.set_memo(row.get("memo"));
+            t.1.set_payee(
+                row.get::<Option<&str>, _>("payeeId")
+                    .and_then(|p| self.payees.get(p)),
+            );
 
             let rec_date: Option<DateTime<Local>> =
                 row.get::<Option<NaiveDate>, _>("reconcileDate").map(|d| {
@@ -658,7 +611,7 @@ impl KmyMoneyImporter {
                     //   Same information as above but positive value.
                     (
                         None,
-                        Quantity::Dividend(Value::new(
+                        Operation::Dividend(Value::new(
                             Decimal::ZERO,
                             *tx_currency,
                         )),
@@ -666,13 +619,16 @@ impl KmyMoneyImporter {
                 }
                 (Some("Add"), None) => (
                     None,
-                    Quantity::Credit(Value::new(shares, *account_currency_id)),
+                    Operation::Credit(Value::new(shares, *account_currency_id)),
                 ),
                 (Some("Buy"), Some(p)) => {
                     assert!((p * shares - value).abs() < dec!(0.01));
                     (
                         Some(Value::new(value, *tx_currency)),
-                        Quantity::Buy(Value::new(shares, *account_currency_id)),
+                        Operation::Buy(Value::new(
+                            shares,
+                            *account_currency_id,
+                        )),
                     )
                 }
                 (Some("Split"), None) => {
@@ -692,7 +648,7 @@ impl KmyMoneyImporter {
                             .unwrap();
                     (
                         None,
-                        Quantity::Split {
+                        Operation::Split {
                             ratio,
                             commodity: *account_currency_id,
                         },
@@ -700,7 +656,7 @@ impl KmyMoneyImporter {
                 }
                 (Some("Reinvest"), Some(_)) => (
                     Some(Value::new(value, *tx_currency)),
-                    Quantity::Reinvest(Value::new(
+                    Operation::Reinvest(Value::new(
                         shares,
                         *account_currency_id,
                     )),
@@ -709,7 +665,7 @@ impl KmyMoneyImporter {
                     // Standard transaction, not for shares
                     (
                         Some(Value::new(value, *tx_currency)),
-                        Quantity::Credit(Value::new(
+                        Operation::Credit(Value::new(
                             shares,
                             *account_currency_id,
                         )),
@@ -720,20 +676,18 @@ impl KmyMoneyImporter {
                 }
             };
 
-            let s = Split {
+            t.1.add_split(
                 account,
-                reconciled: match row.get_unchecked::<i8, _>("reconcileFlag") {
-                    0 => ReconcileKind::NEW,
-                    1 => ReconcileKind::CLEARED,
-                    2 => ReconcileKind::RECONCILED(rec_date),
+                match row.get_unchecked::<i8, _>("reconcileFlag") {
+                    0 => ReconcileKind::New,
+                    1 => ReconcileKind::Cleared,
+                    2 => ReconcileKind::Reconciled(rec_date),
                     _ => panic!("Invalid reconcile flag"),
                 },
                 post_ts,
-                original_value: orig_value,
+                orig_value,
                 value,
-            };
-
-            t.1.splits.push(s);
+            );
 
             // ??? Not imported from kmmSplits
             //    action
@@ -743,16 +697,14 @@ impl KmyMoneyImporter {
         }
 
         for t in tx.into_iter() {
-            repo.add_transaction(t.1 .1);
+            repo.add_transaction(&t.1 .1);
         }
         Ok(())
     }
-
 }
 
 #[cfg(feature = "kmymoney")]
 impl Importer for KmyMoneyImporter {
-
     async fn import_file(
         &mut self,
         path: &Path,

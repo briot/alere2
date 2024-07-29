@@ -1,7 +1,8 @@
+use anyhow::{Context, Result};
 use crate::account_kinds::AccountKindId;
 use crate::accounts::{Account, AccountId};
 use crate::commodities::{Commodity, CommodityId};
-use crate::errors::Error;
+use crate::errors::AlrError;
 use crate::importers::Importer;
 use crate::institutions::{Institution, InstitutionId};
 use crate::multi_values::{Operation, Value};
@@ -24,7 +25,7 @@ use std::path::Path;
 pub fn parse_price(
     text: &str,
     price_precision: u8,
-) -> Result<Option<Decimal>, Error> {
+) -> Result<Option<Decimal>> {
     if text.is_empty() {
         return Ok(None);
     }
@@ -82,7 +83,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmInstitutions").fetch(conn);
         let mut id = InstitutionId::default();
         while let Some(row) = stream.try_next().await? {
@@ -115,7 +116,7 @@ impl KmyMoneyImporter {
     async fn import_key_values(
         &mut self,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query(
             "SELECT kmmKeyValuePairs.*
                  FROM kmmKeyValuePairs
@@ -190,7 +191,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream =
             query("SELECT DISTINCT priceSource FROM kmmPrices").fetch(conn);
         let mut id = PriceSourceId::External(0);
@@ -207,7 +208,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmCurrencies").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             assert_eq!(row.get::<&str, _>("typeString"), "Currency");
@@ -248,7 +249,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmSecurities").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             let precision = row.get_unchecked::<u8, _>("pricePrecision");
@@ -285,7 +286,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmPayees").fetch(conn);
         let mut id = PayeeId::default();
         while let Some(row) = stream.try_next().await? {
@@ -319,7 +320,7 @@ impl KmyMoneyImporter {
         name: &str,
         description: Option<&str>,
         account_type: &str,
-    ) -> Result<AccountKindId, Error> {
+    ) -> Result<AccountKindId> {
         let config: Vec<&str> = description
             .unwrap_or_default()
             .split('\n')
@@ -335,7 +336,7 @@ impl KmyMoneyImporter {
 
         // ??? This assumes our account kind names are the same as kmymoney
         match self.account_kinds.get(&akind_name) {
-            None => Err(Error::Str(format!(
+            None => Err(AlrError::Str(format!(
                 "Could not get account_kind '{}' for account '{}'",
                 akind_name, name
             )))?,
@@ -348,7 +349,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmAccounts").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             let kmm_id: &str = row.get("id");
@@ -409,7 +410,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream =
             query("SELECT id, parentId FROM kmmAccounts").fetch(conn);
         while let Some(row) = stream.try_next().await? {
@@ -452,7 +453,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream =
             query("SELECT * FROM kmmPrices ORDER BY priceDate ASC").fetch(conn);
         while let Some(row) = stream.try_next().await? {
@@ -503,7 +504,7 @@ impl KmyMoneyImporter {
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,
-    ) -> Result<HashMap<String, (CommodityId, TransactionRc)>, Error> {
+    ) -> Result<HashMap<String, (CommodityId, TransactionRc)>> {
         let mut tx = HashMap::new();
 
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
@@ -554,7 +555,7 @@ impl KmyMoneyImporter {
         repo: &mut Repository,
         conn: &mut SqliteConnection,
         mut tx: HashMap<String, (CommodityId, TransactionRc)>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut stream =
             query("SELECT * FROM kmmSplits ORDER BY transactionId").fetch(conn);
         while let Some(row) = stream.try_next().await? {
@@ -712,14 +713,14 @@ impl Importer for KmyMoneyImporter {
         &mut self,
         path: &Path,
         report_progress: impl Fn(u64, u64),
-    ) -> Result<Repository, Error> {
+    ) -> Result<Repository> {
         const MAX_PROGRESS: u64 = 14;
 
         let mut repo = Repository::default();
         report_progress(1, MAX_PROGRESS);
 
         let mut conn = SqliteConnection::connect(path.to_str().ok_or(
-            Error::Str("Cannot convert path to a valid string".into()),
+            AlrError::Str("Cannot convert path to a valid string".into()),
         )?)
         .await?;
         report_progress(2, MAX_PROGRESS);

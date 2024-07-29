@@ -2,7 +2,7 @@
 use sqlx;
 
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub enum AlrError {
     #[error("{0}")]
     Str(String),
 

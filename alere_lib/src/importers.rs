@@ -1,4 +1,4 @@
-use crate::errors::Error;
+use anyhow::Result;
 use crate::repositories::Repository;
 use std::future::Future;
 use std::path::Path;
@@ -11,5 +11,5 @@ pub trait Importer {
         &mut self,
         path: &Path,
         report_progress: impl Fn(u64, u64),
-    ) -> impl Future<Output = Result<Repository, Error>>;
+    ) -> impl Future<Output = Result<Repository>>;
 }

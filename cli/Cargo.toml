@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 alere_lib = { path = "../alere_lib", features = [ "kmymoney" ] }
+anyhow = { workspace = true }
 chrono = { workspace = true }
 console = "0.15.8"
 futures = { workspace = true }

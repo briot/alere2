@@ -1,8 +1,8 @@
 use alere_lib::accounts::AccountNameKind;
-use alere_lib::errors::Error;
 use alere_lib::importers::Importer;
 use alere_lib::kmymoney::KmyMoneyImporter;
 use alere_lib::multi_values::MultiValue;
+use anyhow::Result;
 use chrono::Local;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -20,7 +20,7 @@ fn trunc_keep_first(s: &str, max_width: usize) -> &str {
         .map_or_else(|| s, |(i, _)| &s[..i])
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let mut kmy = KmyMoneyImporter::default();
 
     let progress = ProgressBar::new(1) //  we do not know the length

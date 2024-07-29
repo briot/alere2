@@ -11,6 +11,7 @@ default = []
 kmymoney = [ "dep:sqlx" ]
 
 [dependencies]
+anyhow = { workspace = true }
 bisection = "0.1.0"
 bitmask = "0.5.0"
 chrono = { workspace = true }

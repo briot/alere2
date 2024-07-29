@@ -415,10 +415,13 @@ impl KmyMoneyImporter {
         while let Some(row) = stream.try_next().await? {
             let parent_kmm_id: Option<&str> = row.get("parentId");
             if let Some(pid) = parent_kmm_id {
-                let parent_id = self.accounts.get(pid).unwrap();
-                let kmm_id: &str = row.get("id");
-                let id = self.accounts.get(kmm_id).unwrap();
-                repo.get_account_mut(*id).unwrap().set_parent(*parent_id);
+                if !pid.is_empty() {
+                    let parent_id = self.accounts.get(pid)
+                        .with_context(|| format!("No such account {pid:?}"))?;
+                    let kmm_id: &str = row.get("id");
+                    let id = self.accounts.get(kmm_id).unwrap();
+                    repo.get_account_mut(*id).unwrap().set_parent(*parent_id);
+                }
             }
         }
         Ok(())

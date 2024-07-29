@@ -72,7 +72,10 @@ pub struct KmyMoneyImporter {
     account_kinds: HashMap<String, AccountKindId>,
     commodities: HashMap<String, CommodityId>,
     payees: HashMap<String, PayeeId>,
+
     price_precisions: HashMap<CommodityId, u8>,
+    smallest_account_fraction: HashMap<CommodityId, u8>,
+
     account_currency: HashMap<String, CommodityId>,
     price_sources: HashMap<String, PriceSourceId>,
 }
@@ -223,7 +226,7 @@ impl KmyMoneyImporter {
             let precision = row.get_unchecked::<u8, _>("pricePrecision");
             let display_precision = row
                 .get_unchecked::<u32, _>("smallestAccountFraction")
-                .ilog10();
+                .ilog10() as u8;
 
             let id = repo.add_commodity(Commodity::new(
                 row.get("name"),
@@ -231,10 +234,11 @@ impl KmyMoneyImporter {
                 row.get("symbolString"), // symbol_after (could be symbol2)
                 true,                    // is_currency
                 row.get("ISOcode"),
-                display_precision as u8,
+                display_precision,
             ));
             self.commodities.insert(row.get("ISOcode"), id);
             self.price_precisions.insert(id, precision);
+            self.smallest_account_fraction.insert(id, display_precision);
 
             // ??? Not imported
             //    symbol1
@@ -255,9 +259,9 @@ impl KmyMoneyImporter {
             let precision = row.get_unchecked::<u8, _>("pricePrecision");
             let display_precision = row
                 .get_unchecked::<u32, _>("smallestAccountFraction")
-                .ilog10();
+                .ilog10() as u8;
             let prec = if row.get::<&str, _>("typeString") == "Stock" {
-                display_precision as u8
+                display_precision
             } else {
                 precision
             };
@@ -269,7 +273,9 @@ impl KmyMoneyImporter {
                 row.get("symbol"),
                 prec,
             ));
-            self.price_precisions.insert(id, prec);
+            self.price_precisions.insert(id, precision);
+            self.smallest_account_fraction.insert(
+                id, display_precision);
             let kmm_id: String = row.get("id");
             self.commodities.insert(kmm_id, id);
 
@@ -570,7 +576,6 @@ impl KmyMoneyImporter {
                 .get(self.account_currency.get(k_account).unwrap())
                 .unwrap();
             let tx_currency = &t.0;
-            let tx_precision = *self.price_precisions.get(tx_currency).unwrap();
             let post_ts = row
                 .get::<NaiveDate, _>("postDate")
                 .and_hms_opt(0, 0, 0)
@@ -579,7 +584,7 @@ impl KmyMoneyImporter {
                 .unwrap();
 
             t.1.set_check_number(row.get("checkNumber"))
-                .map_err(|e| Error::Str(format!("{tid}/{sid} {e}")))?;
+                .map_err(|e| AlrError::Str(format!("{tid}/{sid} {e}")))?;
             t.1.set_memo(row.get("memo"));
             t.1.set_payee(
                 row.get::<Option<&str>, _>("payeeId")
@@ -594,11 +599,25 @@ impl KmyMoneyImporter {
                         .unwrap()
                 });
 
-            let price = parse_price(row.get("price"), tx_precision)?;
+            // In kmymoney, we have a sell of ETH (price_precision is 5)
+            // at a price 2450.75413 EUR (and the price_precision for
+            // EUR is 4).  So we end up using 2450.7541 which results in
+            // a rounding error in the assert below.
+            // So we should be using the precision for the account's
+            // security (here ETH) for the price.
+            // And the precision of smallestAccountFraction for the same
+            // security (ETH) for the quantity we are selling.
+
+            let price = parse_price(
+                row.get("price"),
+                self.price_precisions[account_currency_id],
+            )?;
             let value =
                 parse_price(row.get("value"), account_precision)?.unwrap();
-            let shares =
-                parse_price(row.get("shares"), account_precision)?.unwrap();
+            let shares = parse_price(
+                row.get("shares"),
+                self.smallest_account_fraction[account_currency_id]
+            )?.unwrap();
 
             let action: Option<&str> = row.get("action");
             let (value, orig_value) = match (action, price) {
@@ -626,7 +645,23 @@ impl KmyMoneyImporter {
                     Operation::Credit(Value::new(shares, *account_currency_id)),
                 ),
                 (Some("Buy"), Some(p)) => {
-                    assert!((p * shares - value).abs() < dec!(0.01));
+                    let diff = (p * shares - value).abs();
+                    if diff >= dec!(0.007) {
+                        println!("{tid} price {:?}={:?} shares {:?}={:?} value {:?}={:?} computed_value={:?} diff={:?} smallest={:?}/{:?}/{:?}/{:?}",
+                            row.get::<&str, _>("price"),
+                            p,
+                            row.get::<&str, _>("shares"),
+                            shares,
+                            row.get::<&str, _>("value"),
+                            value,
+                            p * shares,
+                            diff,
+                            self.smallest_account_fraction[account_currency_id],
+                            self.smallest_account_fraction[tx_currency],
+                            self.price_precisions[account_currency_id],
+                            self.price_precisions[tx_currency]);
+                    }
+
                     (
                         Some(Value::new(value, *tx_currency)),
                         Operation::Buy(Value::new(

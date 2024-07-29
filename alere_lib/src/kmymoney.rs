@@ -620,7 +620,7 @@ impl KmyMoneyImporter {
                         )),
                     )
                 }
-                (Some("Add"), None) => (
+                (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => (
                     None,
                     Operation::Credit(Value::new(shares, *account_currency_id)),
                 ),
@@ -634,7 +634,7 @@ impl KmyMoneyImporter {
                         )),
                     )
                 }
-                (Some("Split"), None) => {
+                (Some("Split"), p) if p.is_none() || p == Some(Decimal::ONE)=> {
                     // Split could be represented as:
                     // - an entry in a separate table. Useful to take them into
                     //   account when looking at performance.
@@ -664,7 +664,7 @@ impl KmyMoneyImporter {
                         *account_currency_id,
                     )),
                 ),
-                (None, _) => {
+                (None | Some(""), _) => {
                     // Standard transaction, not for shares
                     (
                         Some(Value::new(value, *tx_currency)),
@@ -674,8 +674,8 @@ impl KmyMoneyImporter {
                         )),
                     )
                 }
-                (Some(a), _) => {
-                    Err(Error::Str(format!("Unknown action, {a:?}")))?
+                (Some(a), p) => {
+                    Err(AlrError::Str(format!("Unknown action, {a:?} {p:?}")))?
                 }
             };
 

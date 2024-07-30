@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use crate::account_kinds::AccountKindId;
 use crate::accounts::{Account, AccountId};
 use crate::commodities::{Commodity, CommodityId};
@@ -11,6 +10,7 @@ use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
 use crate::repositories::Repository;
 use crate::transactions::{ReconcileKind, TransactionDetails, TransactionRc};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDate};
 use log::error;
 use rust_decimal::Decimal;
@@ -22,10 +22,7 @@ use std::path::Path;
 // Moreover, we must take into account the "pricePrecision" for the currency
 // (this could let us store integers rather than decimal, too).
 
-pub fn parse_price(
-    text: &str,
-    price_precision: u8,
-) -> Result<Option<Decimal>> {
+pub fn parse_price(text: &str, price_precision: u8) -> Result<Option<Decimal>> {
     if text.is_empty() {
         return Ok(None);
     }
@@ -274,8 +271,7 @@ impl KmyMoneyImporter {
                 prec,
             ));
             self.price_precisions.insert(id, precision);
-            self.smallest_account_fraction.insert(
-                id, display_precision);
+            self.smallest_account_fraction.insert(id, display_precision);
             let kmm_id: String = row.get("id");
             self.commodities.insert(kmm_id, id);
 
@@ -423,7 +419,9 @@ impl KmyMoneyImporter {
             let parent_kmm_id: Option<&str> = row.get("parentId");
             if let Some(pid) = parent_kmm_id {
                 if !pid.is_empty() {
-                    let parent_id = self.accounts.get(pid)
+                    let parent_id = self
+                        .accounts
+                        .get(pid)
                         .with_context(|| format!("No such account {pid:?}"))?;
                     let kmm_id: &str = row.get("id");
                     let id = self.accounts.get(kmm_id).unwrap();
@@ -616,8 +614,9 @@ impl KmyMoneyImporter {
                 parse_price(row.get("value"), account_precision)?.unwrap();
             let shares = parse_price(
                 row.get("shares"),
-                self.smallest_account_fraction[account_currency_id]
-            )?.unwrap();
+                self.smallest_account_fraction[account_currency_id],
+            )?
+            .unwrap();
 
             let action: Option<&str> = row.get("action");
             let (value, orig_value) = match (action, price) {
@@ -670,7 +669,9 @@ impl KmyMoneyImporter {
                         )),
                     )
                 }
-                (Some("Split"), p) if p.is_none() || p == Some(Decimal::ONE)=> {
+                (Some("Split"), p)
+                    if p.is_none() || p == Some(Decimal::ONE) =>
+                {
                     // Split could be represented as:
                     // - an entry in a separate table. Useful to take them into
                     //   account when looking at performance.

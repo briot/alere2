@@ -287,10 +287,10 @@ impl Repository {
     pub fn balance(&self) -> HashMap<AccountId, MultiValue> {
         self.accounts
             .iter_accounts()
-            .filter(|(_, acc)|
+            .filter(|(_, acc)| {
                 !acc.closed
-                && self.account_kinds.get(acc.kind).unwrap().is_networth
-            )
+                    && self.account_kinds.get(acc.kind).unwrap().is_networth
+            })
             .map(|(acc_id, acc)| {
                 let mut acc_balance = MultiValue::default();
 

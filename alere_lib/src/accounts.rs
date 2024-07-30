@@ -147,7 +147,7 @@ impl Account {
             .sort_by(|tr1, tr2| tr1.earlier_than_for_account(tr2, self_id))
     }
 
-    pub fn iter_transactions(&self) -> impl Iterator<Item=&TransactionRc> {
+    pub fn iter_transactions(&self) -> impl Iterator<Item = &TransactionRc> {
         self.transactions.iter()
     }
 }

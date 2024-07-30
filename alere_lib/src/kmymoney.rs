@@ -231,7 +231,7 @@ impl KmyMoneyImporter {
                 row.get("symbolString"), // symbol_after (could be symbol2)
                 true,                    // is_currency
                 row.get("ISOcode"),
-                display_precision,
+                precision,
             ));
             self.commodities.insert(row.get("ISOcode"), id);
             self.price_precisions.insert(id, precision);

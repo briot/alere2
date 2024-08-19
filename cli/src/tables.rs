@@ -1,32 +1,54 @@
+#[derive(Clone, Copy)]
 pub enum Width {
     Fixed(usize),
     Auto,
     Expand,
 }
+#[derive(Clone, Copy)]
 pub enum Align {
     Left,
+    Center,
     Right,
 }
+#[derive(Clone, Copy)]
 pub enum Truncate {
     Left,  //  Remove left-most characters
     Right, //  Remove right-most characters
 }
+#[derive(Clone, Copy)]
+pub enum ColumnFooter {
+    Show,
+    Hide,
+}
 
-pub struct Column {
+pub struct Column<'a, T> {
     align: Align,
     truncate: Truncate,
     width: Width,
+    footer: ColumnFooter,
+    title: String,
+    get_content: &'a dyn Fn(&T) -> String,
+
+    computed_width: usize,
 }
-impl Default for Column {
-    fn default() -> Self {
-        Column {
+impl<'a, T> Column<'a, T> {
+    pub fn new(title: &str, get_content: &'a dyn Fn(&T) -> String) -> Self {
+        Self {
             align: Align::Left,
             truncate: Truncate::Right,
             width: Width::Auto,
+            footer: ColumnFooter::Show,
+            title: title.to_string(),
+            computed_width: 0,
+            get_content,
         }
     }
-}
-impl Column {
+
+    pub fn with_footer(mut self, footer: ColumnFooter) -> Self {
+        self.footer = footer;
+        self
+    }
+
     pub fn with_align(mut self, align: Align) -> Self {
         self.align = align;
         self
@@ -43,139 +65,200 @@ impl Column {
     }
 }
 
-enum Row {
+#[derive(Debug)]
+enum RowData {
     Separator,
     Cells(Vec<String>),
+    Headers,
 }
 
 #[derive(Default)]
-pub struct Table {
-    columns: Vec<Column>,
-    rows: Vec<Row>,
+pub struct Table<'a, T> {
+    columns: Vec<Column<'a, T>>,
+    rows: Vec<RowData>,
+    title: Option<String>,
+    colsep: String,
 }
-impl Table {
-    fn width_from_content(&self, col: usize) -> usize {
-        let mut w = 0;
-        for row in &self.rows {
-            match row {
-                Row::Separator => {}
-                Row::Cells(columns) => {
-                    w = std::cmp::max(w, columns[col].len());
-                }
-            }
+impl<'a, T> Table<'a, T> {
+    pub fn new(columns: Vec<Column<'a, T>>) -> Self {
+        Self {
+            rows: Vec::new(),
+            columns,
+            title: None,
+            colsep: " │ ".to_string(),
         }
-        w
     }
 
-    fn compute_widths(&self, max_width: usize) -> Vec<usize> {
-        let mut widths = Vec::new();
+    pub fn with_title(mut self, title: &str) -> Self {
+        self.title = Some(title.to_string());
+        self
+    }
+
+    pub fn add_col_headers(&mut self) {
+        self.rows.push(RowData::Headers);
+        self.rows.push(RowData::Separator);
+    }
+
+    pub fn add_rows(&mut self, rows: impl IntoIterator<Item = T>) {
+        self.rows.extend(rows.into_iter().map(|row| {
+            RowData::Cells(
+                self.columns
+                    .iter()
+                    .map(|col| (col.get_content)(&row))
+                    .collect(),
+            )
+        }));
+    }
+
+    pub fn add_footer(&mut self, total: &T) {
+        self.rows.push(RowData::Separator);
+        self.rows.push(RowData::Cells(
+            self.columns
+                .iter()
+                .map(|col| match col.footer {
+                    ColumnFooter::Hide => String::new(),
+                    ColumnFooter::Show => (col.get_content)(total),
+                })
+                .collect(),
+        ));
+    }
+
+    /// Compute the size allocated for each column.
+    /// max_width should not include the space for column separators.
+    fn compute_widths(&mut self, max_width: usize) {
+        let mut expandable_count: usize = 0;
         let mut expandable_width: usize = 0;
         let mut fixed_width: usize = 0;
 
-        for (colidx, col) in self.columns.iter().enumerate() {
+        for (colidx, col) in self.columns.iter_mut().enumerate() {
             match col.width {
                 Width::Fixed(w) => {
                     fixed_width += w;
-                    widths.push(w);
+                    col.computed_width = w;
                 }
-                Width::Auto => {
-                    let w = self.width_from_content(colidx);
-                    fixed_width += w;
-                    widths.push(w);
-                }
-                Width::Expand => {
-                    let w = self.width_from_content(colidx);
-                    expandable_width += w;
-                    widths.push(w);
+                Width::Auto | Width::Expand => {
+                    // Compute the ideal width for a column, by checking the
+                    // width of each cell in this column
+                    let mut w = 0;
+                    for row in &self.rows {
+                        match row {
+                            RowData::Separator => {}
+                            RowData::Headers => {
+                                w = std::cmp::max(w, col.title.len());
+                            }
+                            RowData::Cells(columns) => {
+                                w = std::cmp::max(w, columns[colidx].len());
+                            }
+                        }
+                    }
+
+                    col.computed_width = w;
+                    match col.width {
+                        Width::Fixed(_) => {}
+                        Width::Auto => {
+                            fixed_width += w;
+                        }
+                        Width::Expand => {
+                            expandable_width += w;
+                            expandable_count += 1;
+                        }
+                    }
                 }
             }
         }
 
         if expandable_width + fixed_width > max_width {
-            let adjust =
-                (max_width - fixed_width) as f32 / expandable_width as f32;
-            for (colidx, col) in self.columns.iter().enumerate() {
-                if let Width::Expand = col.width {
-                    widths[colidx] = (widths[colidx] as f32 * adjust) as usize;
+            if fixed_width > max_width {
+                // Screen is too narrow, columns will not get what they want.
+                // Assume we only give a few pixels to expandable columns then
+                // apply a ratio so that the table fits
+                const EXP_WIDTH: usize = 3;
+                let ratio = fixed_width as f32
+                    / (max_width - expandable_count * EXP_WIDTH) as f32;
+                for col in self.columns.iter_mut() {
+                    match col.width {
+                        Width::Fixed(_) | Width::Auto => {
+                            col.computed_width =
+                                (col.computed_width as f32 / ratio) as usize;
+                        }
+                        Width::Expand => {
+                            col.computed_width = EXP_WIDTH;
+                        }
+                    }
+                }
+            } else {
+                let adjust =
+                    (max_width - fixed_width) as f32 / expandable_width as f32;
+                for col in self.columns.iter_mut() {
+                    if let Width::Expand = col.width {
+                        col.computed_width =
+                            (col.computed_width as f32 * adjust) as usize;
+                    }
                 }
             }
         }
-
-        widths
     }
 
-    pub fn add_column(&mut self, column: Column) {
-        self.columns.push(column);
+    fn push_colsep(&self, into: &mut String) {
+        into.push_str(&self.colsep);
+    }
+    fn push_rowsep(&self, into: &mut String) {
+        into.push('\n');
     }
 
-    pub fn add_sep(&mut self) {
-        self.rows.push(Row::Separator);
-    }
+    pub fn to_string(&mut self, max_width: usize) -> String {
+        let total_width =
+            max_width - (self.columns.len() - 1) * self.colsep.len();
 
-    pub fn add_row(&mut self, row: Vec<String>) {
-        self.rows.push(Row::Cells(row));
-    }
-
-    pub fn to_string(&self, max_width: usize) -> String {
-        let total_width = max_width - self.columns.len();
-
-        let widths = self.compute_widths(total_width);
+        self.compute_widths(total_width);
         let mut result = String::new();
 
+        if let Some(title) = &self.title {
+            push_sep(&mut result, max_width);
+            self.push_rowsep(&mut result);
+            push_align(&mut result, title, max_width, Align::Center);
+            self.push_rowsep(&mut result);
+            push_sep(&mut result, max_width);
+            self.push_rowsep(&mut result);
+        }
+
         for row in &self.rows {
-            match row {
-                Row::Separator => {
-                    for (colidx, _col) in self.columns.iter().enumerate() {
-                        let max_col_width = widths[colidx];
-                        result.push_str(
-                            &format!("{:-^width$}", "", width=max_col_width)
+            for (colidx, col) in self.columns.iter().enumerate() {
+                match row {
+                    RowData::Separator => {
+                        push_sep(&mut result, col.computed_width);
+                    }
+                    RowData::Headers => {
+                        push_align(
+                            &mut result,
+                            truncate(
+                                &col.title,
+                                col.truncate,
+                                col.computed_width,
+                            ),
+                            col.computed_width,
+                            Align::Center,
                         );
-                        if colidx < self.columns.len() - 1 {
-                            result.push(' ');
-                        }
+                    }
+                    RowData::Cells(columns) => {
+                        push_align(
+                            &mut result,
+                            truncate(
+                                &columns[colidx],
+                                col.truncate,
+                                col.computed_width,
+                            ),
+                            col.computed_width,
+                            col.align,
+                        );
                     }
                 }
-                Row::Cells(columns) => {
-                    for (colidx, content) in columns.iter().enumerate() {
-                        let max_col_width = widths[colidx];
-                        let col = &self.columns[colidx];
-                        let truncated = if content.len() <= max_col_width {
-                            content
-                        } else {
-                            match col.truncate {
-                                Truncate::Right => {
-                                    trunc_keep_first(content, max_col_width)
-                                }
-                                Truncate::Left => {
-                                    trunc_keep_last(content, max_col_width)
-                                }
-                            }
-                        };
 
-                        match col.align {
-                            Align::Left => {
-                                result.push_str(&format!(
-                                    "{:<0width$}",
-                                    truncated,
-                                    width = widths[colidx],
-                                ));
-                            }
-                            Align::Right => {
-                                result.push_str(&format!(
-                                    "{:>0width$}",
-                                    truncated,
-                                    width = widths[colidx],
-                                ));
-                            }
-                        }
-
-                        if colidx < self.columns.len() - 1 {
-                            result.push(' ');
-                        }
-                    }
+                if colidx < self.columns.len() - 1 {
+                    self.push_colsep(&mut result);
                 }
             }
-            result.push('\n');
+            self.push_rowsep(&mut result);
         }
 
         result
@@ -192,4 +275,32 @@ fn trunc_keep_first(s: &str, max_width: usize) -> &str {
     s.char_indices()
         .nth(max_width)
         .map_or_else(|| s, |(i, _)| &s[..i])
+}
+fn push_sep(into: &mut String, width: usize) {
+    into.push_str(&format!("{:─^width$}", "", width = width,));
+}
+fn push_align(into: &mut String, value: &str, width: usize, align: Align) {
+    match align {
+        Align::Left => {
+            into.push_str(&format!("{:<width$}", value, width = width))
+        }
+        Align::Center => {
+            into.push_str(&format!("{:^width$}", value, width = width))
+        }
+        Align::Right => {
+            into.push_str(&format!("{:>width$}", value, width = width))
+        }
+    }
+}
+
+/// Truncate the string if necessary
+fn truncate(val: &str, truncate: Truncate, width: usize) -> &str {
+    if val.len() <= width {
+        val
+    } else {
+        match truncate {
+            Truncate::Right => trunc_keep_first(val, width),
+            Truncate::Left => trunc_keep_last(val, width),
+        }
+    }
 }

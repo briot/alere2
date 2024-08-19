@@ -282,9 +282,11 @@ impl Repository {
         MarketPrices::new(self, to_commodity)
     }
 
-    /// Show the balance for each account, either converted to the given
-    /// commodity, using today's market prices, or in the original commodity.
-    pub fn balance(&self) -> HashMap<AccountId, MultiValue> {
+    /// Show the balance for each account
+    pub fn balance(
+        &self,
+        as_of: DateTime<Local>,
+    ) -> HashMap<AccountId, MultiValue> {
         self.accounts
             .iter_accounts()
             .filter(|(_, acc)| {
@@ -298,7 +300,7 @@ impl Repository {
                 //  place.
                 acc.iter_transactions()
                     .flat_map(|tx| tx.iter_splits())
-                    .filter(|s| s.account == acc_id)
+                    .filter(|s| s.account == acc_id && s.post_ts <= as_of)
                     .for_each(|s| acc_balance.apply(&s.original_value));
                 (acc_id, acc_balance)
             })

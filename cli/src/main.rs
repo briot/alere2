@@ -24,59 +24,76 @@ fn balance_view(
     as_of: &[DateTime<Local>],
     settings: BalanceViewSettings,
 ) -> String {
-    #[derive(Default, Clone)]
+    #[derive(Clone)]
     struct Row {
-        value: MultiValue,
-        market_value: MultiValue,
+        value: Vec<MultiValue>,
+        market_value: Vec<MultiValue>,
         account_name: String,
     }
-    let mv_image = |row: &Row| repo.display_multi_value(&row.value);
-    let market_image = |row: &Row| repo.display_multi_value(&row.market_value);
+    let mv_image =
+        |row: &Row, idx: usize| repo.display_multi_value(&row.value[idx]);
+    let market_image = |row: &Row, idx: usize| {
+        repo.display_multi_value(&row.market_value[idx])
+    };
 
     let mut market = repo.market_prices(repo.find_commodity("Euro"));
     let mut lines = Vec::new();
-    let mut total = Row::default();
-    for (account, value) in repo.balance(as_of[0]) {
-        if !value.is_zero() {
-            let market_value = market.convert_multi_value(&value, &as_of[0]);
-            total.value += &value;
-            total.market_value += &market_value;
+    let mut total = Row {
+        value: vec![MultiValue::default(); as_of.len()],
+        market_value: vec![MultiValue::default(); as_of.len()],
+        account_name: String::new(),
+    };
+    for (account, value) in repo.balance(as_of) {
+        let mut row = Row {
+            market_value: vec![MultiValue::default(); value.len()],
+            value,
+            account_name: repo.get_account_name(account, AccountNameKind::Full),
+        };
+        let mut has_non_zero = false;
 
-            lines.push(Row {
-                value,
-                market_value,
-                account_name: repo
-                    .get_account_name(account, AccountNameKind::Full),
-            });
+        for (idx, v) in row.value.iter().enumerate() {
+            if !v.is_zero() {
+                has_non_zero = true;
+                let market_value = market.convert_multi_value(v, &as_of[idx]);
+                total.value[idx] += v;
+                total.market_value[idx] += &market_value;
+                row.market_value[idx] = market_value;
+            }
+        }
+
+        if has_non_zero {
+            lines.push(row);
         }
     }
     lines.sort_by(|l1, l2| l1.account_name.cmp(&l2.account_name));
 
     let mut columns = Vec::new();
-    if settings.column_value {
-        columns.push(
-            Column::new("Value", &mv_image)
-                .with_align(Align::Right)
-                .with_truncate(Truncate::Left)
-                .with_footer(ColumnFooter::Hide),
-        );
-    }
-    if settings.column_market {
-        columns.push(
-            Column::new("Market", &market_image)
-                .with_align(Align::Right)
-                .with_truncate(Truncate::Left),
-        );
+    for ts in as_of.iter() {
+        if settings.column_value {
+            columns.push(
+                Column::new(&format!("Value {}", ts.date_naive()), &mv_image)
+                    .with_align(Align::Right)
+                    .with_truncate(Truncate::Left)
+                    .with_footer(ColumnFooter::Hide),
+            );
+        }
+        if settings.column_market {
+            columns.push(
+                Column::new(&format!("Market {}", ts.date_naive()), &market_image)
+                    .with_align(Align::Right)
+                    .with_truncate(Truncate::Left),
+            );
+        }
     }
     columns.push(
-        Column::new("Account", &|row: &Row| row.account_name.clone())
+        Column::new("Account", &|row: &Row, _| row.account_name.clone())
             .with_width(Width::Expand)
             .with_truncate(Truncate::Left)
             .with_footer(ColumnFooter::Hide),
     );
 
     let mut table = Table::<Row>::new(columns)
-        .with_title(&format!("Balance as of {}", as_of[0]));
+        .with_colsep(" ");
     table.add_col_headers();
     table.add_rows(lines);
     table.add_footer(&total);

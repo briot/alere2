@@ -27,12 +27,15 @@ pub struct Column<'a, T> {
     width: Width,
     footer: ColumnFooter,
     title: String,
-    get_content: &'a dyn Fn(&T) -> String,
+    get_content: &'a dyn Fn(&T, usize) -> String,
 
     computed_width: usize,
 }
 impl<'a, T> Column<'a, T> {
-    pub fn new(title: &str, get_content: &'a dyn Fn(&T) -> String) -> Self {
+    pub fn new(
+        title: &str,
+        get_content: &'a dyn Fn(&T, usize) -> String,
+    ) -> Self {
         Self {
             align: Align::Left,
             truncate: Truncate::Right,
@@ -89,6 +92,11 @@ impl<'a, T> Table<'a, T> {
         }
     }
 
+    pub fn with_colsep(mut self, colsep: &str) -> Self {
+        self.colsep = colsep.to_string();
+        self
+    }
+
     pub fn with_title(mut self, title: &str) -> Self {
         self.title = Some(title.to_string());
         self
@@ -100,14 +108,16 @@ impl<'a, T> Table<'a, T> {
     }
 
     pub fn add_rows(&mut self, rows: impl IntoIterator<Item = T>) {
-        self.rows.extend(rows.into_iter().map(|row| {
-            RowData::Cells(
-                self.columns
-                    .iter()
-                    .map(|col| (col.get_content)(&row))
-                    .collect(),
-            )
-        }));
+        self.rows
+            .extend(rows.into_iter().map(|row| {
+                RowData::Cells(
+                    self.columns
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, col)| (col.get_content)(&row, idx))
+                        .collect(),
+                )
+            }));
     }
 
     pub fn add_footer(&mut self, total: &T) {
@@ -115,9 +125,10 @@ impl<'a, T> Table<'a, T> {
         self.rows.push(RowData::Cells(
             self.columns
                 .iter()
-                .map(|col| match col.footer {
+                .enumerate()
+                .map(|(idx, col)| match col.footer {
                     ColumnFooter::Hide => String::new(),
-                    ColumnFooter::Show => (col.get_content)(total),
+                    ColumnFooter::Show => (col.get_content)(total, idx),
                 })
                 .collect(),
         ));

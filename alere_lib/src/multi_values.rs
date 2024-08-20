@@ -140,3 +140,25 @@ impl core::ops::AddAssign<&MultiValue> for MultiValue {
         }
     }
 }
+
+impl core::ops::Sub<&MultiValue> for &MultiValue {
+    type Output = MultiValue;
+
+    fn sub(self, rhs: &MultiValue) -> Self::Output {
+        let mut result = self.clone();
+        result -= rhs;
+        result
+    }
+}
+
+impl core::ops::SubAssign<&MultiValue> for MultiValue {
+    fn sub_assign(&mut self, rhs: &MultiValue) {
+        for (c, value) in &rhs.values {
+            self.values
+                .entry(*c)
+                .and_modify(|v| *v -= *value)
+                .or_insert(*value);
+        }
+    }
+}
+

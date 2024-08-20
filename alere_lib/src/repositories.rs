@@ -285,8 +285,8 @@ impl Repository {
     /// Show the balance for each account
     pub fn balance(
         &self,
-        as_of: DateTime<Local>,
-    ) -> HashMap<AccountId, MultiValue> {
+        as_of: &[DateTime<Local>],
+    ) -> HashMap<AccountId, Vec<MultiValue>> {
         self.accounts
             .iter_accounts()
             .filter(|(_, acc)| {
@@ -294,14 +294,20 @@ impl Repository {
                     && self.account_kinds.get(acc.kind).unwrap().is_networth
             })
             .map(|(acc_id, acc)| {
-                let mut acc_balance = MultiValue::default();
+                let mut acc_balance = vec![MultiValue::default(); as_of.len()];
 
                 //  ??? Could we use fold() here, though we are applying in
                 //  place.
                 acc.iter_transactions()
                     .flat_map(|tx| tx.iter_splits())
-                    .filter(|s| s.account == acc_id && s.post_ts <= as_of)
-                    .for_each(|s| acc_balance.apply(&s.original_value));
+                    .filter(|s| s.account == acc_id)
+                    .for_each(|s| {
+                        for (idx, ts) in as_of.iter().enumerate() {
+                            if s.post_ts <= *ts {
+                                acc_balance[idx].apply(&s.original_value);
+                            }
+                        }
+                    });
                 (acc_id, acc_balance)
             })
             .collect()

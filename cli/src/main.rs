@@ -11,15 +11,13 @@ use chrono::{DateTime, Local};
 use console::Term;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::path::Path;
 use itertools::Itertools;
-
+use std::path::Path;
 
 /// Whether the vector contains all-equal elements
 fn is_all_same<T: PartialEq>(arr: &[T]) -> bool {
     arr.windows(2).all(|w| w[0] == w[1])
 }
-
 
 #[derive(Default)]
 struct BalanceViewSettings {
@@ -75,10 +73,10 @@ fn balance_view(
             }
         }
 
-        if (!settings.hide_zero || has_non_zero) 
-           && (!settings.hide_all_same
-               || !is_all_same(&row.value)
-               || !is_all_same(&row.market_value))
+        if (!settings.hide_zero || has_non_zero)
+            && (!settings.hide_all_same
+                || !is_all_same(&row.value)
+                || !is_all_same(&row.market_value))
         {
             lines.push(row);
         }
@@ -91,12 +89,12 @@ fn balance_view(
         repo.display_multi_value(&row.market_value[*idx])
     };
     let delta_image = |row: &Row, idx: &usize| {
-        repo.display_multi_value(
-            &(&row.value[*idx + 1] - &row.value[*idx]))
+        repo.display_multi_value(&(&row.value[*idx + 1] - &row.value[*idx]))
     };
     let delta_market_image = |row: &Row, idx: &usize| {
         repo.display_multi_value(
-            &(&row.market_value[*idx + 1] - &row.market_value[*idx]))
+            &(&row.market_value[*idx + 1] - &row.market_value[*idx]),
+        )
     };
 
     let mut columns = Vec::new();
@@ -146,9 +144,8 @@ fn balance_view(
             .with_footer(ColumnFooter::Hide),
     );
 
-    let mut table = Table::new(columns)
-        .with_col_headers()
-        .with_colsep(" ");
+    let mut table = Table::new(columns).with_col_headers();
+    //.with_colsep(" ");
     table.add_rows(lines);
     table.add_footer(&total);
 

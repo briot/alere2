@@ -27,7 +27,7 @@ pub enum Operation {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Value {
     pub value: Decimal,
     pub commodity: CommodityId,
@@ -46,7 +46,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MultiValue {
     values: HashMap<CommodityId, Decimal>,
 }

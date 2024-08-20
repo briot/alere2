@@ -13,10 +13,25 @@ use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
+
+/// Whether the vector contains all-equal elements
+fn is_all_same<T: PartialEq>(arr: &[T]) -> bool {
+    arr.windows(2).all(|w| w[0] == w[1])
+}
+
+
 #[derive(Default)]
 struct BalanceViewSettings {
     column_value: bool,
     column_market: bool,
+
+    // Do not show rows if the value is zero
+    hide_zero: bool,
+
+    // Do not show rows if the value or market_value hasn't changed between
+    // all timestamps.  If there is a single timestamp, rows are always
+    // displayed.
+    hide_all_same: bool,
 }
 
 fn balance_view(
@@ -49,6 +64,7 @@ fn balance_view(
             value,
             account_name: repo.get_account_name(account, AccountNameKind::Full),
         };
+
         let mut has_non_zero = false;
 
         for (idx, v) in row.value.iter().enumerate() {
@@ -61,7 +77,11 @@ fn balance_view(
             }
         }
 
-        if has_non_zero {
+        if (!settings.hide_zero || has_non_zero) 
+           && (!settings.hide_all_same
+               || !is_all_same(&row.value)
+               || !is_all_same(&row.market_value))
+        {
             lines.push(row);
         }
     }
@@ -127,6 +147,8 @@ fn main() -> Result<()> {
         BalanceViewSettings {
             column_market: true,
             column_value: false,
+            hide_zero: true,
+            hide_all_same: false,
         },
     );
     progress.finish_and_clear();

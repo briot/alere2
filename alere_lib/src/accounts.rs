@@ -138,6 +138,10 @@ impl Account {
         self.parent = Some(parent);
     }
 
+    pub fn get_parent(&self) -> Option<AccountId> {
+        self.parent
+    }
+
     pub fn add_transaction(&mut self, transaction: &TransactionRc) {
         self.transactions.push(transaction.clone());
     }

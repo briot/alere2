@@ -197,6 +197,15 @@ impl Repository {
     pub fn get_account(&self, id: AccountId) -> Option<&Account> {
         self.accounts.get(id)
     }
+    pub fn get_account_parents(&self, id: AccountId) -> Vec<AccountId> {
+        let mut parents = Vec::new();
+        let mut p = self.accounts.get(id).unwrap().get_parent();
+        while let Some(pid) = p {
+            parents.push(pid);
+            p = self.accounts.get(pid).unwrap().get_parent();
+        }
+        parents.into_iter().rev().collect()
+    }
     pub fn get_account_name(
         &self,
         id: AccountId,

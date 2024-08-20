@@ -99,7 +99,7 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
             rows: Vec::new(),
             columns,
             title: None,
-            colsep: " │ ".to_string(),
+            colsep: "│".to_string(),
         }
     }
 
@@ -120,15 +120,11 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
     }
 
     pub fn add_rows(&mut self, rows: impl IntoIterator<Item = TRow>) {
-        self.rows
-            .extend(rows.into_iter().map(|row| {
-                RowData::Cells(
-                    self.columns
-                        .iter()
-                        .map(|col| col.content(&row))
-                        .collect(),
-                )
-            }));
+        self.rows.extend(rows.into_iter().map(|row| {
+            RowData::Cells(
+                self.columns.iter().map(|col| col.content(&row)).collect(),
+            )
+        }));
     }
 
     pub fn add_footer(&mut self, total: &TRow) {
@@ -166,11 +162,11 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                             RowData::Separator => {}
                             RowData::Headers => {
                                 if let Some(t) = &col.title {
-                                    w = std::cmp::max(w, t.len());
+                                    w = std::cmp::max(w, t.chars().count());
                                 }
                             }
                             RowData::Cells(columns) => {
-                                w = std::cmp::max(w, columns[colidx].len());
+                                w = std::cmp::max(w, columns[colidx].chars().count());
                             }
                         }
                     }
@@ -231,7 +227,7 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
 
     pub fn to_string(&mut self, max_width: usize) -> String {
         let total_width =
-            max_width - (self.columns.len() - 1) * self.colsep.len();
+            max_width - (self.columns.len() - 1) * self.colsep.chars().count();
 
         self.compute_widths(total_width);
         let mut result = String::new();
@@ -257,7 +253,7 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                             truncate(
                                 match &col.title {
                                     None => "",
-                                    Some(t) => &t,
+                                    Some(t) => t,
                                 },
                                 col.truncate,
                                 col.computed_width,
@@ -321,7 +317,7 @@ fn push_align(into: &mut String, value: &str, width: usize, align: Align) {
 
 /// Truncate the string if necessary
 fn truncate(val: &str, truncate: Truncate, width: usize) -> &str {
-    if val.len() <= width {
+    if val.chars().count() <= width {
         val
     } else {
         match truncate {

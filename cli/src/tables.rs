@@ -21,30 +21,37 @@ pub enum ColumnFooter {
     Hide,
 }
 
-pub struct Column<'a, T> {
+pub struct Column<'a, TRow, TCol> {
     align: Align,
     truncate: Truncate,
     width: Width,
     footer: ColumnFooter,
-    title: String,
-    get_content: &'a dyn Fn(&T, usize) -> String,
+    title: Option<String>,
+    data: TCol,
+    get_content: &'a dyn Fn(&TRow, &TCol) -> String,
 
     computed_width: usize,
 }
-impl<'a, T> Column<'a, T> {
+impl<'a, TRow, TCol> Column<'a, TRow, TCol> {
     pub fn new(
-        title: &str,
-        get_content: &'a dyn Fn(&T, usize) -> String,
+        data: TCol,
+        get_content: &'a dyn Fn(&TRow, &TCol) -> String,
     ) -> Self {
         Self {
             align: Align::Left,
             truncate: Truncate::Right,
             width: Width::Auto,
             footer: ColumnFooter::Show,
-            title: title.to_string(),
+            title: None,
             computed_width: 0,
+            data,
             get_content,
         }
+    }
+
+    pub fn with_title(mut self, title: &str) -> Self {
+        self.title = Some(title.to_string());
+        self
     }
 
     pub fn with_footer(mut self, footer: ColumnFooter) -> Self {
@@ -66,6 +73,10 @@ impl<'a, T> Column<'a, T> {
         self.width = width;
         self
     }
+
+    fn content(&self, row: &TRow) -> String {
+        (self.get_content)(row, &self.data)
+    }
 }
 
 #[derive(Debug)]
@@ -76,14 +87,14 @@ enum RowData {
 }
 
 #[derive(Default)]
-pub struct Table<'a, T> {
-    columns: Vec<Column<'a, T>>,
+pub struct Table<'a, TRow, TCol> {
+    columns: Vec<Column<'a, TRow, TCol>>,
     rows: Vec<RowData>,
     title: Option<String>,
     colsep: String,
 }
-impl<'a, T> Table<'a, T> {
-    pub fn new(columns: Vec<Column<'a, T>>) -> Self {
+impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
+    pub fn new(columns: Vec<Column<'a, TRow, TCol>>) -> Self {
         Self {
             rows: Vec::new(),
             columns,
@@ -102,33 +113,32 @@ impl<'a, T> Table<'a, T> {
         self
     }
 
-    pub fn add_col_headers(&mut self) {
+    pub fn with_col_headers(mut self) -> Self {
         self.rows.push(RowData::Headers);
         self.rows.push(RowData::Separator);
+        self
     }
 
-    pub fn add_rows(&mut self, rows: impl IntoIterator<Item = T>) {
+    pub fn add_rows(&mut self, rows: impl IntoIterator<Item = TRow>) {
         self.rows
             .extend(rows.into_iter().map(|row| {
                 RowData::Cells(
                     self.columns
                         .iter()
-                        .enumerate()
-                        .map(|(idx, col)| (col.get_content)(&row, idx))
+                        .map(|col| col.content(&row))
                         .collect(),
                 )
             }));
     }
 
-    pub fn add_footer(&mut self, total: &T) {
+    pub fn add_footer(&mut self, total: &TRow) {
         self.rows.push(RowData::Separator);
         self.rows.push(RowData::Cells(
             self.columns
                 .iter()
-                .enumerate()
-                .map(|(idx, col)| match col.footer {
+                .map(|col| match col.footer {
                     ColumnFooter::Hide => String::new(),
-                    ColumnFooter::Show => (col.get_content)(total, idx),
+                    ColumnFooter::Show => col.content(total),
                 })
                 .collect(),
         ));
@@ -155,7 +165,9 @@ impl<'a, T> Table<'a, T> {
                         match row {
                             RowData::Separator => {}
                             RowData::Headers => {
-                                w = std::cmp::max(w, col.title.len());
+                                if let Some(t) = &col.title {
+                                    w = std::cmp::max(w, t.len());
+                                }
                             }
                             RowData::Cells(columns) => {
                                 w = std::cmp::max(w, columns[colidx].len());
@@ -243,7 +255,10 @@ impl<'a, T> Table<'a, T> {
                         push_align(
                             &mut result,
                             truncate(
-                                &col.title,
+                                match &col.title {
+                                    None => "",
+                                    Some(t) => &t,
+                                },
                                 col.truncate,
                                 col.computed_width,
                             ),

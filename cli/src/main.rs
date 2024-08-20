@@ -12,6 +12,7 @@ use console::Term;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
+use itertools::Itertools;
 
 
 /// Whether the vector contains all-equal elements
@@ -24,6 +25,8 @@ fn is_all_same<T: PartialEq>(arr: &[T]) -> bool {
 struct BalanceViewSettings {
     column_value: bool,
     column_market: bool,
+    column_delta: bool,
+    column_market_delta: bool,
 
     // Do not show rows if the value is zero
     hide_zero: bool,
@@ -45,11 +48,6 @@ fn balance_view(
         market_value: Vec<MultiValue>,
         account_name: String,
     }
-    let mv_image =
-        |row: &Row, idx: usize| repo.display_multi_value(&row.value[idx]);
-    let market_image = |row: &Row, idx: usize| {
-        repo.display_multi_value(&row.market_value[idx])
-    };
 
     let mut market = repo.market_prices(repo.find_commodity("Euro"));
     let mut lines = Vec::new();
@@ -87,11 +85,26 @@ fn balance_view(
     }
     lines.sort_by(|l1, l2| l1.account_name.cmp(&l2.account_name));
 
+    let mv_image =
+        |row: &Row, idx: &usize| repo.display_multi_value(&row.value[*idx]);
+    let market_image = |row: &Row, idx: &usize| {
+        repo.display_multi_value(&row.market_value[*idx])
+    };
+    let delta_image = |row: &Row, idx: &usize| {
+        repo.display_multi_value(
+            &(&row.value[*idx + 1] - &row.value[*idx]))
+    };
+    let delta_market_image = |row: &Row, idx: &usize| {
+        repo.display_multi_value(
+            &(&row.market_value[*idx + 1] - &row.market_value[*idx]))
+    };
+
     let mut columns = Vec::new();
-    for ts in as_of.iter() {
+    for (pos, (idx, ts)) in as_of.iter().enumerate().with_position() {
         if settings.column_value {
             columns.push(
-                Column::new(&format!("Value {}", ts.date_naive()), &mv_image)
+                Column::new(idx, &mv_image)
+                    .with_title(&format!("Value {}", ts.date_naive()))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left)
                     .with_footer(ColumnFooter::Hide),
@@ -99,22 +112,43 @@ fn balance_view(
         }
         if settings.column_market {
             columns.push(
-                Column::new(&format!("Market {}", ts.date_naive()), &market_image)
+                Column::new(idx, &market_image)
+                    .with_title(&format!("Mkt {}", ts.date_naive()))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );
         }
+        if let itertools::Position::Last | itertools::Position::Only = pos {
+        } else {
+            if settings.column_delta {
+                columns.push(
+                    Column::new(idx, &delta_image)
+                        .with_title("Delta")
+                        .with_align(Align::Right)
+                        .with_truncate(Truncate::Left),
+                );
+            }
+            if settings.column_market_delta {
+                columns.push(
+                    Column::new(idx, &delta_market_image)
+                        .with_title("Delta Mkt")
+                        .with_align(Align::Right)
+                        .with_truncate(Truncate::Left),
+                );
+            }
+        }
     }
     columns.push(
-        Column::new("Account", &|row: &Row, _| row.account_name.clone())
+        Column::new(0, &|row: &Row, _| row.account_name.clone())
+            .with_title("Account")
             .with_width(Width::Expand)
             .with_truncate(Truncate::Left)
             .with_footer(ColumnFooter::Hide),
     );
 
-    let mut table = Table::<Row>::new(columns)
+    let mut table = Table::new(columns)
+        .with_col_headers()
         .with_colsep(" ");
-    table.add_col_headers();
     table.add_rows(lines);
     table.add_footer(&total);
 
@@ -147,6 +181,8 @@ fn main() -> Result<()> {
         BalanceViewSettings {
             column_market: true,
             column_value: false,
+            column_delta: false,
+            column_market_delta: true,
             hide_zero: true,
             hide_all_same: false,
         },

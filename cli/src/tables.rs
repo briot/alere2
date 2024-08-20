@@ -166,7 +166,10 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                                 }
                             }
                             RowData::Cells(columns) => {
-                                w = std::cmp::max(w, columns[colidx].chars().count());
+                                w = std::cmp::max(
+                                    w,
+                                    columns[colidx].chars().count(),
+                                );
                             }
                         }
                     }

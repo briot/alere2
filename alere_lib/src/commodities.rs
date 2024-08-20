@@ -1,4 +1,5 @@
 use crate::price_sources::PriceSourceId;
+//use accounting::Accounting;
 use rust_decimal::{Decimal, RoundingStrategy};
 
 #[derive(Default)]
@@ -59,17 +60,15 @@ impl CommodityId {
 /// statistics, depending on when you bought, the fees applied by the
 /// institution, and so on.
 
-#[derive(Debug)]
 pub struct Commodity {
     /// Name as displayed in selection boxes in the GUI.  For instance, it
     /// could be "Euro", "Apple Inc.", ...
     pub name: String,
 
-    /// Symbol to display the commodity. For instance, it could be the
-    /// euro sign, or "AAPL".  "before" and "after" refer to whether the
-    /// symbol is displayed before or after the numeric value.
-    symbol_before: String,
-    symbol_after: String,
+    // Symbol to display the commodity. For instance, it could be the
+    // euro sign, or "AAPL", and whether to display before or after the value.
+    symbol: String,
+    symbol_after: bool,
 
     /// What kind of commodity this is.
     pub is_currency: bool,
@@ -96,46 +95,68 @@ pub struct Commodity {
 impl Commodity {
     pub fn new(
         name: &str,
-        symbol_before: &str,
-        symbol_after: &str,
+        symbol: &str,
+        symbol_after: bool,
         is_currency: bool,
         quote_symbol: Option<&str>,
         display_precision: u8,
     ) -> Self {
         Commodity {
             name: name.into(),
-            symbol_before: symbol_before.trim().to_string(),
-            symbol_after: symbol_after.trim().into(),
+            display_precision,
+            symbol: symbol.trim().to_string(),
+            symbol_after,
             is_currency,
             quote_symbol: quote_symbol.map(str::to_string),
             quote_source: None,
             quote_currency: None,
-            display_precision,
         }
     }
 
     //  Display a given value for a commodity
     pub fn display(&self, value: &Decimal) -> String {
-        format!(
-            "{}{}{:.width$}{}{}",
-            self.symbol_before,
-            if self.symbol_before.is_empty() {
-                ""
-            } else {
-                " "
-            },
-            value.round_dp_with_strategy(
-                self.display_precision as u32,
-                RoundingStrategy::MidpointTowardZero
-            ),
-            if self.symbol_after.is_empty() {
-                ""
-            } else {
-                " "
-            },
-            self.symbol_after,
-            width = self.display_precision as usize,
-        )
+        let rounded = value.abs().round_dp_with_strategy(
+            self.display_precision as u32,
+            RoundingStrategy::MidpointTowardZero,
+        );
+        let val: Vec<char> = rounded.to_string().chars().collect();
+        let decimal = val.iter().position(|&r| r == '.').unwrap_or(val.len());
+        let mut buffer = String::new();
+
+        if value.is_sign_negative() {
+            buffer.push('-');
+        }
+
+        if !self.symbol_after {
+            buffer.push_str(&self.symbol);
+            buffer.push(' ');
+        }
+
+        for (idx, p) in val[0..decimal].iter().enumerate() {
+            if idx > 0 && (decimal - idx) % 3 == 0 {
+                buffer.push(',');
+            }
+            buffer.push(*p);
+        }
+
+        if self.display_precision > 0 {
+            buffer.push('.');
+            let mut count = 0_u8;
+            for p in val.iter().skip(decimal + 1) {
+                buffer.push(*p);
+                count += 1;
+            }
+            for _ in count + 1..=self.display_precision {
+                buffer.push('0');
+            }
+        }
+
+        if self.symbol_after {
+            buffer.push(' ');
+            buffer.push_str(&self.symbol);
+        }
+
+        buffer
     }
 }
 
@@ -147,8 +168,11 @@ mod test {
     pub fn create_currency(
         coll: &mut CommodityCollection,
         name: &str,
+        precision: u8,
+        after: bool,
     ) -> CommodityId {
-        let commodity = Commodity::new(name, "", name, true, None, 2);
+        let commodity =
+            Commodity::new(name, name, after, true, None, precision);
         coll.add(commodity)
     }
 
@@ -156,14 +180,14 @@ mod test {
         coll: &mut CommodityCollection,
         name: &str,
     ) -> CommodityId {
-        let commodity = Commodity::new(name, "", name, false, None, 2);
+        let commodity = Commodity::new(name, name, true, false, None, 2);
         coll.add(commodity)
     }
 
     #[test]
     fn test_commodity() {
         let mut coll = CommodityCollection::default();
-        let eur = create_currency(&mut coll, "EUR");
+        let eur = create_currency(&mut coll, "EUR", 2, true);
         let aapl = create_security(&mut coll, "AAPL");
         assert_eq!(coll.list_currencies(), &[eur]);
         assert_eq!(coll.find("EUR"), Some(eur));
@@ -174,7 +198,8 @@ mod test {
     #[test]
     fn test_display() {
         let mut coll = CommodityCollection::default();
-        let eur = create_currency(&mut coll, "EUR");
+        let eur = create_currency(&mut coll, "EUR", 2, true);
+        let usd = create_currency(&mut coll, "USD", 4, false);
         assert_eq!(coll.get(eur).unwrap().display(&dec!(0.238)), "0.24 EUR");
         assert_eq!(coll.get(eur).unwrap().display(&dec!(0.234)), "0.23 EUR");
         assert_eq!(coll.get(eur).unwrap().display(&dec!(0.235)), "0.23 EUR");
@@ -185,5 +210,14 @@ mod test {
         );
         assert_eq!(coll.get(eur).unwrap().display(&dec!(1.00)), "1.00 EUR");
         assert_eq!(coll.get(eur).unwrap().display(&dec!(1)), "1.00 EUR");
+
+        assert_eq!(
+            coll.get(eur).unwrap().display(&dec!(-1234567.891)),
+            "-1,234,567.89 EUR"
+        );
+        assert_eq!(
+            coll.get(usd).unwrap().display(&dec!(-1234567.891)),
+            "-USD 1,234,567.8910"
+        );
     }
 }

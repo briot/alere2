@@ -285,14 +285,14 @@ pub struct Split {
 mod test {
     use crate::accounts::AccountId;
     use crate::commodities::CommodityId;
-    use crate::errors::Error;
+    use crate::errors::AlrError;
     use crate::multi_values::Value;
     use crate::transactions::{Operation, ReconcileKind, TransactionRc};
     use chrono::Local;
     use rust_decimal_macros::dec;
 
     #[test]
-    fn test_proper() -> Result<(), Error> {
+    fn test_proper() -> Result<(), AlrError> {
         let mut tr = TransactionRc::new_with_default();
         tr.add_split(
             AccountId(1),

@@ -127,6 +127,12 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
         }));
     }
 
+    pub fn add_row(&mut self, row: &TRow) {
+        self.rows.push(RowData::Cells(
+            self.columns.iter().map(|col| col.content(row)).collect(),
+        ));
+    }
+
     pub fn add_footer(&mut self, total: &TRow) {
         self.rows.push(RowData::Separator);
         self.rows.push(RowData::Cells(

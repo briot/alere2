@@ -3,6 +3,7 @@ use crate::institutions::InstitutionId;
 use crate::transactions::TransactionRc;
 use chrono::{DateTime, Local};
 
+#[derive(Clone, Copy)]
 pub enum AccountNameKind {
     Short,
     Full,

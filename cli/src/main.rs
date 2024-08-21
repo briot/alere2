@@ -1,11 +1,13 @@
+mod networth_view;
 pub mod tables;
-pub mod networth;
 
-use alere_lib::importers::Importer;
-use alere_lib::kmymoney::KmyMoneyImporter;
+use crate::networth_view::networth_view;
+use alere_lib::{
+    accounts::AccountNameKind, importers::Importer, kmymoney::KmyMoneyImporter,
+    networth::Networth,
+};
 use anyhow::Result;
 use chrono::Local;
-use crate::networth::networth_view;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
@@ -30,10 +32,10 @@ fn main() -> Result<()> {
     ))?;
 
     let now = Local::now();
-    let output = networth_view(
+    let networth = Networth::new(
         &repo,
         &[now - chrono::Months::new(1), now],
-        crate::networth::Settings {
+        alere_lib::networth::Settings {
             column_market: true,
             column_value: false,
             column_delta: false,
@@ -41,10 +43,13 @@ fn main() -> Result<()> {
             hide_zero: true,
             hide_all_same: false,
             tree: true,
+            account_names: AccountNameKind::Short,
             subtotals: true,
             commodity: repo.find_commodity("Euro"),
         },
     );
+
+    let output = networth_view(&repo, networth);
     progress.finish_and_clear();
     println!("{}", output);
 

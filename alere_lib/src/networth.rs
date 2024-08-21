@@ -172,7 +172,7 @@ impl Networth {
                             repo,
                             col_count,
                             Some(p),
-                            pidx,
+                            row.indent - pidx - 1,
                         ));
                         result.lines.len() - 1
                     });

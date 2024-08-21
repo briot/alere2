@@ -197,14 +197,17 @@ impl Repository {
     pub fn get_account(&self, id: AccountId) -> Option<&Account> {
         self.accounts.get(id)
     }
+
+    // Return the parent accounts, starting with the direct parent.  The last
+    // element in the returned vec is therefore the toplevel account like Asset.
     pub fn get_account_parents(&self, id: AccountId) -> Vec<AccountId> {
         let mut parents = Vec::new();
-        let mut p = self.accounts.get(id).unwrap().get_parent();
-        while let Some(pid) = p {
+        let mut p = id;
+        while let Some(pid) = self.accounts.get(p).unwrap().get_parent() {
             parents.push(pid);
-            p = self.accounts.get(pid).unwrap().get_parent();
+            p = pid;
         }
-        parents.into_iter().rev().collect()
+        parents
     }
     pub fn get_account_name(
         &self,

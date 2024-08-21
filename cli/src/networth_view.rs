@@ -1,20 +1,27 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
-use alere_lib::networth::{Networth, NetworthRow};
+use alere_lib::networth::{NodeData, Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use console::Term;
 use itertools::Itertools;
 
 pub fn networth_view(repo: &Repository, networth: Networth) -> String {
-    let mv_image =
-        |row: &NetworthRow, idx: &usize| row.display_value(repo, *idx);
+    type Row = NodeData<NetworthRow>;
+
+    let mv_image = |row: &Row, idx: &usize| row.data.display_value(repo, *idx);
     let market_image =
-        |row: &NetworthRow, idx: &usize| row.display_market_value(repo, *idx);
+        |row: &Row, idx: &usize| row.data.display_market_value(repo, *idx);
     let delta_image =
-        |row: &NetworthRow, idx: &usize| row.display_delta(repo, *idx);
+        |row: &Row, idx: &usize| row.data.display_delta(repo, *idx);
     let delta_market_image =
-        |row: &NetworthRow, idx: &usize| row.display_market_delta(repo, *idx);
-    let account_image = |row: &NetworthRow, _idx: &usize| {
-        row.display_account(repo, networth.settings.account_names)
+        |row: &Row, idx: &usize| row.data.display_market_delta(repo, *idx);
+    let account_image = |row: &Row, _idx: &usize| {
+        format!(
+            "{: <width$}{}",
+            "",
+            row.data
+                .display_account(repo, networth.settings.account_names),
+            width = row.depth,
+        )
     };
 
     let mut columns = Vec::new();
@@ -70,7 +77,8 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
     );
 
     let mut table = Table::new(columns).with_col_headers();
-    table.add_rows(networth.lines);
-    table.add_footer(&networth.total);
+    networth.tree.traverse(|node| table.add_row(node));
+
+    table.add_footer(&Row { data: networth.total.clone(), depth: 0});
     table.to_string(Term::stdout().size().1 as usize)
 }

@@ -6,11 +6,13 @@ pub mod errors;
 pub mod importers;
 pub mod institutions;
 pub mod multi_values;
+pub mod networth;
 pub mod payees;
 pub mod price_sources;
 pub mod prices;
 pub mod repositories;
 pub mod transactions;
+mod utils;
 
 #[cfg(feature = "kmymoney")]
 pub mod kmymoney;

@@ -39,16 +39,21 @@ pub struct Settings {
 }
 
 pub struct NetworthRow {
-    pub value: Vec<MultiValue>,
-    pub market_value: Vec<MultiValue>,
-    pub account: Option<AccountId>,
-    pub indent: usize,
-    pub has_children: bool,
+    value: Vec<MultiValue>,
+    market_value: Vec<MultiValue>,
+    account: Option<AccountId>,
+    indent: usize,
+    has_children: bool,
     full_account_name: String,
 }
 
 impl NetworthRow {
-    fn new(repo: &Repository, size: usize, account: Option<AccountId>, indent: usize) -> Self {
+    fn new(
+        repo: &Repository,
+        size: usize,
+        account: Option<AccountId>,
+        indent: usize,
+    ) -> Self {
         NetworthRow {
             value: vec![MultiValue::default(); size],
             market_value: vec![MultiValue::default(); size],
@@ -63,12 +68,52 @@ impl NetworthRow {
     }
 
     fn new_with_children(
-        repo: &Repository, size: usize, account: Option<AccountId>,
+        repo: &Repository,
+        size: usize,
+        account: Option<AccountId>,
         indent: usize,
     ) -> Self {
         let mut r = NetworthRow::new(repo, size, account, indent);
         r.has_children = true;
         r
+    }
+
+    pub fn display_value(&self, repo: &Repository, idx: usize) -> String {
+        repo.display_multi_value(&self.value[idx])
+    }
+    pub fn display_market_value(
+        &self,
+        repo: &Repository,
+        idx: usize,
+    ) -> String {
+        repo.display_multi_value(&self.market_value[idx])
+    }
+    pub fn display_delta(&self, repo: &Repository, idx: usize) -> String {
+        repo.display_multi_value(&(&self.value[idx + 1] - &self.value[idx]))
+    }
+    pub fn display_market_delta(
+        &self,
+        repo: &Repository,
+        idx: usize,
+    ) -> String {
+        repo.display_multi_value(
+            &(&self.market_value[idx + 1] - &self.market_value[idx]),
+        )
+    }
+    pub fn display_account(
+        &self,
+        repo: &Repository,
+        kind: AccountNameKind,
+    ) -> String {
+        match self.account {
+            None => String::new(),
+            Some(acc) => format!(
+                "{: <width$}{}",
+                "",
+                repo.get_account_name(acc, kind),
+                width = self.indent,
+            ),
+        }
     }
 
     /// Merge two rows
@@ -124,7 +169,11 @@ impl Networth {
                 for (pidx, p) in parents.into_iter().enumerate() {
                     let n = parent_nodes.entry(p).or_insert_with(|| {
                         result.lines.push(NetworthRow::new_with_children(
-                            repo, col_count, Some(p), pidx));
+                            repo,
+                            col_count,
+                            Some(p),
+                            pidx,
+                        ));
                         result.lines.len() - 1
                     });
                     result.lines[*n].has_children = true;

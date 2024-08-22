@@ -294,17 +294,18 @@ impl Repository {
         MarketPrices::new(self, to_commodity)
     }
 
-    /// Show the balance for each account
-    pub fn balance(
+    /// Cumulate all operations, for all accounts, to get the current total.
+    pub fn balance<F>(
         &self,
         as_of: &[DateTime<Local>],
-    ) -> HashMap<AccountId, Vec<MultiValue>> {
+        mut filter_account: F,
+    ) -> HashMap<AccountId, Vec<MultiValue>>
+    where
+        F: FnMut(&Account) -> bool,
+    {
         self.accounts
             .iter_accounts()
-            .filter(|(_, acc)| {
-                !acc.closed
-                    && self.account_kinds.get(acc.kind).unwrap().is_networth
-            })
+            .filter(|(_, acc)| filter_account(acc))
             .map(|(acc_id, acc)| {
                 let mut acc_balance = vec![MultiValue::default(); as_of.len()];
 

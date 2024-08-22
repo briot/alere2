@@ -117,7 +117,10 @@ impl Networth {
             total: NetworthRow::new(col_count),
         };
 
-        for (account, value) in repo.balance(as_of) {
+        for (account, value) in repo.balance(as_of, |acc| {
+            !acc.closed
+                && repo.get_account_kinds().get(acc.kind).unwrap().is_networth
+        }) {
             let parents = repo.get_account_parents(account);
             let row = result
                 .tree

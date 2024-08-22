@@ -70,6 +70,20 @@ impl NetworthRow {
         )
     }
 
+    /// Add values to the already known values in self
+    fn add_value(&mut self, values: &[MultiValue]) {
+        self.value
+            .iter_mut()
+            .zip(values)
+            .for_each(|(r, val)| *r += val);
+    }
+    fn add_market_value(&mut self, values: &[MultiValue]) {
+        self.market_value
+            .iter_mut()
+            .zip(values)
+            .for_each(|(r, val)| *r += val);
+    }
+
     //    /// Merge two rows
     //    fn merge(&mut self, right: &NetworthRow) {
     //        for idx in 0..self.value.len() {
@@ -105,10 +119,10 @@ impl Networth {
 
         for (account, value) in repo.balance(as_of) {
             let parents = repo.get_account_parents(account);
-            let row = result.tree.try_get(&account, &parents, |_| {
-                NetworthRow::new(col_count)
-            });
-            row.value = value; // ??? Should merge instead
+            let row = result
+                .tree
+                .try_get(&account, &parents, |_| NetworthRow::new(col_count));
+            row.add_value(&value);
 
             for (idx, v) in row.value.iter().enumerate() {
                 if !v.is_zero() {
@@ -120,9 +134,9 @@ impl Networth {
             }
         }
 
-        // Filter out rows.  This needs to be done after we have inserted them all
-        // above, including the parents, since the values might not be known till
-        // that point.
+        // Filter out rows.  This needs to be done after we have inserted them
+        // all above, including the parents, since the values might not be known
+        // till that point.
         result.tree.retain(|node| {
             node.has_children()   // Always keep parent nodes with children
             || (
@@ -134,10 +148,29 @@ impl Networth {
                     || !is_all_same(&node.data.data.market_value)))
         });
 
-        result.tree.sort(|d1, d2|
-            repo.get_account(d1.key).unwrap().name
-            .cmp(&repo.get_account(d2.key).unwrap().name)
-        );
+        if result.settings.subtotals {
+            result.tree.traverse_mut(
+                |node| {
+                    let mut tmp = NetworthRow::new(col_count);
+
+                    node.iter_children().for_each(|child| {
+                        tmp.add_value(&child.data.data.value);
+                        tmp.add_market_value(&child.data.data.market_value);
+                    });
+
+                    node.data.data.add_value(&tmp.value);
+                    node.data.data.add_market_value(&tmp.market_value);
+                },
+                false,
+            );
+        }
+
+        result.tree.sort(|d1, d2| {
+            repo.get_account(d1.key)
+                .unwrap()
+                .name
+                .cmp(&repo.get_account(d2.key).unwrap().name)
+        });
         result
     }
 }

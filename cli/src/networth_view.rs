@@ -78,12 +78,14 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
     );
 
     let mut table = Table::new(columns).with_col_headers();
-    networth.tree.traverse(|node| table.add_row(node));
+    networth
+        .tree
+        .traverse(|node| table.add_row(&node.data), true);
 
     table.add_footer(&Data {
         data: networth.total.clone(),
         depth: 0,
-        key: AccountId(0),   //  ??? irrelevant
+        key: AccountId(0), //  ??? irrelevant
     });
     table.to_string(Term::stdout().size().1 as usize)
 }

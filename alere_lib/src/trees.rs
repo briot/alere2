@@ -88,7 +88,8 @@ impl<K, T> Tree<K, T> {
     where
         F: FnMut(&mut TreeNode<K, T>),
     {
-        self.roots.traverse_recursive_mut(&mut process, parent_first);
+        self.roots
+            .traverse_recursive_mut(&mut process, parent_first);
     }
 
     /// Recursively traverse all nodes

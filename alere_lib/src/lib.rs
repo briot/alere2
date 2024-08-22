@@ -12,6 +12,7 @@ pub mod price_sources;
 pub mod prices;
 pub mod repositories;
 pub mod transactions;
+pub mod trees;
 mod utils;
 
 #[cfg(feature = "kmymoney")]

@@ -1,25 +1,26 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
-use alere_lib::networth::{NodeData, Networth, NetworthRow};
+use alere_lib::accounts::AccountId;
+use alere_lib::networth::{Networth, NetworthRow};
 use alere_lib::repositories::Repository;
+use alere_lib::trees::NodeData;
 use console::Term;
 use itertools::Itertools;
 
 pub fn networth_view(repo: &Repository, networth: Networth) -> String {
-    type Row = NodeData<NetworthRow>;
+    type Data = NodeData<AccountId, NetworthRow>;
 
-    let mv_image = |row: &Row, idx: &usize| row.data.display_value(repo, *idx);
+    let mv_image = |row: &Data, idx: &usize| row.data.display_value(repo, *idx);
     let market_image =
-        |row: &Row, idx: &usize| row.data.display_market_value(repo, *idx);
+        |row: &Data, idx: &usize| row.data.display_market_value(repo, *idx);
     let delta_image =
-        |row: &Row, idx: &usize| row.data.display_delta(repo, *idx);
+        |row: &Data, idx: &usize| row.data.display_delta(repo, *idx);
     let delta_market_image =
-        |row: &Row, idx: &usize| row.data.display_market_delta(repo, *idx);
-    let account_image = |row: &Row, _idx: &usize| {
+        |row: &Data, idx: &usize| row.data.display_market_delta(repo, *idx);
+    let account_image = |row: &Data, _idx: &usize| {
         format!(
             "{: <width$}{}",
             "",
-            row.data
-                .display_account(repo, networth.settings.account_names),
+            repo.get_account_name(row.key, networth.settings.account_names),
             width = row.depth,
         )
     };
@@ -79,6 +80,10 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
     let mut table = Table::new(columns).with_col_headers();
     networth.tree.traverse(|node| table.add_row(node));
 
-    table.add_footer(&Row { data: networth.total.clone(), depth: 0});
+    table.add_footer(&Data {
+        data: networth.total.clone(),
+        depth: 0,
+        key: AccountId(0),   //  ??? irrelevant
+    });
     table.to_string(Term::stdout().size().1 as usize)
 }

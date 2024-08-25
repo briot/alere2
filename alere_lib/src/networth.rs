@@ -1,7 +1,7 @@
 use crate::accounts::{AccountId, AccountNameKind};
 use crate::commodities::CommodityId;
 use crate::multi_values::MultiValue;
-use crate::repositories::Repository;
+use crate::repositories::{AccountBalance, Repository};
 use crate::trees::Tree;
 use crate::utils::is_all_same;
 use chrono::{DateTime, Local};
@@ -117,7 +117,7 @@ impl Networth {
             total: NetworthRow::new(col_count),
         };
 
-        for (account, value) in repo.balance(as_of, |acc| {
+        for AccountBalance(account, value) in repo.balance(as_of, |acc| {
             !acc.closed
                 && repo.get_account_kinds().get(acc.kind).unwrap().is_networth
         }) {

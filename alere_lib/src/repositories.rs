@@ -295,17 +295,18 @@ impl Repository {
     }
 
     /// Cumulate all operations, for all accounts, to get the current total.
-    pub fn balance<F>(
-        &self,
-        as_of: &[DateTime<Local>],
+    pub fn balance<'a, 'b, F>(
+        &'a self,
+        as_of: &'b[DateTime<Local>],
         mut filter_account: F,
-    ) -> HashMap<AccountId, Vec<MultiValue>>
+    ) -> impl Iterator<Item = AccountBalance> + 'a
     where
-        F: FnMut(&Account) -> bool,
+        F: FnMut(&Account) -> bool + 'a,
+        'b: 'a
     {
         self.accounts
             .iter_accounts()
-            .filter(|(_, acc)| filter_account(acc))
+            .filter(move |(_, acc)| filter_account(acc))
             .map(|(acc_id, acc)| {
                 let mut acc_balance = vec![MultiValue::default(); as_of.len()];
 
@@ -321,11 +322,12 @@ impl Repository {
                             }
                         }
                     });
-                (acc_id, acc_balance)
+                AccountBalance(acc_id, acc_balance)
             })
-            .collect()
     }
 }
+
+pub struct AccountBalance(pub AccountId, pub Vec<MultiValue>);
 
 pub struct MarketPrices<'a> {
     cache: HashMap<CommodityId, Option<Price>>,

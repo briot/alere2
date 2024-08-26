@@ -1,12 +1,27 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
-use alere_lib::accounts::AccountId;
+use alere_lib::accounts::{AccountId, AccountNameKind};
 use alere_lib::networth::{Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use alere_lib::trees::NodeData;
 use console::Term;
 use itertools::Itertools;
 
-pub fn networth_view(repo: &Repository, networth: Networth) -> String {
+pub struct Settings {
+    // Which columns to show
+    pub column_value: bool,
+    pub column_market: bool,
+    pub column_delta: bool,
+    pub column_market_delta: bool,
+    pub column_price: bool,
+
+    pub account_names: AccountNameKind,
+}
+
+pub fn networth_view(
+    repo: &Repository,
+    networth: Networth,
+    settings: Settings,
+) -> String {
     type Data = NodeData<AccountId, NetworthRow>;
 
     let mv_image = |row: &Data, idx: &usize| row.data.display_value(repo, *idx);
@@ -20,14 +35,15 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
         format!(
             "{: <width$}{}",
             "",
-            repo.get_account_name(row.key, networth.settings.account_names),
+            repo.get_account_name(row.key, settings.account_names),
             width = row.depth,
         )
     };
+    let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
 
     let mut columns = Vec::new();
     for (pos, (idx, ts)) in networth.as_of.iter().enumerate().with_position() {
-        if networth.settings.column_value {
+        if settings.column_value {
             columns.push(
                 Column::new(idx, &mv_image)
                     .with_title(&format!("Value {}", ts.date_naive()))
@@ -36,7 +52,7 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
                     .with_footer(ColumnFooter::Hide),
             );
         }
-        if networth.settings.column_market {
+        if settings.column_market {
             columns.push(
                 Column::new(idx, &market_image)
                     .with_title(&format!("Mkt {}", ts.date_naive()))
@@ -44,8 +60,16 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
                     .with_truncate(Truncate::Left),
             );
         }
+        if settings.column_price {
+            columns.push(
+                Column::new(idx, &price_image)
+                    .with_title(&format!("Price {}", ts.date_naive()))
+                    .with_align(Align::Right)
+                    .with_truncate(Truncate::Left),
+            );
+        }
         if let itertools::Position::First | itertools::Position::Middle = pos {
-            if networth.settings.column_delta {
+            if settings.column_delta {
                 columns.push(
                     Column::new(idx, &delta_image)
                         .with_title("Delta")
@@ -53,7 +77,7 @@ pub fn networth_view(repo: &Repository, networth: Networth) -> String {
                         .with_truncate(Truncate::Left),
                 );
             }
-            if networth.settings.column_market_delta {
+            if settings.column_market_delta {
                 columns.push(
                     Column::new(idx, &delta_market_image)
                         .with_title("Delta Mkt")

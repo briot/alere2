@@ -36,20 +36,25 @@ fn main() -> Result<()> {
         &repo,
         &[now - chrono::Months::new(1), now],
         alere_lib::networth::Settings {
-            column_market: true,
-            column_value: false,
-            column_delta: false,
-            column_market_delta: true,
             hide_zero: true,
             hide_all_same: false,
             tree: true,
-            account_names: AccountNameKind::Short,
             subtotals: true,
             commodity: repo.find_commodity("Euro"),
         },
     );
 
-    let output = networth_view(&repo, networth);
+    let output = networth_view(
+        &repo, networth,
+        crate::networth_view::Settings {
+            column_market: true,
+            column_value: false,
+            column_delta: false,
+            column_price: true,
+            column_market_delta: true,
+            account_names: AccountNameKind::Short,
+        },
+    );
     progress.finish_and_clear();
     println!("{}", output);
 

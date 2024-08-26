@@ -38,6 +38,10 @@ impl Value {
         Value { value, commodity }
     }
 
+    pub fn is_zero(&self) -> bool {
+        self.value.is_zero()
+    }
+
     pub fn display(&self, commodities: &CommodityCollection) -> String {
         commodities
             .get(self.commodity)
@@ -54,7 +58,9 @@ pub struct MultiValue {
 impl MultiValue {
     pub fn from_value(value: Value) -> Self {
         let mut result = MultiValue::default();
-        result += value;
+        if !value.is_zero() {
+            result += value;
+        }
         result
     }
 
@@ -75,11 +81,16 @@ impl MultiValue {
         result
     }
 
+    /// Iterate over all components of the multi-value, skipping
+    /// zero.
     pub fn iter(&self) -> impl Iterator<Item = Value> + '_ {
-        self.values.iter().map(|(c, v)| Value {
-            value: *v,
-            commodity: *c,
-        })
+        self.values
+            .iter()
+            .filter(|(_, v)| !v.is_zero())
+            .map(|(c, v)| Value {
+                value: *v,
+                commodity: *c,
+            })
     }
 
     pub fn apply(&mut self, op: &Operation) {
@@ -123,10 +134,12 @@ impl core::ops::Add<&MultiValue> for MultiValue {
 
 impl core::ops::AddAssign<Value> for MultiValue {
     fn add_assign(&mut self, rhs: Value) {
-        self.values
-            .entry(rhs.commodity)
-            .and_modify(|v| *v += rhs.value)
-            .or_insert(rhs.value);
+        if !rhs.is_zero() {
+            self.values
+                .entry(rhs.commodity)
+                .and_modify(|v| *v += rhs.value)
+                .or_insert(rhs.value);
+        }
     }
 }
 

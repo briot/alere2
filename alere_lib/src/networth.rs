@@ -1,22 +1,17 @@
-use crate::accounts::{AccountId, AccountNameKind};
+use crate::accounts::AccountId;
 use crate::commodities::CommodityId;
 use crate::multi_values::MultiValue;
 use crate::repositories::{MarketPrices, Repository};
 use crate::trees::Tree;
 use crate::utils::is_all_same;
 use chrono::{DateTime, Local};
+use rust_decimal::Decimal;
 
 //--------------------------------------------------------------
 // Settings
 //--------------------------------------------------------------
 
 pub struct Settings {
-    // Which columns to show
-    pub column_value: bool,
-    pub column_market: bool,
-    pub column_delta: bool,
-    pub column_market_delta: bool,
-
     // Do not show rows if the value is zero
     pub hide_zero: bool,
 
@@ -24,8 +19,6 @@ pub struct Settings {
     // all timestamps.  If there is a single timestamp, rows are always
     // displayed.
     pub hide_all_same: bool,
-
-    pub account_names: AccountNameKind,
 
     // Display a tree of accounts
     pub tree: bool,
@@ -67,8 +60,25 @@ impl Balance {
 
     /// True if the value is zero.
     /// We do not check the market_value, which will be zero also in that case.
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.value.is_zero()
+    }
+
+    /// Compute the price used to convert from value to market_value.
+    /// If we have multiple commodities, this returns nothing.
+    pub fn get_price(&self) -> Option<Decimal> {
+        let mut p = None;
+        self.value.iter().enumerate().for_each(|(idx, v)| {
+            if idx > 0 || v.value.is_zero() {
+                p = None;
+            } else {
+                self.market_value.iter().for_each(|mv| {
+                    let x = mv.value / v.value;
+                    p = if x == Decimal::ONE { None } else { Some(x) };
+                });
+            }
+        });
+        p
     }
 }
 
@@ -136,6 +146,15 @@ impl NetworthRow {
         repo.display_multi_value(
             &(&self.0[idx + 1] - &self.0[idx]).market_value,
         )
+    }
+
+    /// Show the price used to compute the market value of the idx-th column
+    pub fn display_price(&self, idx: usize) -> String {
+        let p = self.0[idx].get_price();
+        match p {
+            None => String::new(),
+            Some(p) => p.to_string(),
+        }
     }
 }
 

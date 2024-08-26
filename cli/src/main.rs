@@ -50,7 +50,7 @@ fn main() -> Result<()> {
             column_market: true,
             column_value: false,
             column_delta: false,
-            column_price: true,
+            column_price: false,
             column_market_delta: true,
             account_names: AccountNameKind::Short,
         },

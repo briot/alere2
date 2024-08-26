@@ -299,7 +299,7 @@ impl Repository {
 }
 
 pub struct MarketPrices<'a> {
-    cache: HashMap<CommodityId, Option<Price>>,
+    cache: HashMap<(CommodityId, DateTime<Local>), Option<Price>>,
     repo: &'a Repository,
     to_commodity: Option<CommodityId>,
 }
@@ -350,9 +350,8 @@ impl<'a> MarketPrices<'a> {
             None => Decimal::ONE,
             Some(c) if c == commodity => Decimal::ONE,
             Some(c) => {
-                // ??? Cache must include as_of
                 let m =
-                    self.cache.entry(commodity).or_insert_with(|| {
+                    self.cache.entry((commodity, *as_of)).or_insert_with(|| {
                         self.repo.prices.price_as_of(
                             commodity,
                             c,

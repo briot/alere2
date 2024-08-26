@@ -1,10 +1,14 @@
 use crate::accounts::{AccountId, AccountNameKind};
 use crate::commodities::CommodityId;
 use crate::multi_values::MultiValue;
-use crate::repositories::{AccountBalance, Repository};
+use crate::repositories::{MarketPrices, Repository};
 use crate::trees::Tree;
 use crate::utils::is_all_same;
 use chrono::{DateTime, Local};
+
+//--------------------------------------------------------------
+// Settings
+//--------------------------------------------------------------
 
 pub struct Settings {
     // Which columns to show
@@ -33,32 +37,96 @@ pub struct Settings {
     pub commodity: Option<CommodityId>,
 }
 
-#[derive(Clone)]
-pub struct NetworthRow {
-    value: Vec<MultiValue>,
-    market_value: Vec<MultiValue>,
+//--------------------------------------------------------------
+// Balance
+//--------------------------------------------------------------
+
+/// The balance of an account, computed as of a specific timestamp
+#[derive(Clone, Default, PartialEq)]
+pub struct Balance {
+    value: MultiValue,
+    market_value: MultiValue,
 }
 
-impl NetworthRow {
-    fn new(size: usize) -> Self {
-        NetworthRow {
-            value: vec![MultiValue::default(); size],
-            market_value: vec![MultiValue::default(); size],
+impl Balance {
+    /// Compute the market value as the given timestamp, by converting the
+    /// value.  For instance, the account's value might be 8 shares of AAPL,
+    /// and this is converts to 1840 EUR.
+    fn compute_market(
+        &mut self,
+        prices: &mut MarketPrices,
+        as_of: &DateTime<Local>,
+    ) {
+        if !self.value.is_zero() {
+            let mv = prices.convert_multi_value(&self.value, as_of);
+            self.market_value = mv;
+        } else {
+            self.market_value = MultiValue::default();
         }
     }
 
+    /// True if the value is zero.
+    /// We do not check the market_value, which will be zero also in that case.
+    fn is_zero(&self) -> bool {
+        self.value.is_zero()
+    }
+}
+
+impl core::ops::AddAssign<&Balance> for Balance {
+    fn add_assign(&mut self, rhs: &Balance) {
+        self.value += &rhs.value;
+        self.market_value += &rhs.market_value;
+    }
+}
+
+impl core::ops::Sub<&Balance> for &Balance {
+    type Output = Balance;
+
+    fn sub(self, rhs: &Balance) -> Self::Output {
+        Balance {
+            value: &self.value - &rhs.value,
+            market_value: &self.market_value - &rhs.market_value,
+        }
+    }
+}
+
+//--------------------------------------------------------------
+// NetworthRow
+//--------------------------------------------------------------
+
+/// Represents one row of the networth: it is the balance of one account,
+/// potentially computed for multiple timestamps.
+#[derive(Clone)]
+pub struct NetworthRow(Vec<Balance>);
+
+impl NetworthRow {
+    fn new(size: usize) -> Self {
+        NetworthRow(vec![Balance::default(); size])
+    }
+
+    /// Whether the balance is zero for all the timestamps.
+    /// This is in general used to filter out irrelevant rows.
+    fn is_zero(&self) -> bool {
+        self.0.iter().all(Balance::is_zero)
+    }
+
+    /// Whether the balance is the same for all timestamps.
+    fn is_all_same(&self) -> bool {
+        is_all_same(&self.0)
+    }
+
     pub fn display_value(&self, repo: &Repository, idx: usize) -> String {
-        repo.display_multi_value(&self.value[idx])
+        repo.display_multi_value(&self.0[idx].value)
     }
     pub fn display_market_value(
         &self,
         repo: &Repository,
         idx: usize,
     ) -> String {
-        repo.display_multi_value(&self.market_value[idx])
+        repo.display_multi_value(&self.0[idx].market_value)
     }
     pub fn display_delta(&self, repo: &Repository, idx: usize) -> String {
-        repo.display_multi_value(&(&self.value[idx + 1] - &self.value[idx]))
+        repo.display_multi_value(&(&self.0[idx + 1] - &self.0[idx]).value)
     }
     pub fn display_market_delta(
         &self,
@@ -66,32 +134,20 @@ impl NetworthRow {
         idx: usize,
     ) -> String {
         repo.display_multi_value(
-            &(&self.market_value[idx + 1] - &self.market_value[idx]),
+            &(&self.0[idx + 1] - &self.0[idx]).market_value,
         )
     }
-
-    /// Add values to the already known values in self
-    fn add_value(&mut self, values: &[MultiValue]) {
-        self.value
-            .iter_mut()
-            .zip(values)
-            .for_each(|(r, val)| *r += val);
-    }
-    fn add_market_value(&mut self, values: &[MultiValue]) {
-        self.market_value
-            .iter_mut()
-            .zip(values)
-            .for_each(|(r, val)| *r += val);
-    }
-
-    //    /// Merge two rows
-    //    fn merge(&mut self, right: &NetworthRow) {
-    //        for idx in 0..self.value.len() {
-    //            self.value[idx] += &right.value[idx];
-    //            self.market_value[idx] += &right.market_value[idx];
-    //        }
-    //    }
 }
+
+impl core::ops::AddAssign<&NetworthRow> for NetworthRow {
+    fn add_assign(&mut self, rhs: &NetworthRow) {
+        self.0.iter_mut().zip(&rhs.0).for_each(|(v1, v2)| *v1 += v2);
+    }
+}
+
+//--------------------------------------------------------------
+// Networth
+//--------------------------------------------------------------
 
 /// A view that shows the value (as of any timestamp) of all user accounts.
 /// This ignores all accounts that are not marked as "networth".
@@ -103,6 +159,7 @@ pub struct Networth {
 }
 
 impl Networth {
+    /// Cumulate all operations, for all accounts, to get the current total.
     pub fn new(
         repo: &Repository,
         as_of: &[DateTime<Local>],
@@ -117,25 +174,36 @@ impl Networth {
             total: NetworthRow::new(col_count),
         };
 
-        for AccountBalance(account, value) in repo.balance(as_of, |acc| {
-            !acc.closed
-                && repo.get_account_kinds().get(acc.kind).unwrap().is_networth
-        }) {
-            let parents = repo.get_account_parents(account);
-            let row = result
-                .tree
-                .try_get(&account, &parents, |_| NetworthRow::new(col_count));
-            row.add_value(&value);
+        repo.iter_accounts()
+            .filter(move |(_, acc)| {
+                !acc.closed
+                    && repo
+                        .get_account_kinds()
+                        .get(acc.kind)
+                        .unwrap()
+                        .is_networth
+            })
+            .for_each(|(acc_id, acc)| {
+                let parents = repo.get_account_parents(acc_id);
+                let row = result.tree.try_get(&acc_id, &parents, |_| {
+                    NetworthRow::new(col_count)
+                });
 
-            for (idx, v) in row.value.iter().enumerate() {
-                if !v.is_zero() {
-                    let mv = market.convert_multi_value(v, &as_of[idx]);
-                    result.total.value[idx] += v;
-                    result.total.market_value[idx] += &mv;
-                    row.market_value[idx] = mv;
+                //  ??? Could we use fold() here, though we are applying in
+                //  place.
+                acc.iter_splits(acc_id).for_each(|s| {
+                    for (idx, ts) in as_of.iter().enumerate() {
+                        if s.post_ts <= *ts {
+                            row.0[idx].value.apply(&s.original_value);
+                        }
+                    }
+                });
+
+                for (idx, v) in row.0.iter_mut().enumerate() {
+                    v.compute_market(&mut market, &as_of[idx]);
+                    result.total.0[idx] += v;
                 }
-            }
-        }
+            });
 
         // Filter out rows.  This needs to be done after we have inserted them
         // all above, including the parents, since the values might not be known
@@ -143,26 +211,19 @@ impl Networth {
         result.tree.retain(|node| {
             node.has_children()   // Always keep parent nodes with children
             || (
-                (!result.settings.hide_zero
-                 || !node.data.data.value.iter().all(MultiValue::is_zero)
-                 || !node.data.data.market_value.iter().all(MultiValue::is_zero))
+                (!result.settings.hide_zero || !node.data.data.is_zero())
                 && (!result.settings.hide_all_same
-                    || !is_all_same(&node.data.data.value)
-                    || !is_all_same(&node.data.data.market_value)))
+                    || !node.data.data.is_all_same()))
         });
 
         if result.settings.subtotals {
             result.tree.traverse_mut(
                 |node| {
                     let mut tmp = NetworthRow::new(col_count);
-
                     node.iter_children().for_each(|child| {
-                        tmp.add_value(&child.data.data.value);
-                        tmp.add_market_value(&child.data.data.market_value);
+                        tmp += &child.data.data;
                     });
-
-                    node.data.data.add_value(&tmp.value);
-                    node.data.data.add_market_value(&tmp.market_value);
+                    node.data.data += &tmp;
                 },
                 false,
             );

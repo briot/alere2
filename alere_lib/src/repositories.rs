@@ -197,6 +197,9 @@ impl Repository {
     pub fn get_account(&self, id: AccountId) -> Option<&Account> {
         self.accounts.get(id)
     }
+    pub fn iter_accounts(&self) -> impl Iterator<Item = (AccountId, &Account)> {
+        self.accounts.iter_accounts()
+    }
 
     // Return the parent accounts, starting with the direct parent.  The last
     // element in the returned vec is therefore the toplevel account like Asset.
@@ -293,41 +296,7 @@ impl Repository {
     ) -> MarketPrices {
         MarketPrices::new(self, to_commodity)
     }
-
-    /// Cumulate all operations, for all accounts, to get the current total.
-    pub fn balance<'a, 'b, F>(
-        &'a self,
-        as_of: &'b[DateTime<Local>],
-        mut filter_account: F,
-    ) -> impl Iterator<Item = AccountBalance> + 'a
-    where
-        F: FnMut(&Account) -> bool + 'a,
-        'b: 'a
-    {
-        self.accounts
-            .iter_accounts()
-            .filter(move |(_, acc)| filter_account(acc))
-            .map(|(acc_id, acc)| {
-                let mut acc_balance = vec![MultiValue::default(); as_of.len()];
-
-                //  ??? Could we use fold() here, though we are applying in
-                //  place.
-                acc.iter_transactions()
-                    .flat_map(|tx| tx.iter_splits())
-                    .filter(|s| s.account == acc_id)
-                    .for_each(|s| {
-                        for (idx, ts) in as_of.iter().enumerate() {
-                            if s.post_ts <= *ts {
-                                acc_balance[idx].apply(&s.original_value);
-                            }
-                        }
-                    });
-                AccountBalance(acc_id, acc_balance)
-            })
-    }
 }
-
-pub struct AccountBalance(pub AccountId, pub Vec<MultiValue>);
 
 pub struct MarketPrices<'a> {
     cache: HashMap<CommodityId, Option<Price>>,
@@ -352,24 +321,11 @@ impl<'a> MarketPrices<'a> {
         value: &Value,
         as_of: &DateTime<Local>,
     ) -> Value {
-        match self.to_commodity {
-            None => *value,
-            Some(c) if c == value.commodity => *value,
-            Some(c) => {
-                let m =
-                    self.cache.entry(value.commodity).or_insert_with(|| {
-                        self.repo.prices.price_as_of(
-                            value.commodity,
-                            c,
-                            self.repo.commodities.list_currencies(),
-                            as_of,
-                        )
-                    });
-                match m {
-                    None => *value,
-                    Some(m) => Value::new(m.price * value.value, c),
-                }
-            }
+        let p = self.get_price(value.commodity, as_of);
+        if p == Decimal::ONE {
+            *value
+        } else {
+            Value::new(p * value.value, self.to_commodity.unwrap())
         }
     }
 
@@ -385,23 +341,30 @@ impl<'a> MarketPrices<'a> {
         result
     }
 
-    pub fn get_prices(
+    pub fn get_price(
         &mut self,
-        value: &MultiValue,
+        commodity: CommodityId,
         as_of: &DateTime<Local>,
-    ) -> Vec<Value> {
+    ) -> Decimal {
         match self.to_commodity {
-            None => vec![],
-            Some(c) => value
-                .iter()
-                .filter(|v| v.commodity != c)
-                .map(|v| {
-                    self.convert_value(
-                        &Value::new(Decimal::ONE, v.commodity),
-                        as_of,
-                    )
-                })
-                .collect(),
+            None => Decimal::ONE,
+            Some(c) if c == commodity => Decimal::ONE,
+            Some(c) => {
+                // ??? Cache must include as_of
+                let m =
+                    self.cache.entry(commodity).or_insert_with(|| {
+                        self.repo.prices.price_as_of(
+                            commodity,
+                            c,
+                            self.repo.commodities.list_currencies(),
+                            as_of,
+                        )
+                    });
+                match m {
+                    None => Decimal::ONE,
+                    Some(m) => m.price,
+                }
+            }
         }
     }
 }

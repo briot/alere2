@@ -1,6 +1,6 @@
 use crate::account_kinds::AccountKindId;
 use crate::institutions::InstitutionId;
-use crate::transactions::TransactionRc;
+use crate::transactions::{Split, TransactionRc};
 use chrono::{DateTime, Local};
 
 #[derive(Clone, Copy)]
@@ -154,5 +154,15 @@ impl Account {
 
     pub fn iter_transactions(&self) -> impl Iterator<Item = &TransactionRc> {
         self.transactions.iter()
+    }
+
+    pub fn iter_splits(
+        &self,
+        acc_id: AccountId,
+    ) -> impl Iterator<Item = &Split> {
+        self.transactions
+            .iter()
+            .flat_map(|tx| tx.iter_splits())
+            .filter(move |s| s.account == acc_id)
     }
 }

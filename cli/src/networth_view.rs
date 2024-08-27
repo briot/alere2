@@ -12,6 +12,8 @@ pub struct Settings {
     pub column_market: bool,
     pub column_delta: bool,
     pub column_market_delta: bool,
+    pub column_delta_to_last: bool,
+    pub column_market_delta_to_last: bool,
     pub column_price: bool,
 
     pub account_names: AccountNameKind,
@@ -29,8 +31,14 @@ pub fn networth_view(
         |row: &Data, idx: &usize| row.data.display_market_value(repo, *idx);
     let delta_image =
         |row: &Data, idx: &usize| row.data.display_delta(repo, *idx);
-    let delta_market_image =
-        |row: &Data, idx: &usize| row.data.display_market_delta(repo, *idx);
+    let delta_market_image = |row: &Data, idx: &usize| {
+        row.data.display_market_delta(repo, *idx)
+    };
+    let delta_to_last_image =
+        |row: &Data, idx: &usize| row.data.display_delta_to_last(repo, *idx);
+    let delta_market_to_last_image = |row: &Data, idx: &usize| {
+        row.data.display_market_delta_to_last(repo, *idx)
+    };
     let account_image = |row: &Data, _idx: &usize| {
         format!(
             "{: <width$}{}",
@@ -81,6 +89,22 @@ pub fn networth_view(
                 columns.push(
                     Column::new(idx, &delta_market_image)
                         .with_title("Delta Mkt")
+                        .with_align(Align::Right)
+                        .with_truncate(Truncate::Left),
+                );
+            }
+            if settings.column_delta_to_last {
+                columns.push(
+                    Column::new(idx, &delta_to_last_image)
+                        .with_title("To lastDelta")
+                        .with_align(Align::Right)
+                        .with_truncate(Truncate::Left),
+                );
+            }
+            if settings.column_market_delta_to_last {
+                columns.push(
+                    Column::new(idx, &delta_market_to_last_image)
+                        .with_title("To last")
                         .with_align(Align::Right)
                         .with_truncate(Truncate::Left),
                 );

@@ -138,6 +138,13 @@ impl NetworthRow {
     pub fn display_delta(&self, repo: &Repository, idx: usize) -> String {
         repo.display_multi_value(&(&self.0[idx + 1] - &self.0[idx]).value)
     }
+    pub fn display_delta_to_last(
+        &self,
+        repo: &Repository,
+        idx: usize,
+    ) -> String {
+        repo.display_multi_value(&(self.0.last().unwrap() - &self.0[idx]).value)
+    }
     pub fn display_market_delta(
         &self,
         repo: &Repository,
@@ -145,6 +152,15 @@ impl NetworthRow {
     ) -> String {
         repo.display_multi_value(
             &(&self.0[idx + 1] - &self.0[idx]).market_value,
+        )
+    }
+    pub fn display_market_delta_to_last(
+        &self,
+        repo: &Repository,
+        idx: usize,
+    ) -> String {
+        repo.display_multi_value(
+            &(self.0.last().unwrap() - &self.0[idx]).market_value,
         )
     }
 

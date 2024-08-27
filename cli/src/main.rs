@@ -51,8 +51,10 @@ fn main() -> Result<()> {
             column_market: true,
             column_value: false,
             column_delta: false,
+            column_delta_to_last: false,
             column_price: false,
-            column_market_delta: true,
+            column_market_delta: false,
+            column_market_delta_to_last: true,
             account_names: AccountNameKind::Short,
         },
     );

@@ -1,6 +1,6 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
-use alere_lib::accounts::{AccountId, AccountNameKind};
-use alere_lib::networth::{Networth, NetworthRow};
+use alere_lib::accounts::AccountNameKind;
+use alere_lib::networth::{Key, Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use alere_lib::trees::NodeData;
 use console::Term;
@@ -27,7 +27,7 @@ pub fn networth_view(
     networth: Networth,
     settings: Settings,
 ) -> String {
-    type Data = NodeData<AccountId, NetworthRow>;
+    type Data<'a> = NodeData<Key<'a>, NetworthRow>;
 
     let mv_image = |row: &Data, idx: &usize| row.data.display_value(repo, *idx);
     let market_image =
@@ -41,8 +41,13 @@ pub fn networth_view(
     let delta_market_to_last_image = |row: &Data, idx: &usize| {
         row.data.display_market_delta_to_last(repo, *idx)
     };
-    let account_image = |row: &Data, _idx: &usize| {
-        repo.get_account_name(row.key, settings.account_names)
+    let node_image = |row: &Data, _idx: &usize| {
+        match row.key {
+            Key::Account(a) => repo.get_account_name(a, settings.account_names),
+            Key::Institution(Some(inst)) => inst.name.clone(),
+            Key::Institution(None) => "Unknown".to_string(),
+        }
+        //repo.get_account_name(row.key, settings.account_names)
     };
     let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
     let percent_image = |row: &Data, idx: &usize| {
@@ -52,7 +57,7 @@ pub fn networth_view(
     let mut columns = Vec::new();
 
     columns.push(
-        Column::new(0, &account_image)
+        Column::new(0, &node_image)
             .show_indent()
             .with_title("Account")
             .with_width(Width::ExpandWithMin(8))
@@ -138,7 +143,7 @@ pub fn networth_view(
     table.add_footer(&Data {
         data: networth.total.clone(),
         depth: 0,
-        key: AccountId(0), //  ??? irrelevant
+        key: Key::Institution(None), //  ??? irrelevant
     });
     table.to_string(Term::stdout().size().1 as usize)
 }

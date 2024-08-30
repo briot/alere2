@@ -187,6 +187,13 @@ impl Repository {
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {
         self.institutions.insert(id, inst);
     }
+    pub fn get_account_institution(
+        &self,
+        acc: &Account,
+    ) -> Option<&Institution> {
+        acc.get_institution_id()
+            .and_then(|inst| self.institutions.get(&inst))
+    }
 
     pub fn add_account(&mut self, account: Account) -> AccountId {
         self.accounts.add(account)
@@ -203,21 +210,38 @@ impl Repository {
 
     // Return the parent accounts, starting with the direct parent.  The last
     // element in the returned vec is therefore the toplevel account like Asset.
-    pub fn get_account_parents(&self, id: AccountId) -> Vec<AccountId> {
+    pub fn get_account_parents_id(&self, id: AccountId) -> Vec<AccountId> {
         let mut parents = Vec::new();
         let mut p = id;
-        while let Some(pid) = self.accounts.get(p).unwrap().get_parent() {
+        while let Some(pid) = self.accounts.get(p).unwrap().get_parent_id() {
             parents.push(pid);
             p = pid;
         }
         parents
     }
+
+    pub fn get_account_parents<'a, 'b>(
+        &'a self,
+        acc: &'b Account,
+    ) -> Vec<&'a Account>
+    where
+        'b: 'a,
+    {
+        let mut parents = Vec::new();
+        let mut p = acc;
+        while let Some(pid) = p.get_parent_id() {
+            p = self.accounts.get(pid).unwrap();
+            parents.push(p);
+        }
+        parents
+    }
+
     pub fn get_account_name(
         &self,
-        id: AccountId,
+        acc: &Account,
         kind: AccountNameKind,
     ) -> String {
-        self.accounts.name(id, kind)
+        self.accounts.name(acc, kind)
     }
 
     pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {

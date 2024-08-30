@@ -6,7 +6,7 @@ use alere_lib::{
     accounts::AccountNameKind,
     importers::Importer,
     kmymoney::KmyMoneyImporter,
-    networth::Networth,
+    networth::{GroupBy, Networth},
     times::{get_timestamps, Timestamp},
 };
 use anyhow::Result;
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,
-                tree: true,
+                group_by: GroupBy::ParentAccount,
                 subtotals: true,
                 commodity: repo.find_commodity("Euro"),
             },

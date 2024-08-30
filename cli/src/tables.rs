@@ -178,17 +178,22 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                     // width of each cell in this column
                     let mut w = 0;
                     for row in &self.rows {
-                        w = std::cmp::max(w, match row {
-                            RowData::Separator => 0,
-                            RowData::Headers =>
-                                if let Some(t) = &col.title {
-                                    t.chars().count()
-                                } else {
-                                    0
-                                },
-                            RowData::Cells(indent, columns) =>
-                                indent + columns[colidx].chars().count(),
-                        });
+                        w = std::cmp::max(
+                            w,
+                            match row {
+                                RowData::Separator => 0,
+                                RowData::Headers => {
+                                    if let Some(t) = &col.title {
+                                        t.chars().count()
+                                    } else {
+                                        0
+                                    }
+                                }
+                                RowData::Cells(indent, columns) => {
+                                    indent + columns[colidx].chars().count()
+                                }
+                            },
+                        );
                     }
                     col.computed_width = w;
                     col.min_width = w;
@@ -198,19 +203,23 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                     let mut w = 0;
                     let mut min = 0;
                     for row in &self.rows {
-                        w = std::cmp::max(w, match row {
-                            RowData::Separator => 0,
-                            RowData::Headers =>
-                                if let Some(t) = &col.title {
-                                    t.chars().count()
-                                } else {
-                                    0
-                                },
-                            RowData::Cells(indent, columns) => {
-                                min = std::cmp::max(min, indent + col_min);
-                                indent + columns[colidx].chars().count()
-                            }
-                        });
+                        w = std::cmp::max(
+                            w,
+                            match row {
+                                RowData::Separator => 0,
+                                RowData::Headers => {
+                                    if let Some(t) = &col.title {
+                                        t.chars().count()
+                                    } else {
+                                        0
+                                    }
+                                }
+                                RowData::Cells(indent, columns) => {
+                                    min = std::cmp::max(min, indent + col_min);
+                                    indent + columns[colidx].chars().count()
+                                }
+                            },
+                        );
                     }
                     col.computed_width = w;
                     col.min_width = min;
@@ -239,7 +248,8 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                 let extra_width = max_width - fixed_width;
 
                 // Divide that extra space amongst all expandable columns
-                let adjust = (extra_width as f32 / expandable_count as f32) as usize;
+                let adjust =
+                    (extra_width as f32 / expandable_count as f32) as usize;
 
                 for col in self.columns.iter_mut() {
                     if let Width::ExpandWithMin(_) = col.width {

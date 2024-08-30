@@ -1,5 +1,6 @@
-use crate::accounts::AccountId;
+use crate::accounts::Account;
 use crate::commodities::CommodityId;
+use crate::institutions::Institution;
 use crate::multi_values::MultiValue;
 use crate::repositories::{MarketPrices, Repository};
 use crate::trees::Tree;
@@ -11,6 +12,20 @@ use rust_decimal::Decimal;
 // Settings
 //--------------------------------------------------------------
 
+#[derive(Copy, Clone)]
+pub enum GroupBy {
+    None,
+    ParentAccount,
+    AccountKind,
+    Institution,
+}
+impl GroupBy {
+    /// Whether output should reserve space for indentation
+    pub fn need_indent(&self) -> bool {
+        matches!(self, GroupBy::None)
+    }
+}
+
 pub struct Settings {
     // Do not show rows if the value is zero
     pub hide_zero: bool,
@@ -21,7 +36,7 @@ pub struct Settings {
     pub hide_all_same: bool,
 
     // Display a tree of accounts
-    pub tree: bool,
+    pub group_by: GroupBy,
 
     // If true, parents' values will also including all their children
     pub subtotals: bool,
@@ -206,19 +221,60 @@ impl core::ops::AddAssign<&NetworthRow> for NetworthRow {
 // Networth
 //--------------------------------------------------------------
 
+#[derive(Clone)]
+pub enum Key<'a> {
+    Account(&'a Account),
+    Institution(Option<&'a Institution>),
+}
+
+impl<'a> PartialEq for Key<'a> {
+    fn eq(&self, right: &Self) -> bool {
+        matches!(self.cmp(right), std::cmp::Ordering::Equal)
+    }
+}
+
+impl<'a> Eq for Key<'a> {}
+
+impl<'a> Ord for Key<'a> {
+    fn cmp(&self, right: &Self) -> std::cmp::Ordering {
+        match self {
+            Key::Account(ka) => match right {
+                Key::Account(ra) => ka.name.cmp(&ra.name),
+                Key::Institution(_) => std::cmp::Ordering::Greater,
+            },
+            Key::Institution(Some(ki)) => match right {
+                Key::Account(_) => std::cmp::Ordering::Less,
+                Key::Institution(Some(ri)) => ki.name.cmp(&ri.name),
+                Key::Institution(None) => std::cmp::Ordering::Less,
+            },
+            Key::Institution(None) => match right {
+                Key::Account(_) => std::cmp::Ordering::Less,
+                Key::Institution(Some(_)) => std::cmp::Ordering::Greater,
+                Key::Institution(None) => std::cmp::Ordering::Equal,
+            },
+        }
+    }
+}
+
+impl<'a> PartialOrd for Key<'a> {
+    fn partial_cmp(&self, right: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(right))
+    }
+}
+
 /// A view that shows the value (as of any timestamp) of all user accounts.
 /// This ignores all accounts that are not marked as "networth".
-pub struct Networth {
-    pub tree: Tree<AccountId, NetworthRow>,
+pub struct Networth<'a> {
+    pub tree: Tree<Key<'a>, NetworthRow>,
     pub total: NetworthRow,
     pub settings: Settings,
     pub as_of: Vec<DateTime<Local>>,
 }
 
-impl Networth {
+impl<'a> Networth<'a> {
     /// Cumulate all operations, for all accounts, to get the current total.
     pub fn new(
-        repo: &Repository,
+        repo: &'a Repository,
         as_of: &[DateTime<Local>],
         settings: Settings,
     ) -> Self {
@@ -241,10 +297,36 @@ impl Networth {
                         .is_networth
             })
             .for_each(|(acc_id, acc)| {
-                let parents = repo.get_account_parents(acc_id);
-                let row = result.tree.try_get(&acc_id, &parents, |_| {
-                    NetworthRow::new(col_count)
-                });
+                let parents: Vec<Key> = match &result.settings.group_by {
+                    GroupBy::None => vec![],
+                    GroupBy::ParentAccount => repo
+                        .get_account_parents(acc)
+                        .into_iter()
+                        .map(Key::Account)
+                        .collect(),
+                    GroupBy::AccountKind => vec![],
+                    GroupBy::Institution => {
+                        let mut inst = repo.get_account_institution(acc);
+                        let mut parent = acc;
+                        while inst.is_none() {
+                            match parent.get_parent_id() {
+                                None => {
+                                    break;
+                                }
+                                Some(p) => {
+                                    parent = repo.get_account(p).unwrap();
+                                    inst = repo.get_account_institution(parent);
+                                }
+                            }
+                        }
+                        vec![Key::Institution(inst)]
+                    }
+                };
+                let key = Key::Account(acc);
+
+                let row = result
+                    .tree
+                    .try_get(&key, &parents, |_| NetworthRow::new(col_count));
 
                 //  ??? Could we use fold() here, though we are applying in
                 //  place.
@@ -286,12 +368,7 @@ impl Networth {
             );
         }
 
-        result.tree.sort(|d1, d2| {
-            repo.get_account(d1.key)
-                .unwrap()
-                .name
-                .cmp(&repo.get_account(d2.key).unwrap().name)
-        });
+        result.tree.sort(|n1, n2| n1.key.cmp(&n2.key));
         result
     }
 }

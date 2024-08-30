@@ -1,4 +1,5 @@
 use crate::accounts::Account;
+use crate::account_kinds::AccountKind;
 use crate::commodities::CommodityId;
 use crate::institutions::Institution;
 use crate::multi_values::MultiValue;
@@ -225,6 +226,7 @@ impl core::ops::AddAssign<&NetworthRow> for NetworthRow {
 pub enum Key<'a> {
     Account(&'a Account),
     Institution(Option<&'a Institution>),
+    AccountKind(Option<&'a AccountKind>),
 }
 
 impl<'a> PartialEq for Key<'a> {
@@ -240,18 +242,28 @@ impl<'a> Ord for Key<'a> {
         match self {
             Key::Account(ka) => match right {
                 Key::Account(ra) => ka.name.cmp(&ra.name),
-                Key::Institution(_) => std::cmp::Ordering::Greater,
+                Key::Institution(_) | Key::AccountKind(_) =>
+                     std::cmp::Ordering::Greater,
             },
             Key::Institution(Some(ki)) => match right {
                 Key::Account(_) => std::cmp::Ordering::Less,
+                Key::AccountKind(_) => std::cmp::Ordering::Less,
                 Key::Institution(Some(ri)) => ki.name.cmp(&ri.name),
                 Key::Institution(None) => std::cmp::Ordering::Less,
             },
             Key::Institution(None) => match right {
                 Key::Account(_) => std::cmp::Ordering::Less,
+                Key::AccountKind(_) => std::cmp::Ordering::Greater,
                 Key::Institution(Some(_)) => std::cmp::Ordering::Greater,
                 Key::Institution(None) => std::cmp::Ordering::Equal,
             },
+            Key::AccountKind(None) => std::cmp::Ordering::Less,
+            Key::AccountKind(Some(kk)) => match right {
+                Key::Account(_) => std::cmp::Ordering::Less,
+                Key::Institution(_) => std::cmp::Ordering::Less,
+                Key::AccountKind(Some(vk)) => kk.name.cmp(&vk.name),
+                Key::AccountKind(None) => std::cmp::Ordering::Equal,
+            }
         }
     }
 }
@@ -304,7 +316,11 @@ impl<'a> Networth<'a> {
                         .into_iter()
                         .map(Key::Account)
                         .collect(),
-                    GroupBy::AccountKind => vec![],
+                    GroupBy::AccountKind => vec![
+                        Key::AccountKind(
+                            repo.get_account_kinds().get(acc.kind)
+                        ),
+                    ],
                     GroupBy::Institution => {
                         let mut inst = repo.get_account_institution(acc);
                         let mut parent = acc;

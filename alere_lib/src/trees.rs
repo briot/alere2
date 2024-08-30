@@ -175,7 +175,7 @@ impl<K: PartialEq + Clone, T> NodeList<K, T> {
             self.0.push(TreeNode::new(
                 key.clone(),
                 create(key),
-                self_depth + 1,
+                self_depth,
             ));
             self.0.last_mut().unwrap()
         }

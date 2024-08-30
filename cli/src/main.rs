@@ -38,7 +38,7 @@ fn main() -> Result<()> {
         Networth::new(
             &repo,
             &get_timestamps(&[
-                Timestamp::YearsAgo(1),
+                //  Timestamp::YearsAgo(1),
                 Timestamp::MonthsAgo(1),
                 Timestamp::Now,
             ])
@@ -58,7 +58,7 @@ fn main() -> Result<()> {
             column_delta_to_last: false,
             column_price: false,
             column_market_delta: false,
-            column_market_delta_to_last: true,
+            column_market_delta_to_last: false,
             column_percent: false,
             account_names: AccountNameKind::Short,
         },

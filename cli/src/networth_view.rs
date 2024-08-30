@@ -42,18 +42,24 @@ pub fn networth_view(
         row.data.display_market_delta_to_last(repo, *idx)
     };
     let account_image = |row: &Data, _idx: &usize| {
-        format!(
-            "{: <width$}{}",
-            "",
-            repo.get_account_name(row.key, settings.account_names),
-            width = row.depth,
-        )
+        repo.get_account_name(row.key, settings.account_names)
     };
     let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
-    let percent_image = |row: &Data, idx: &usize|
-        row.data.display_percent(&networth.total, *idx);
+    let percent_image = |row: &Data, idx: &usize| {
+        row.data.display_percent(&networth.total, *idx)
+    };
 
     let mut columns = Vec::new();
+
+    columns.push(
+        Column::new(0, &account_image)
+            .show_indent()
+            .with_title("Account")
+            .with_width(Width::ExpandWithMin(8))
+            .with_truncate(Truncate::Left)
+            .with_footer(ColumnFooter::Hide),
+    );
+
     for (pos, (idx, ts)) in networth.as_of.iter().enumerate().with_position() {
         if settings.column_value {
             columns.push(
@@ -124,23 +130,10 @@ pub fn networth_view(
         }
     }
 
-    columns.push(
-        Column::new(0, &account_image)
-            .with_title("Account")
-            .with_width(Width::Expand)
-            .with_truncate(if networth.settings.tree {
-                // Need to show the indentation always
-                Truncate::Right
-            } else {
-                Truncate::Left
-            })
-            .with_footer(ColumnFooter::Hide),
-    );
-
     let mut table = Table::new(columns).with_col_headers();
     networth
         .tree
-        .traverse(|node| table.add_row(&node.data), true);
+        .traverse(|node| table.add_row(&node.data, node.data.depth), true);
 
     table.add_footer(&Data {
         data: networth.total.clone(),

@@ -37,8 +37,12 @@ fn main() -> Result<()> {
         &repo,
         Networth::new(
             &repo,
-            &get_timestamps(&[Timestamp::YearsAgo(1), Timestamp::MonthsAgo(1), Timestamp::Now])
-                .collect::<Vec<_>>(),
+            &get_timestamps(&[
+                Timestamp::YearsAgo(1),
+                Timestamp::MonthsAgo(1),
+                Timestamp::Now,
+            ])
+            .collect::<Vec<_>>(),
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,

@@ -31,9 +31,8 @@ pub fn networth_view(
         |row: &Data, idx: &usize| row.data.display_market_value(repo, *idx);
     let delta_image =
         |row: &Data, idx: &usize| row.data.display_delta(repo, *idx);
-    let delta_market_image = |row: &Data, idx: &usize| {
-        row.data.display_market_delta(repo, *idx)
-    };
+    let delta_market_image =
+        |row: &Data, idx: &usize| row.data.display_market_delta(repo, *idx);
     let delta_to_last_image =
         |row: &Data, idx: &usize| row.data.display_delta_to_last(repo, *idx);
     let delta_market_to_last_image = |row: &Data, idx: &usize| {

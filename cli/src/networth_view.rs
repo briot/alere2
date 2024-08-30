@@ -16,6 +16,9 @@ pub struct Settings {
     pub column_market_delta_to_last: bool,
     pub column_price: bool,
 
+    // Whether to show percent of total
+    pub column_percent: bool,
+
     pub account_names: AccountNameKind,
 }
 
@@ -47,6 +50,8 @@ pub fn networth_view(
         )
     };
     let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
+    let percent_image = |row: &Data, idx: &usize|
+        row.data.display_percent(&networth.total, *idx);
 
     let mut columns = Vec::new();
     for (pos, (idx, ts)) in networth.as_of.iter().enumerate().with_position() {
@@ -71,6 +76,14 @@ pub fn networth_view(
             columns.push(
                 Column::new(idx, &price_image)
                     .with_title(&format!("Price {}", ts.date_naive()))
+                    .with_align(Align::Right)
+                    .with_truncate(Truncate::Left),
+            );
+        }
+        if settings.column_percent {
+            columns.push(
+                Column::new(idx, &percent_image)
+                    .with_title("% total")
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );

@@ -508,43 +508,57 @@ impl KmyMoneyImporter {
 
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
         while let Some(row) = stream.try_next().await? {
-            assert_eq!(row.get::<&str, _>("txType"), "N");
-            tx.insert(
-                row.get::<String, _>("id"),
-                (
-                    *self
-                        .commodities
-                        .get(row.get::<&str, _>("currencyId"))
-                        .unwrap(),
-                    TransactionRc::new_with_details(TransactionDetails {
-                        memo: row.get("memo"),
-                        entry_date: row
-                            .get::<NaiveDate, _>("entryDate")
-                            .and_hms_opt(0, 0, 0)
-                            .unwrap()
-                            .and_local_timezone(Local)
-                            .unwrap(),
-                        ..Default::default()
-                    }),
-                ),
-            );
-            // ??? Not imported from kmmTransactions
-            //    bankId
-            //    postDate
-            // ??? Not imported from kmmSchedules
-            //    id
-            //    name
-            //    type + typeString
-            //    occurrence + occurrenceString
-            //    occurrenceMultiplier
-            //    paymentType + paymentTypeString
-            //    startDate
-            //    endDate
-            //    fixed
-            //    lastDayInMonth
-            //    autoEnter
-            //    lastPayment
-            //    weekendOption + weekendOptionString
+            match row.get::<&str, _>("txType") {
+                "S" | "N" => {
+                    tx.insert(
+                        row.get::<String, _>("id"),
+                        (
+                            *self
+                                .commodities
+                                .get(row.get::<&str, _>("currencyId"))
+                                .unwrap(),
+                            TransactionRc::new_with_details(
+                                TransactionDetails {
+                                    memo: row.get("memo"),
+                                    entry_date: row
+                                        .get::<Option<NaiveDate>, _>(
+                                            "entryDate",
+                                        )
+                                        .map(|d| {
+                                            d.and_hms_opt(0, 0, 0)
+                                                .unwrap()
+                                                .and_local_timezone(Local)
+                                                .unwrap()
+                                        })
+                                        // Unset for a scheduled transaction
+                                        .unwrap_or(Local::now()),
+                                    ..Default::default()
+                                },
+                            ),
+                        ),
+                    );
+                    // ??? Not imported from kmmTransactions
+                    //    bankId
+                    //    postDate
+                    // ??? Not imported from kmmSchedules
+                    //    id
+                    //    name
+                    //    type + typeString
+                    //    occurrence + occurrenceString
+                    //    occurrenceMultiplier
+                    //    paymentType + paymentTypeString
+                    //    startDate
+                    //    endDate
+                    //    fixed
+                    //    lastDayInMonth
+                    //    autoEnter
+                    //    lastPayment
+                    //    weekendOption + weekendOptionString
+                }
+                t => {
+                    panic!("??? Does not handle transactions with type {}", t);
+                }
+            }
         }
         Ok(tx)
     }

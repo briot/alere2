@@ -350,15 +350,16 @@ impl<'a> MarketPrices<'a> {
             None => Decimal::ONE,
             Some(c) if c == commodity => Decimal::ONE,
             Some(c) => {
-                let m =
-                    self.cache.entry((commodity, *as_of)).or_insert_with(|| {
+                let m = self.cache.entry((commodity, *as_of)).or_insert_with(
+                    || {
                         self.repo.prices.price_as_of(
                             commodity,
                             c,
                             self.repo.commodities.list_currencies(),
                             as_of,
                         )
-                    });
+                    },
+                );
                 match m {
                     None => Decimal::ONE,
                     Some(m) => m.price,

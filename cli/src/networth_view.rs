@@ -46,6 +46,8 @@ pub fn networth_view(
             Key::Account(a) => repo.get_account_name(a, settings.account_names),
             Key::Institution(Some(inst)) => inst.name.clone(),
             Key::Institution(None) => "Unknown".to_string(),
+            Key::AccountKind(Some(kind)) => kind.name.clone(),
+            Key::AccountKind(None) => "Unknown".to_string(),
         }
         //repo.get_account_name(row.key, settings.account_names)
     };

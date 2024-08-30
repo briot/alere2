@@ -26,16 +26,16 @@ impl AccountCollection {
         self.0.get(id.0 as usize - 1)
     }
 
-    pub fn name(&self, id: AccountId, kind: AccountNameKind) -> String {
+    pub fn name(&self, acc: &Account, kind: AccountNameKind) -> String {
         match kind {
-            AccountNameKind::Short => {
-                let acc = self.get(id).unwrap();
-                acc.name.clone()
-            }
+            AccountNameKind::Short => acc.name.clone(),
             AccountNameKind::Full => {
-                let acc = self.get(id).unwrap();
                 if let Some(p) = acc.parent {
-                    format!("{}::{}", self.name(p, kind), acc.name)
+                    format!(
+                        "{}::{}",
+                        self.name(self.get(p).unwrap(), kind),
+                        acc.name
+                    )
                 } else {
                     acc.name.clone()
                 }
@@ -86,7 +86,7 @@ pub struct Account {
     // Short name as displayed to users
     pub name: String,
 
-    _institution: Option<InstitutionId>,
+    institution: Option<InstitutionId>,
     parent: Option<AccountId>,
     _description: Option<String>,
 
@@ -125,7 +125,7 @@ impl Account {
             name: name.into(),
             kind,
             parent,
-            _institution: institution,
+            institution,
             _description: description.map(str::to_string),
             _iban: iban.map(str::to_string),
             _number: number.map(str::to_string),
@@ -139,8 +139,12 @@ impl Account {
         self.parent = Some(parent);
     }
 
-    pub fn get_parent(&self) -> Option<AccountId> {
+    pub fn get_parent_id(&self) -> Option<AccountId> {
         self.parent
+    }
+
+    pub fn get_institution_id(&self) -> Option<InstitutionId> {
+        self.institution
     }
 
     pub fn add_transaction(&mut self, transaction: &TransactionRc) {

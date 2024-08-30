@@ -172,11 +172,8 @@ impl<K: PartialEq + Clone, T> NodeList<K, T> {
         if let Some(i) = self.0.iter().position(|n| n.data.key == *key) {
             &mut self.0[i]
         } else {
-            self.0.push(TreeNode::new(
-                key.clone(),
-                create(key),
-                self_depth,
-            ));
+            self.0
+                .push(TreeNode::new(key.clone(), create(key), self_depth));
             self.0.last_mut().unwrap()
         }
     }

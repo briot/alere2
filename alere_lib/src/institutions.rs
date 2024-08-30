@@ -9,7 +9,7 @@ impl InstitutionId {
 
 #[derive(Debug)]
 pub struct Institution {
-    _name: String, // Display name
+    pub name: String, // Display name
     _manager: Option<String>,
     _street: Option<String>,
     _zip: Option<String>,
@@ -28,7 +28,7 @@ impl Institution {
         phone: Option<&str>,
     ) -> Self {
         Institution {
-            _name: name.into(),
+            name: name.into(),
             _manager: manager.map(|s| s.into()),
             _street: street.map(|s| s.into()),
             _zip: zip.map(|s| s.into()),

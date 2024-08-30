@@ -172,6 +172,28 @@ impl NetworthRow {
             Some(p) => p.to_string(),
         }
     }
+
+    /// Display value as percent of the total
+    pub fn display_percent(&self, total: &Self, idx: usize) -> String {
+        let mut s = self.0[idx].market_value.iter();
+        let mut t = total.0[idx].market_value.iter();
+
+        let v1 = s.next();
+        if let Some(v1) = v1 {
+            assert_eq!(s.next(), None);
+
+            let t1 = t.next();
+            if let Some(t1) = t1 {
+                assert_eq!(s.next(), None);
+                assert_eq!(t1.commodity, v1.commodity);
+                return format!(
+                    "{:.1}%",
+                    v1.value / t1.value * Decimal::ONE_HUNDRED
+                );
+            }
+        }
+        "ERROR".to_string()
+    }
 }
 
 impl core::ops::AddAssign<&NetworthRow> for NetworthRow {

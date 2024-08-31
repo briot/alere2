@@ -14,6 +14,7 @@ pub mod repositories;
 pub mod times;
 pub mod transactions;
 pub mod trees;
+pub mod tree_keys;
 mod utils;
 
 #[cfg(feature = "kmymoney")]

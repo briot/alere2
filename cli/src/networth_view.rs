@@ -1,8 +1,9 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
 use alere_lib::accounts::AccountNameKind;
-use alere_lib::networth::{Key, Networth, NetworthRow};
+use alere_lib::networth::{Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use alere_lib::trees::NodeData;
+use alere_lib::tree_keys::Key;
 use console::Term;
 use itertools::Itertools;
 

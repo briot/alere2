@@ -165,8 +165,8 @@ impl Default for Repository {
 }
 
 impl Repository {
-    // Re-arrange internal data structure for faster queries.  For instance
-    // ensures that things are sorted by dates when appropriate.
+    /// Re-arrange internal data structure for faster queries.  For instance
+    /// ensures that things are sorted by dates when appropriate.
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
         self.accounts.postprocess();
@@ -187,12 +187,27 @@ impl Repository {
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {
         self.institutions.insert(id, inst);
     }
+
+    /// Return the institution to which an account belongs.  If the account
+    /// itself doesn't specify this information, look in the parent account.
     pub fn get_account_institution(
         &self,
         acc: &Account,
     ) -> Option<&Institution> {
-        acc.get_institution_id()
-            .and_then(|inst| self.institutions.get(&inst))
+        let mut inst_id = acc.get_institution_id();
+        let mut current = acc;
+        while inst_id.is_none() {
+            match current.get_parent_id() {
+                None => {
+                    break;
+                }
+                Some(p) => {
+                    current = self.accounts.get(p).unwrap();
+                    inst_id = current.get_institution_id();
+                }
+            }
+        }
+        inst_id.and_then(|inst| self.institutions.get(&inst))
     }
 
     pub fn add_account(&mut self, account: Account) -> AccountId {
@@ -208,8 +223,9 @@ impl Repository {
         self.accounts.iter_accounts()
     }
 
-    // Return the parent accounts, starting with the direct parent.  The last
-    // element in the returned vec is therefore the toplevel account like Asset.
+    /// Return the parent accounts, starting with the direct parent.  The last
+    /// element in the returned vec is therefore the toplevel account like
+    /// Asset.
     pub fn get_account_parents_id(&self, id: AccountId) -> Vec<AccountId> {
         let mut parents = Vec::new();
         let mut p = id;

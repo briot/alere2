@@ -268,20 +268,7 @@ impl<'a> Networth<'a> {
                         ),
                     ],
                     GroupBy::Institution => {
-                        let mut inst = repo.get_account_institution(acc);
-                        let mut parent = acc;
-                        while inst.is_none() {
-                            match parent.get_parent_id() {
-                                None => {
-                                    break;
-                                }
-                                Some(p) => {
-                                    parent = repo.get_account(p).unwrap();
-                                    inst = repo.get_account_institution(parent);
-                                }
-                            }
-                        }
-                        vec![Key::Institution(inst)]
+                        vec![Key::Institution(repo.get_account_institution(acc))]
                     }
                 };
                 let key = Key::Account(acc);

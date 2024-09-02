@@ -1,4 +1,4 @@
-use crate::account_kinds::{AccountKind, AccountKindCollection, AccountKindId};
+use crate::account_kinds::AccountKindCollection;
 use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
 use crate::commodities::{Commodity, CommodityCollection, CommodityId};
 use crate::institutions::{Institution, InstitutionId};
@@ -15,7 +15,7 @@ use std::collections::HashMap;
 pub struct Repository {
     institutions: HashMap<InstitutionId, Institution>,
     accounts: AccountCollection,
-    account_kinds: AccountKindCollection,
+    pub(crate) account_kinds: AccountKindCollection,
     commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
@@ -33,14 +33,6 @@ impl Repository {
         // ??? We should sort transactions, but they have no timestamps.  In
         // fact, what counts is sorting the splits themselves, when we compute
         // an account's balance at some point in time, for instance.
-    }
-
-    pub fn add_account_kind(&mut self, kind: AccountKind) -> AccountKindId {
-        self.account_kinds.add(kind)
-    }
-
-    pub fn get_account_kinds(&self) -> &AccountKindCollection {
-        &self.account_kinds
     }
 
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {

@@ -2,7 +2,6 @@
 /// various computations.
 use crate::account_categories::AccountCategory;
 
-#[derive(Default)]
 pub struct AccountKindCollection(pub Vec<AccountKind>);
 
 impl AccountKindCollection {
@@ -13,6 +12,139 @@ impl AccountKindCollection {
 
     pub fn get(&self, id: AccountKindId) -> Option<&AccountKind> {
         self.0.get(id.0 as usize - 1)
+    }
+}
+
+impl Default for AccountKindCollection {
+    fn default() -> Self {
+        let mut a = Self(Vec::new());
+
+        a.add(
+            AccountKind::new(
+                "Passive Income",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_passive_income(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Work Income",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_work_income(true),
+        );
+        a.add(AccountKind::new(
+            "Income",
+            "Expense",
+            "Income",
+            AccountCategory::INCOME,
+        ));
+        a.add(
+            AccountKind::new(
+                "Unrealized gain",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_unrealized(true),
+        );
+        a.add(AccountKind::new(
+            "Expense",
+            "Increase",
+            "Decrease",
+            AccountCategory::EXPENSE,
+        ));
+        a.add(
+            AccountKind::new(
+                "Income tax",
+                "Increase",
+                "Decrease",
+                AccountCategory::EXPENSE,
+            )
+            .set_is_income_tax(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Other tax",
+                "Increase",
+                "Decrease",
+                AccountCategory::EXPENSE,
+            )
+            .set_is_misc_tax(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Liability",
+                "Deposit",
+                "Paiement",
+                AccountCategory::LIABILITY,
+            )
+            .set_is_networth(true),
+        );
+        a.add(AccountKind::new(
+            "Equity",
+            "Deposit",
+            "Paiement",
+            AccountCategory::EQUITY,
+        ));
+        a.add(
+            AccountKind::new(
+                "Checking",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Savings",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true),
+        );
+        a.add(
+            AccountKind::new("Stock", "Add", "Remove", AccountCategory::EQUITY)
+                .set_is_networth(true)
+                .set_is_trading(true)
+                .set_is_stock(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Investment",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true)
+            .set_is_trading(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Asset",
+                "Increase",
+                "Decrease",
+                AccountCategory::ASSET,
+            )
+            .set_is_networth(true),
+        );
+        a.add(
+            AccountKind::new(
+                "Non-liquid Investment",
+                "Deposit",
+                "Paiement",
+                AccountCategory::ASSET,
+            )
+            .set_is_networth(true)
+            .set_is_trading(true),
+        );
+        a
     }
 }
 

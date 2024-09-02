@@ -1,5 +1,5 @@
-use crate::accounts::Account;
 use crate::account_kinds::AccountKind;
+use crate::accounts::Account;
 use crate::institutions::Institution;
 
 /// An enum that can be used as the key for trees.
@@ -23,8 +23,9 @@ impl<'a> Ord for Key<'a> {
         match self {
             Key::Account(ka) => match right {
                 Key::Account(ra) => ka.name.cmp(&ra.name),
-                Key::Institution(_) | Key::AccountKind(_) =>
-                     std::cmp::Ordering::Greater,
+                Key::Institution(_) | Key::AccountKind(_) => {
+                    std::cmp::Ordering::Greater
+                }
             },
             Key::Institution(Some(ki)) => match right {
                 Key::Account(_) => std::cmp::Ordering::Less,
@@ -43,13 +44,13 @@ impl<'a> Ord for Key<'a> {
                 Key::Institution(_) => std::cmp::Ordering::Greater,
                 Key::AccountKind(Some(_)) => std::cmp::Ordering::Greater,
                 Key::AccountKind(None) => std::cmp::Ordering::Equal,
-            }
+            },
             Key::AccountKind(Some(kk)) => match right {
                 Key::Account(_) => std::cmp::Ordering::Less,
                 Key::Institution(_) => std::cmp::Ordering::Greater,
                 Key::AccountKind(Some(vk)) => kk.name.cmp(&vk.name),
                 Key::AccountKind(None) => std::cmp::Ordering::Less,
-            }
+            },
         }
     }
 }
@@ -62,9 +63,9 @@ impl<'a> PartialOrd for Key<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::accounts::Account;
     use crate::account_categories::AccountCategory;
-    use crate::account_kinds::{AccountKindId, AccountKind};
+    use crate::account_kinds::{AccountKind, AccountKindId};
+    use crate::accounts::Account;
     use crate::institutions::Institution;
     use crate::tree_keys::Key;
 
@@ -72,15 +73,17 @@ mod test {
     fn test_sort() {
         let kind_id = AccountKindId(1);
         let acc_aaa = Account::new(
-            "aaa", kind_id, None, None, None, None, None, false, None);
+            "aaa", kind_id, None, None, None, None, None, false, None,
+        );
         let acc_bbb = Account::new(
-            "bbb", kind_id, None, None, None, None, None, false, None);
+            "bbb", kind_id, None, None, None, None, None, false, None,
+        );
         let inst_ccc = Institution::new("ccc", None, None, None, None, None);
         let inst_ddd = Institution::new("ddd", None, None, None, None, None);
-        let kind_eee = AccountKind::new(
-            "eee", "Inc", "Dec", AccountCategory::EXPENSE);
-        let kind_fff = AccountKind::new(
-            "fff", "Inc", "Dec", AccountCategory::INCOME);
+        let kind_eee =
+            AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
+        let kind_fff =
+            AccountKind::new("fff", "Inc", "Dec", AccountCategory::INCOME);
 
         let key_acc_aaa = Key::Account(&acc_aaa);
         let key_acc_bbb = Key::Account(&acc_bbb);

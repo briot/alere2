@@ -1,4 +1,3 @@
-use crate::account_categories::AccountCategory;
 use crate::account_kinds::{AccountKind, AccountKindCollection, AccountKindId};
 use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
 use crate::commodities::{Commodity, CommodityCollection, CommodityId};
@@ -12,6 +11,7 @@ use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
+#[derive(Default)]
 pub struct Repository {
     institutions: HashMap<InstitutionId, Institution>,
     accounts: AccountCollection,
@@ -21,147 +21,6 @@ pub struct Repository {
     price_sources: HashMap<PriceSourceId, PriceSource>,
     prices: PriceCollection,
     transactions: Vec<TransactionRc>,
-}
-
-impl Default for Repository {
-    fn default() -> Self {
-        let mut repo = Repository {
-            institutions: Default::default(),
-            accounts: Default::default(),
-            account_kinds: Default::default(),
-            commodities: Default::default(),
-            payees: Default::default(),
-            price_sources: Default::default(),
-            prices: PriceCollection::default(),
-            transactions: Default::default(),
-        };
-        repo.add_account_kind(
-            AccountKind::new(
-                "Passive Income",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_passive_income(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Work Income",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_work_income(true),
-        );
-        repo.add_account_kind(AccountKind::new(
-            "Income",
-            "Expense",
-            "Income",
-            AccountCategory::INCOME,
-        ));
-        repo.add_account_kind(
-            AccountKind::new(
-                "Unrealized gain",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_unrealized(true),
-        );
-        repo.add_account_kind(AccountKind::new(
-            "Expense",
-            "Increase",
-            "Decrease",
-            AccountCategory::EXPENSE,
-        ));
-        repo.add_account_kind(
-            AccountKind::new(
-                "Income tax",
-                "Increase",
-                "Decrease",
-                AccountCategory::EXPENSE,
-            )
-            .set_is_income_tax(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Other tax",
-                "Increase",
-                "Decrease",
-                AccountCategory::EXPENSE,
-            )
-            .set_is_misc_tax(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Liability",
-                "Deposit",
-                "Paiement",
-                AccountCategory::LIABILITY,
-            )
-            .set_is_networth(true),
-        );
-        repo.add_account_kind(AccountKind::new(
-            "Equity",
-            "Deposit",
-            "Paiement",
-            AccountCategory::EQUITY,
-        ));
-        repo.add_account_kind(
-            AccountKind::new(
-                "Checking",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Savings",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new("Stock", "Add", "Remove", AccountCategory::EQUITY)
-                .set_is_networth(true)
-                .set_is_trading(true)
-                .set_is_stock(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Investment",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true)
-            .set_is_trading(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Asset",
-                "Increase",
-                "Decrease",
-                AccountCategory::ASSET,
-            )
-            .set_is_networth(true),
-        );
-        repo.add_account_kind(
-            AccountKind::new(
-                "Non-liquid Investment",
-                "Deposit",
-                "Paiement",
-                AccountCategory::ASSET,
-            )
-            .set_is_networth(true)
-            .set_is_trading(true),
-        );
-        repo
-    }
 }
 
 impl Repository {

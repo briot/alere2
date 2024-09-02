@@ -250,26 +250,32 @@ impl<'a> Networth<'a> {
                 repo.account_kinds.get(acc.kind).unwrap().is_networth
             })
             .for_each(|(acc_id, acc)| {
-                let parents: Vec<Key> = match &result.settings.group_by {
-                    GroupBy::None => vec![],
-                    GroupBy::ParentAccount => repo
-                        .iter_parent_accounts(acc)
-                        .map(Key::Account)
-                        .collect(),
-                    GroupBy::AccountKind => vec![Key::AccountKind(
-                        repo.account_kinds.get(acc.kind),
-                    )],
-                    GroupBy::Institution => {
-                        vec![Key::Institution(
-                            repo.get_account_institution(acc),
-                        )]
-                    }
-                };
                 let key = Key::Account(acc);
-
-                let row = result
-                    .tree
-                    .try_get(&key, &parents, |_| NetworthRow::new(col_count));
+                let newcol = |_: &Key| NetworthRow::new(col_count);
+                let row = match &result.settings.group_by {
+                    GroupBy::None => {
+                        result.tree.try_get(&key, std::iter::empty(), newcol)
+                    }
+                    GroupBy::ParentAccount => result.tree.try_get(
+                        &key,
+                        repo.iter_parent_accounts(acc).map(Key::Account),
+                        newcol,
+                    ),
+                    GroupBy::AccountKind => result.tree.try_get(
+                        &key,
+                        std::iter::once(Key::AccountKind(
+                            repo.account_kinds.get(acc.kind),
+                        )),
+                        newcol,
+                    ),
+                    GroupBy::Institution => result.tree.try_get(
+                        &key,
+                        std::iter::once(Key::Institution(
+                            repo.get_account_institution(acc),
+                        )),
+                        newcol,
+                    ),
+                };
 
                 //  ??? Could we use fold() here, though we are applying in
                 //  place.

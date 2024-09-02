@@ -29,10 +29,6 @@ impl Repository {
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
         self.accounts.postprocess();
-
-        // ??? We should sort transactions, but they have no timestamps.  In
-        // fact, what counts is sorting the splits themselves, when we compute
-        // an account's balance at some point in time, for instance.
     }
 
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {
@@ -74,33 +70,13 @@ impl Repository {
         self.accounts.iter_accounts()
     }
 
-    /// Return the parent accounts, starting with the direct parent.  The last
-    /// element in the returned vec is therefore the toplevel account like
-    /// Asset.
-    pub fn get_account_parents_id(&self, id: AccountId) -> Vec<AccountId> {
-        let mut parents = Vec::new();
-        let mut p = id;
-        while let Some(pid) = self.accounts.get(p).unwrap().get_parent_id() {
-            parents.push(pid);
-            p = pid;
-        }
-        parents
-    }
-
-    pub fn get_account_parents<'a, 'b>(
+    /// Return the parent accounts of acc (not including acc itself).  The last
+    /// element returned is the toplevel account, like Asset.
+    pub fn iter_parent_accounts<'a>(
         &'a self,
-        acc: &'b Account,
-    ) -> Vec<&'a Account>
-    where
-        'b: 'a,
-    {
-        let mut parents = Vec::new();
-        let mut p = acc;
-        while let Some(pid) = p.get_parent_id() {
-            p = self.accounts.get(pid).unwrap();
-            parents.push(p);
-        }
-        parents
+        acc: &'a Account,
+    ) -> impl Iterator<Item = &'a Account> {
+        ParentAccountIter::new(self, acc).skip(1)
     }
 
     pub fn get_account_name(
@@ -257,5 +233,30 @@ impl<'a> MarketPrices<'a> {
                 }
             }
         }
+    }
+}
+
+pub struct ParentAccountIter<'a> {
+    current: Option<&'a Account>,
+    repo: &'a Repository,
+}
+impl<'a> ParentAccountIter<'a> {
+    /// An iterator that return current and all its parent accounts
+    pub fn new(repo: &'a Repository, current: &'a Account) -> Self {
+        Self {
+            repo,
+            current: Some(current),
+        }
+    }
+}
+impl<'a> Iterator for ParentAccountIter<'a> {
+    type Item = &'a Account;
+    fn next(&mut self) -> Option<Self::Item> {
+        let p = self.current;
+        if let Some(c) = self.current {
+            self.current =
+                c.get_parent_id().and_then(|pid| self.repo.get_account(pid));
+        }
+        p
     }
 }

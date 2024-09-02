@@ -81,7 +81,7 @@ impl AccountId {
 /// more stocks.   An alternative is to create multiple children accounts, one
 /// per commodity, but the flexibility is left to the user.
 
-#[derive(Debug)]
+#[derive(Debug)] // NOT clone-able
 pub struct Account {
     // Short name as displayed to users
     pub name: String,

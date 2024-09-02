@@ -12,7 +12,20 @@ pub enum Key<'a> {
 
 impl<'a> PartialEq for Key<'a> {
     fn eq(&self, right: &Self) -> bool {
-        matches!(self.cmp(right), std::cmp::Ordering::Equal)
+        match self {
+            Key::Account(la) => match right {
+                // Compare pointers, since a given account only exists once.
+                // Otherwise, two accounts with the same name but different
+                // parents would compare equal
+                Key::Account(ra) => std::ptr::eq(*la, *ra),
+                _ => false,
+            },
+            Key::Institution(Some(li)) => match right {
+                Key::Institution(Some(ri)) => std::ptr::eq(*li, *ri),
+                _ => false,
+            },
+            _ => matches!(self.cmp(right), std::cmp::Ordering::Equal),
+        }
     }
 }
 

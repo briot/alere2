@@ -247,7 +247,7 @@ impl<'a> Networth<'a> {
 
         repo.iter_accounts()
             .filter(move |(_, acc)| {
-                repo.get_account_kinds().get(acc.kind).unwrap().is_networth
+                repo.account_kinds.get(acc.kind).unwrap().is_networth
             })
             .for_each(|(acc_id, acc)| {
                 let parents: Vec<Key> = match &result.settings.group_by {
@@ -258,7 +258,7 @@ impl<'a> Networth<'a> {
                         .map(Key::Account)
                         .collect(),
                     GroupBy::AccountKind => vec![Key::AccountKind(
-                        repo.get_account_kinds().get(acc.kind),
+                        repo.account_kinds.get(acc.kind),
                     )],
                     GroupBy::Institution => {
                         vec![Key::Institution(

@@ -107,7 +107,7 @@ impl KmyMoneyImporter {
 
     fn import_account_kinds(&mut self, repo: &mut Repository) {
         self.account_kinds = HashMap::new();
-        for (id, k) in repo.get_account_kinds().0.iter().enumerate() {
+        for (id, k) in repo.account_kinds.0.iter().enumerate() {
             self.account_kinds
                 .insert(k.name.to_lowercase(), AccountKindId(id as u32 + 1));
         }

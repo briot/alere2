@@ -225,7 +225,7 @@ impl KmyMoneyImporter {
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
 
-            let id = repo.add_commodity(Commodity::new(
+            let id = repo.commodities.add(Commodity::new(
                 row.get("name"),
                 row.get("symbolString"), // symbol (could be symbol2)
                 true,                    // symbol displayed after value
@@ -257,7 +257,7 @@ impl KmyMoneyImporter {
             let display_precision = row
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
-            let id = repo.add_commodity(Commodity::new(
+            let id = repo.commodities.add(Commodity::new(
                 row.get("name"),
                 row.get("symbol"), // symbol
                 true,              // symbol displayed after value

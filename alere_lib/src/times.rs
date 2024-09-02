@@ -1,36 +1,38 @@
 use chrono::{DateTime, Local};
 
-pub enum Timestamp {
+/// Specifies an instant in time, that is relative to some "now".
+/// Such a specification can be stored in configuration files, for instance
+/// as "one year ago".  That way, when we launch the application at some point
+/// in the future, this is still "one year ago".
+pub enum Instant {
     Now,
     DaysAgo(u64),
     MonthsAgo(u32),
     YearsAgo(u32),
 }
 
-pub fn get_timestamps(
-    when: &[Timestamp],
-) -> impl Iterator<Item = DateTime<Local>> + '_ {
-    let now = Local::now();
-    when.iter().map(move |ts| match ts {
-        Timestamp::Now => now,
-        Timestamp::DaysAgo(count) => now - chrono::Days::new(*count),
-        Timestamp::MonthsAgo(count) => now - chrono::Months::new(*count),
-        Timestamp::YearsAgo(count) => now - chrono::Months::new(*count * 12),
-    })
+impl Instant {
+
+    /// Convert self to an actual timestamp.
+    pub fn to_time(&self, now: DateTime<Local>) -> DateTime<Local> {
+        match self {
+            Instant::Now => now,
+            Instant::DaysAgo(count) => now - chrono::Days::new(*count),
+            Instant::MonthsAgo(count) => now - chrono::Months::new(*count),
+            Instant::YearsAgo(count) => now - chrono::Months::new(*count * 12),
+        }
+    }
 }
 
+/// A range of time [start; end] including both ends
 pub struct Range {
     pub start: DateTime<Local>,
-    pub to: DateTime<Local>,
+    pub end: DateTime<Local>,
 }
 
 impl Range {
-    pub fn new(start: Timestamp, to: Timestamp) -> Self {
-        let rg = [start, to];
-        let mut iter = get_timestamps(&rg);
-        let s = iter.nth(1).unwrap();
-        let t = iter.nth(1).unwrap();
-        Range { start: s, to: t }
+    pub fn new(start: DateTime<Local>, end: DateTime<Local>) -> Self {
+        Range { start, end }
     }
 }
 
@@ -40,16 +42,27 @@ pub enum Interval {
     Years(u32),
 }
 
-pub fn get_ranges(ranges: &[Interval]) -> impl Iterator<Item = Range> + '_ {
-    ranges.iter().map(move |itv| match itv {
-        Interval::Days(count) => {
-            Range::new(Timestamp::DaysAgo(*count), Timestamp::Now)
+impl Interval {
+
+    /// Compute the time range for a given interval.  The output doesn't
+    /// depend on a specific "now", so it can be reused
+    pub fn to_range(&self, now: DateTime<Local>) -> Range {
+        match self {
+            Interval::Days(count) => {
+                Range::new(
+                    Instant::DaysAgo(*count).to_time(now),
+                    Instant::Now.to_time(now))
+            }
+            Interval::Months(count) => {
+                Range::new(
+                    Instant::MonthsAgo(*count).to_time(now),
+                    Instant::Now.to_time(now))
+            }
+            Interval::Years(count) => {
+                Range::new(
+                    Instant::YearsAgo(*count).to_time(now),
+                    Instant::Now.to_time(now))
+            }
         }
-        Interval::Months(count) => {
-            Range::new(Timestamp::MonthsAgo(*count), Timestamp::Now)
-        }
-        Interval::Years(count) => {
-            Range::new(Timestamp::YearsAgo(*count), Timestamp::Now)
-        }
-    })
+    }
 }

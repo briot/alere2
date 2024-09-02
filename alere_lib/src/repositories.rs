@@ -1,14 +1,13 @@
 use crate::account_kinds::AccountKindCollection;
 use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
-use crate::commodities::{Commodity, CommodityCollection, CommodityId};
+use crate::commodities::{CommodityCollection, CommodityId};
 use crate::institutions::{Institution, InstitutionId};
+use crate::market_prices::MarketPrices;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
 use crate::transactions::TransactionRc;
-use chrono::{DateTime, Local};
-use rust_decimal::Decimal;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -16,10 +15,10 @@ pub struct Repository {
     institutions: HashMap<InstitutionId, Institution>,
     accounts: AccountCollection,
     pub(crate) account_kinds: AccountKindCollection,
-    commodities: CommodityCollection,
+    pub commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
-    prices: PriceCollection,
+    pub(crate) prices: PriceCollection,
     transactions: Vec<TransactionRc>,
 }
 
@@ -91,16 +90,6 @@ impl Repository {
         self.price_sources.insert(id, source);
     }
 
-    pub fn add_commodity(&mut self, comm: Commodity) -> CommodityId {
-        self.commodities.add(comm)
-    }
-    pub fn get_commodity(&self, id: CommodityId) -> Option<&Commodity> {
-        self.commodities.get(id)
-    }
-    pub fn find_commodity(&self, name: &str) -> Option<CommodityId> {
-        self.commodities.find(name)
-    }
-
     /// Returns the display precision for a given commodity.
     pub fn get_display_precision(&self, id: &CommodityId) -> u8 {
         self.commodities.get(*id).unwrap().display_precision
@@ -161,80 +150,13 @@ impl Repository {
         &self,
         to_commodity: Option<CommodityId>,
     ) -> MarketPrices {
-        MarketPrices::new(self, to_commodity)
+        MarketPrices::new(
+            &self.prices,
+            self.commodities.list_currencies(),
+            to_commodity)
     }
 }
 
-pub struct MarketPrices<'a> {
-    cache: HashMap<(CommodityId, DateTime<Local>), Option<Price>>,
-    repo: &'a Repository,
-    to_commodity: Option<CommodityId>,
-}
-
-impl<'a> MarketPrices<'a> {
-    fn new(repo: &'a Repository, to_commodity: Option<CommodityId>) -> Self {
-        MarketPrices {
-            repo,
-            to_commodity,
-            cache: HashMap::new(),
-        }
-    }
-
-    /// Return the current market price for commodity, given in to_commodity.
-    /// Market acts as a cache.
-    /// If to_commodity is None, no conversion is made.
-    pub fn convert_value(
-        &mut self,
-        value: &Value,
-        as_of: &DateTime<Local>,
-    ) -> Value {
-        let p = self.get_price(value.commodity, as_of);
-        if p == Decimal::ONE {
-            *value
-        } else {
-            Value::new(p * value.value, self.to_commodity.unwrap())
-        }
-    }
-
-    pub fn convert_multi_value(
-        &mut self,
-        value: &MultiValue,
-        as_of: &DateTime<Local>,
-    ) -> MultiValue {
-        let mut result = MultiValue::default();
-        for v in value.iter() {
-            result += self.convert_value(&v, as_of);
-        }
-        result
-    }
-
-    pub fn get_price(
-        &mut self,
-        commodity: CommodityId,
-        as_of: &DateTime<Local>,
-    ) -> Decimal {
-        match self.to_commodity {
-            None => Decimal::ONE,
-            Some(c) if c == commodity => Decimal::ONE,
-            Some(c) => {
-                let m = self.cache.entry((commodity, *as_of)).or_insert_with(
-                    || {
-                        self.repo.prices.price_as_of(
-                            commodity,
-                            c,
-                            self.repo.commodities.list_currencies(),
-                            as_of,
-                        )
-                    },
-                );
-                match m {
-                    None => Decimal::ONE,
-                    Some(m) => m.price,
-                }
-            }
-        }
-    }
-}
 
 pub struct ParentAccountIter<'a> {
     current: Option<&'a Account>,

@@ -1,6 +1,7 @@
 use crate::commodities::CommodityId;
+use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
-use crate::repositories::{MarketPrices, Repository};
+use crate::repositories::Repository;
 use crate::tree_keys::Key;
 use crate::trees::Tree;
 use crate::utils::is_all_same;
@@ -237,6 +238,11 @@ impl<'a> Networth<'a> {
         settings: Settings,
     ) -> Self {
         let col_count = as_of.len();
+
+        // We keep one cache for market prices per entry in as_of, since
+        // otherwise the current cache would keeping wiped out as we move from
+        // one column to the next.
+
         let mut market = repo.market_prices(settings.commodity);
         let mut result = Networth {
             settings,

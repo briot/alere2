@@ -7,9 +7,10 @@ use alere_lib::{
     importers::Importer,
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
-    times::{get_timestamps, Timestamp},
+    times::Instant,
 };
 use anyhow::Result;
+use chrono::Local;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
@@ -33,22 +34,21 @@ fn main() -> Result<()> {
         },
     ))?;
 
+    let now = Local::now();
     let output = networth_view(
         &repo,
         Networth::new(
             &repo,
-            &get_timestamps(&[
-                //  Timestamp::YearsAgo(1),
-                Timestamp::MonthsAgo(1),
-                Timestamp::Now,
-            ])
-            .collect::<Vec<_>>(),
+            &[
+                Instant::MonthsAgo(1),
+                Instant::Now,
+            ].iter().map(|ts| ts.to_time(now)).collect::<Vec<_>>(),
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,
                 group_by: GroupBy::ParentAccount,
                 subtotals: true,
-                commodity: repo.find_commodity("Euro"),
+                commodity: repo.commodities.find("Euro"),
             },
         ),
         crate::networth_view::Settings {

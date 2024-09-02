@@ -1,8 +1,8 @@
 use crate::commodities::CommodityId;
 use crate::multi_values::MultiValue;
 use crate::repositories::{MarketPrices, Repository};
-use crate::trees::Tree;
 use crate::tree_keys::Key;
+use crate::trees::Tree;
 use crate::utils::is_all_same;
 use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
@@ -247,12 +247,7 @@ impl<'a> Networth<'a> {
 
         repo.iter_accounts()
             .filter(move |(_, acc)| {
-                !acc.closed
-                    && repo
-                        .get_account_kinds()
-                        .get(acc.kind)
-                        .unwrap()
-                        .is_networth
+                repo.get_account_kinds().get(acc.kind).unwrap().is_networth
             })
             .for_each(|(acc_id, acc)| {
                 let parents: Vec<Key> = match &result.settings.group_by {
@@ -262,13 +257,13 @@ impl<'a> Networth<'a> {
                         .into_iter()
                         .map(Key::Account)
                         .collect(),
-                    GroupBy::AccountKind => vec![
-                        Key::AccountKind(
-                            repo.get_account_kinds().get(acc.kind)
-                        ),
-                    ],
+                    GroupBy::AccountKind => vec![Key::AccountKind(
+                        repo.get_account_kinds().get(acc.kind),
+                    )],
                     GroupBy::Institution => {
-                        vec![Key::Institution(repo.get_account_institution(acc))]
+                        vec![Key::Institution(
+                            repo.get_account_institution(acc),
+                        )]
                     }
                 };
                 let key = Key::Account(acc);

@@ -46,7 +46,7 @@ fn main() -> Result<()> {
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,
-                group_by: GroupBy::AccountKind,
+                group_by: GroupBy::ParentAccount,
                 subtotals: true,
                 commodity: repo.find_commodity("Euro"),
             },

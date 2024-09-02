@@ -118,10 +118,10 @@ impl KmyMoneyImporter {
         conn: &mut SqliteConnection,
     ) -> Result<()> {
         let mut stream = query(
-            "SELECT kmmKeyValuePairs.*
-                 FROM kmmKeyValuePairs
-                 LEFT JOIN kmmAccounts
-                 ON (kmmKeyValuePairs.kvpId = kmmAccounts.id)",
+            "SELECT kmmKeyValuePairs.* \
+             FROM kmmKeyValuePairs \
+             LEFT JOIN kmmAccounts \
+             ON (kmmKeyValuePairs.kvpId = kmmAccounts.id)",
         )
         .fetch(conn);
         let mut ignored: HashSet<String> = HashSet::new();

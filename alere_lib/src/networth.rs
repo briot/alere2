@@ -253,8 +253,7 @@ impl<'a> Networth<'a> {
                 let parents: Vec<Key> = match &result.settings.group_by {
                     GroupBy::None => vec![],
                     GroupBy::ParentAccount => repo
-                        .get_account_parents(acc)
-                        .into_iter()
+                        .iter_parent_accounts(acc)
                         .map(Key::Account)
                         .collect(),
                     GroupBy::AccountKind => vec![Key::AccountKind(

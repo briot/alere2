@@ -1,5 +1,5 @@
 use crate::accounts::AccountId;
-use crate::multi_values::{Operation, Value};
+use crate::multi_values::{MultiValue, Operation};
 use crate::payees::PayeeId;
 use chrono::{DateTime, Local};
 use std::rc::Rc;
@@ -107,7 +107,7 @@ impl TransactionRc {
         reconciled: ReconcileKind,
         post_ts: DateTime<Local>,
         original_value: Operation,
-        value: Option<Value>,
+        value: Option<MultiValue>,
     ) -> &mut Split {
         let split = Split {
             account,
@@ -281,7 +281,7 @@ pub struct Split {
 
     // ??? Should we use an Operation as well, though it would be in a different
     // currency
-    pub value: Option<Value>,
+    pub value: Option<MultiValue>,
 }
 
 #[cfg(test)]
@@ -289,7 +289,7 @@ mod test {
     use crate::accounts::AccountId;
     use crate::commodities::CommodityId;
     use crate::errors::AlrError;
-    use crate::multi_values::Value;
+    use crate::multi_values::MultiValue;
     use crate::transactions::{Operation, ReconcileKind, TransactionRc};
     use chrono::Local;
     use rust_decimal_macros::dec;
@@ -301,7 +301,7 @@ mod test {
             AccountId(1),
             ReconcileKind::New,
             Local::now(),
-            Operation::Credit(Value::new(dec!(1.1), CommodityId(1))),
+            Operation::Credit(MultiValue::new(dec!(1.1), CommodityId(1))),
             None,
         );
 

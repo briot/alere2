@@ -10,5 +10,5 @@ chrono = { workspace = true }
 console = "0.15.8"
 futures = { workspace = true }
 indicatif = "0.17.8"
-itertools = "0.13.0"
+itertools = { workspace = true }
 rust_decimal = { workspace = true }

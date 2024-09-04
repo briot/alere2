@@ -77,18 +77,7 @@ impl Balance {
     /// Compute the price used to convert from value to market_value.
     /// If we have multiple commodities, this returns nothing.
     pub fn get_price(&self) -> Option<Decimal> {
-        let mut p = None;
-        self.value.iter().enumerate().for_each(|(idx, v)| {
-            if idx > 0 || v.value.is_zero() {
-                p = None;
-            } else {
-                self.market_value.iter().for_each(|mv| {
-                    let x = mv.value / v.value;
-                    p = if x == Decimal::ONE { None } else { Some(x) };
-                });
-            }
-        });
-        p
+        &self.market_value / &self.value
     }
 }
 

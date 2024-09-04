@@ -3,7 +3,7 @@ use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
 use crate::commodities::{CommodityCollection, CommodityId};
 use crate::institutions::{Institution, InstitutionId};
 use crate::market_prices::MarketPrices;
-use crate::multi_values::{MultiValue, Operation, Value};
+use crate::multi_values::{MultiValue, Operation};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
@@ -119,22 +119,17 @@ impl Repository {
                 .add_transaction(tx);
 
             // Register prices from transactions
-            match (s.value, &s.original_value) {
-                (Some(v), Operation::Buy(ov) | Operation::Credit(ov))
-                    if v.commodity != ov.commodity =>
-                {
+            if let (Some(v), Operation::Buy(ov) | Operation::Credit(ov)) =
+                (&s.value, &s.original_value)
+            {
+                if let Some(p) = v / ov {
                     // Register the price we paid
                     self.add_price(
                         ov.commodity,
                         v.commodity,
-                        Price::new(
-                            s.post_ts,
-                            v.value / ov.value,
-                            PriceSourceId::Transaction,
-                        ),
+                        Price::new(s.post_ts, p, PriceSourceId::Transaction),
                     );
                 }
-                _ => {}
             }
         }
     }
@@ -142,7 +137,7 @@ impl Repository {
     pub fn display_multi_value(&self, value: &MultiValue) -> String {
         value.display(&self.commodities)
     }
-    pub fn display_value(&self, value: &Value) -> String {
+    pub fn display_value(&self, value: &MultiValue) -> String {
         value.display(&self.commodities)
     }
 

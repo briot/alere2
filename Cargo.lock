@@ -45,6 +45,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "futures",
+ "itertools",
  "log",
  "regex",
  "rust_decimal",

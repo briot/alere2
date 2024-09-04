@@ -112,6 +112,36 @@ impl MultiValue {
     }
 }
 
+impl core::ops::Div<&MultiValue> for &MultiValue {
+    type Output = Option<Decimal>;
+
+    fn div(self, rhs: &MultiValue) -> Self::Output {
+        let mut s = self.iter();
+        let mut t = rhs.iter();
+        match s.next() {
+            None => None,
+            Some(s1) => {
+                if s.next().is_some() {
+                    None
+                } else {
+                    match t.next() {
+                        None => None,
+                        Some(t1) => {
+                            if t.next().is_some()
+                                || t1.commodity != s1.commodity
+                            {
+                                None
+                            } else {
+                                Some(s1.value / t1.value)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl core::ops::Add<Value> for MultiValue {
     type Output = Self;
 
@@ -122,8 +152,18 @@ impl core::ops::Add<Value> for MultiValue {
     }
 }
 
+impl core::ops::Add<&MultiValue> for &MultiValue {
+    type Output = MultiValue;
+
+    fn add(self, rhs: &MultiValue) -> Self::Output {
+        let mut result = self.clone();
+        result += rhs;
+        result
+    }
+}
+
 impl core::ops::Add<&MultiValue> for MultiValue {
-    type Output = Self;
+    type Output = MultiValue;
 
     fn add(self, rhs: &MultiValue) -> Self::Output {
         let mut result = self.clone();
@@ -134,6 +174,12 @@ impl core::ops::Add<&MultiValue> for MultiValue {
 
 impl core::ops::AddAssign<Value> for MultiValue {
     fn add_assign(&mut self, rhs: Value) {
+        *self += &rhs;
+    }
+}
+
+impl core::ops::AddAssign<&Value> for MultiValue {
+    fn add_assign(&mut self, rhs: &Value) {
         if !rhs.is_zero() {
             self.values
                 .entry(rhs.commodity)

@@ -12,7 +12,6 @@ pub enum Instant {
 }
 
 impl Instant {
-
     /// Convert self to an actual timestamp.
     pub fn to_time(&self, now: DateTime<Local>) -> DateTime<Local> {
         match self {
@@ -25,6 +24,7 @@ impl Instant {
 }
 
 /// A range of time [start; end] including both ends
+#[derive(Debug)]
 pub struct Range {
     pub start: DateTime<Local>,
     pub end: DateTime<Local>,
@@ -43,26 +43,22 @@ pub enum Interval {
 }
 
 impl Interval {
-
     /// Compute the time range for a given interval.  The output doesn't
     /// depend on a specific "now", so it can be reused
     pub fn to_range(&self, now: DateTime<Local>) -> Range {
         match self {
-            Interval::Days(count) => {
-                Range::new(
-                    Instant::DaysAgo(*count).to_time(now),
-                    Instant::Now.to_time(now))
-            }
-            Interval::Months(count) => {
-                Range::new(
-                    Instant::MonthsAgo(*count).to_time(now),
-                    Instant::Now.to_time(now))
-            }
-            Interval::Years(count) => {
-                Range::new(
-                    Instant::YearsAgo(*count).to_time(now),
-                    Instant::Now.to_time(now))
-            }
+            Interval::Days(count) => Range::new(
+                Instant::DaysAgo(*count).to_time(now),
+                Instant::Now.to_time(now),
+            ),
+            Interval::Months(count) => Range::new(
+                Instant::MonthsAgo(*count).to_time(now),
+                Instant::Now.to_time(now),
+            ),
+            Interval::Years(count) => Range::new(
+                Instant::YearsAgo(*count).to_time(now),
+                Instant::Now.to_time(now),
+            ),
         }
     }
 }

@@ -1,13 +1,15 @@
 mod networth_view;
+mod stats_view;
 pub mod tables;
 
-use crate::networth_view::networth_view;
+use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
     accounts::AccountNameKind,
     importers::Importer,
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
-    times::Instant,
+    stats::Stats,
+    times::{Instant, Interval},
 };
 use anyhow::Result;
 use chrono::Local;
@@ -35,14 +37,15 @@ fn main() -> Result<()> {
     ))?;
 
     let now = Local::now();
+
     let output = networth_view(
         &repo,
         Networth::new(
             &repo,
-            &[
-                Instant::MonthsAgo(1),
-                Instant::Now,
-            ].iter().map(|ts| ts.to_time(now)).collect::<Vec<_>>(),
+            &[Instant::YearsAgo(1), Instant::Now]
+                .iter()
+                .map(|ts| ts.to_time(now))
+                .collect::<Vec<_>>(),
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,
@@ -62,6 +65,21 @@ fn main() -> Result<()> {
             column_percent: false,
             account_names: AccountNameKind::Short,
         },
+    );
+    progress.finish_and_clear();
+    println!("{}", output);
+
+    let output = stats_view(
+        &repo,
+        Stats::new(
+            &repo,
+            Interval::Years(1),
+            alere_lib::stats::Settings {
+                commodity: repo.commodities.find("Euro"),
+            },
+            now,
+        ),
+        crate::stats_view::Settings {},
     );
     progress.finish_and_clear();
     println!("{}", output);

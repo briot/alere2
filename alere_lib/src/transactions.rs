@@ -278,6 +278,9 @@ pub struct Split {
     //   split for the same transaction:
     //       split1: account=stock       value=1200 USD   original=10 AAPL
     //       split2: account=investment  value=-1200 USD  original=-1020 EUR
+
+    // ??? Should we use an Operation as well, though it would be in a different
+    // currency
     pub value: Option<Value>,
 }
 

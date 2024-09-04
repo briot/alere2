@@ -153,10 +153,10 @@ impl Repository {
         MarketPrices::new(
             &self.prices,
             self.commodities.list_currencies(),
-            to_commodity)
+            to_commodity,
+        )
     }
 }
-
 
 pub struct ParentAccountIter<'a> {
     current: Option<&'a Account>,

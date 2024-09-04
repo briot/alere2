@@ -65,12 +65,7 @@ impl Balance {
         prices: &mut MarketPrices,
         as_of: &DateTime<Local>,
     ) {
-        if !self.value.is_zero() {
-            let mv = prices.convert_multi_value(&self.value, as_of);
-            self.market_value = mv;
-        } else {
-            self.market_value = MultiValue::default();
-        }
+        self.market_value = prices.convert_multi_value(&self.value, as_of);
     }
 
     /// True if the value is zero.
@@ -190,24 +185,11 @@ impl NetworthRow {
 
     /// Display value as percent of the total
     pub fn display_percent(&self, total: &Self, idx: usize) -> String {
-        let mut s = self.0[idx].market_value.iter();
-        let mut t = total.0[idx].market_value.iter();
-
-        let v1 = s.next();
-        if let Some(v1) = v1 {
-            assert_eq!(s.next(), None);
-
-            let t1 = t.next();
-            if let Some(t1) = t1 {
-                assert_eq!(s.next(), None);
-                assert_eq!(t1.commodity, v1.commodity);
-                return format!(
-                    "{:.1}%",
-                    v1.value / t1.value * Decimal::ONE_HUNDRED
-                );
-            }
+        let percent = &self.0[idx].market_value / &total.0[idx].market_value;
+        match percent {
+            None => String::new(),
+            Some(p) => format!("{:.1}%", p * Decimal::ONE_HUNDRED),
         }
-        "ERROR".to_string()
     }
 }
 

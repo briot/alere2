@@ -266,4 +266,11 @@ impl AccountKind {
         self.is_misc_tax = is_misc_tax;
         self
     }
+
+    pub fn is_expense(&self) -> bool {
+        matches!(self.category, AccountCategory::EXPENSE)
+    }
+    pub fn is_income(&self) -> bool {
+        matches!(self.category, AccountCategory::INCOME)
+    }
 }

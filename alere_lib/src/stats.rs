@@ -10,10 +10,10 @@ pub struct Settings {
 
 // #[derive(Default)]
 // struct AccountSummary {
-//     pub balance: MultiValue,
+//     pub balance: Value,
 //     //  Balance of this account (number of shares for instance)
 //
-//     pub invested: MultiValue,
+//     pub invested: Value,
 //     //  How much we invested to buy those shares.
 // }
 //

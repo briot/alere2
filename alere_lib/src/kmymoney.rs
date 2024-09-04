@@ -4,7 +4,7 @@ use crate::commodities::{Commodity, CommodityId};
 use crate::errors::AlrError;
 use crate::importers::Importer;
 use crate::institutions::{Institution, InstitutionId};
-use crate::multi_values::{Operation, Value};
+use crate::multi_values::{MultiValue, Operation};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
@@ -642,7 +642,7 @@ impl KmyMoneyImporter {
                     //   Same information as above but positive value.
                     (
                         None,
-                        Operation::Dividend(Value::new(
+                        Operation::Dividend(MultiValue::new(
                             Decimal::ZERO,
                             *tx_currency,
                         )),
@@ -650,7 +650,10 @@ impl KmyMoneyImporter {
                 }
                 (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => (
                     None,
-                    Operation::Credit(Value::new(shares, *account_currency_id)),
+                    Operation::Credit(MultiValue::new(
+                        shares,
+                        *account_currency_id,
+                    )),
                 ),
                 (Some("Buy"), Some(p)) => {
                     let diff = (p * shares - value).abs();
@@ -671,8 +674,8 @@ impl KmyMoneyImporter {
                     }
 
                     (
-                        Some(Value::new(value, *tx_currency)),
-                        Operation::Buy(Value::new(
+                        Some(MultiValue::new(value, *tx_currency)),
+                        Operation::Buy(MultiValue::new(
                             shares,
                             *account_currency_id,
                         )),
@@ -704,8 +707,8 @@ impl KmyMoneyImporter {
                     )
                 }
                 (Some("Reinvest"), Some(_)) => (
-                    Some(Value::new(value, *tx_currency)),
-                    Operation::Reinvest(Value::new(
+                    Some(MultiValue::new(value, *tx_currency)),
+                    Operation::Reinvest(MultiValue::new(
                         shares,
                         *account_currency_id,
                     )),
@@ -713,8 +716,8 @@ impl KmyMoneyImporter {
                 (None | Some(""), _) => {
                     // Standard transaction, not for shares
                     (
-                        Some(Value::new(value, *tx_currency)),
-                        Operation::Credit(Value::new(
+                        Some(MultiValue::new(value, *tx_currency)),
+                        Operation::Credit(MultiValue::new(
                             shares,
                             *account_currency_id,
                         )),

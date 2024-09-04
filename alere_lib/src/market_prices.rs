@@ -1,5 +1,5 @@
 use crate::commodities::CommodityId;
-use crate::multi_values::{MultiValue, Value};
+use crate::multi_values::MultiValue;
 use crate::price_sources::PriceSourceId;
 use crate::prices::{Price, PriceCollection};
 use bisection::bisect_right_by;
@@ -35,21 +35,8 @@ impl<'a> MarketPrices<'a> {
         }
     }
 
-    /// Convert the value to to_commodity
-    pub fn convert_value(
-        &mut self,
-        value: &Value,
-        as_of: &DateTime<Local>,
-    ) -> Value {
-        match self.get_price(value.commodity, as_of) {
-            None => *value,                         // no conversion possible
-            Some(p) if p == Decimal::ONE => *value, // no conversion needed
-            Some(p) => Value::new(p * value.value, self.to_commodity.unwrap()),
-        }
-    }
-
     /// Convert each component of the multi-value to to_commodity, and sum
-    /// the results.  We still return a MultiValue, since we might be missing
+    /// the results.  We still return a Value, since we might be missing
     /// some exchange-rates, and could therefore left some of the components
     /// unconverted.
     pub fn convert_multi_value(
@@ -58,8 +45,13 @@ impl<'a> MarketPrices<'a> {
         as_of: &DateTime<Local>,
     ) -> MultiValue {
         let mut result = MultiValue::default();
-        for v in value.iter() {
-            result += self.convert_value(&v, as_of);
+        for pair in value.iter() {
+            result += match self.get_price(pair.commodity, as_of) {
+                None => MultiValue::new(pair.amount, pair.commodity),
+                Some(p) => {
+                    MultiValue::new(p * pair.amount, self.to_commodity.unwrap())
+                }
+            };
         }
         result
     }
@@ -295,10 +287,7 @@ mod test {
         {
             let mut to_origin =
                 MarketPrices::new(&prices, &turnkeys, Some(origin));
-            assert_eq!(
-                to_origin.get_price(target, &t1),
-                Some(dec!(5)),
-            );
+            assert_eq!(to_origin.get_price(target, &t1), Some(dec!(5)),);
         }
 
         // Second price is in reverse order
@@ -347,10 +336,7 @@ mod test {
         {
             let mut to_target =
                 MarketPrices::new(&prices, &turnkeys, Some(target));
-            assert_eq!(
-                to_target.get_price(origin, &t1),
-                Some(dec!(0.2)),
-            );
+            assert_eq!(to_target.get_price(origin, &t1), Some(dec!(0.2)),);
         }
 
         // Test turnkeys

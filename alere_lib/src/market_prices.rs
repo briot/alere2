@@ -14,7 +14,7 @@ use std::collections::HashMap;
 pub struct MarketPrices<'a> {
     cache: HashMap<(CommodityId, CommodityId), PairCacheLine>,
     known_prices: &'a PriceCollection,
-    turnkey_currencies: &'a[CommodityId],
+    turnkey_currencies: &'a [CommodityId],
     to_commodity: Option<CommodityId>,
 }
 
@@ -24,7 +24,7 @@ impl<'a> MarketPrices<'a> {
     /// If to_commodity is None, no conversion is made.
     pub fn new(
         known_prices: &'a PriceCollection,
-        turnkey_currencies: &'a[CommodityId],
+        turnkey_currencies: &'a [CommodityId],
         to_commodity: Option<CommodityId>,
     ) -> Self {
         MarketPrices {
@@ -79,10 +79,8 @@ impl<'a> MarketPrices<'a> {
             Some(c) => {
                 let mut result = self.get_price_no_turnkey(commodity, c, as_of);
 
-                for turnkey in self
-                    .turnkey_currencies
-                    .iter()
-                    .filter(|curr| **curr != c)
+                for turnkey in
+                    self.turnkey_currencies.iter().filter(|curr| **curr != c)
                 {
                     match self.get_price_no_turnkey(commodity, *turnkey, as_of)
                     {
@@ -262,11 +260,8 @@ mod test {
         let t1 = Local.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
 
         {
-            let mut to_target = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(target),
-            );
+            let mut to_target =
+                MarketPrices::new(&prices, &turnkeys, Some(target));
             assert_eq!(to_target.get_price(origin, &t1), None,);
         }
 
@@ -277,47 +272,32 @@ mod test {
         );
 
         {
-            let mut to_target = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(target),
-            );
+            let mut to_target =
+                MarketPrices::new(&prices, &turnkeys, Some(target));
             assert_eq!(
                 //  before first price
-                to_target.get_price(
-                    origin,
-                    &(t1 - Days::new(1))
-                ),
+                to_target.get_price(origin, &(t1 - Days::new(1))),
                 None,
             );
             assert_eq!(
                 //  exactly first price
                 to_target.get_price(origin, &t1),
                 Some(dec!(0.2)),
-                //  Some((t1, dec!(0.2), PriceSourceId::Transaction)),
             );
             assert_eq!(
                 //  after last price
-                to_target.get_price(
-                    origin,
-                    &(t1 + Days::new(3))
-                ),
+                to_target.get_price(origin, &(t1 + Days::new(3))),
                 Some(dec!(0.2)),
-                //  Some(Price::new(t1, dec!(0.2), PriceSourceId::Transaction)),
             );
         }
 
         //  invert xrate
         {
-            let mut to_origin = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(origin),
-            );
+            let mut to_origin =
+                MarketPrices::new(&prices, &turnkeys, Some(origin));
             assert_eq!(
                 to_origin.get_price(target, &t1),
                 Some(dec!(5)),
-                // Some(Price::new(t1, dec!(5), PriceSourceId::Transaction)),
             );
         }
 
@@ -328,53 +308,27 @@ mod test {
             Price::new(t1 + Days::new(2), dec!(4), PriceSourceId::Transaction),
         );
         {
-            let mut to_target = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(target),
-            );
+            let mut to_target =
+                MarketPrices::new(&prices, &turnkeys, Some(target));
             assert_eq!(
                 //  before first price
-                to_target.get_price(
-                    origin,
-                    &(t1 - Days::new(1))
-                ),
+                to_target.get_price(origin, &(t1 - Days::new(1))),
                 None,
             );
             assert_eq!(
                 //  between two days, use earlier price
-                to_target.get_price(
-                    origin,
-                    &(t1 + Days::new(1))
-                ),
+                to_target.get_price(origin, &(t1 + Days::new(1))),
                 Some(dec!(0.2)),
-                // Some(Price::new(t1, dec!(0.2), PriceSourceId::Transaction)),
             );
             assert_eq!(
                 //  on second day
-                to_target.get_price(
-                    origin,
-                    &(t1 + Days::new(2))
-                ),
+                to_target.get_price(origin, &(t1 + Days::new(2))),
                 Some(dec!(0.25)),
-    //            Some(Price::new(
-    //                t1 + Days::new(2),
-    //                dec!(0.25),
-    //                PriceSourceId::Transaction
-    //            )),
             );
             assert_eq!(
                 //  after last price
-                to_target.get_price(
-                    origin,
-                    &(t1 + Days::new(3))
-                ),
+                to_target.get_price(origin, &(t1 + Days::new(3))),
                 Some(dec!(0.25)),
-    //            Some(Price::new(
-    //                t1 + Days::new(2),
-    //                dec!(0.25),
-    //                PriceSourceId::Transaction
-    //            )),
             );
         }
 
@@ -391,15 +345,11 @@ mod test {
         prices.postprocess(); // need sorting
 
         {
-            let mut to_target = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(target),
-            );
+            let mut to_target =
+                MarketPrices::new(&prices, &turnkeys, Some(target));
             assert_eq!(
                 to_target.get_price(origin, &t1),
                 Some(dec!(0.2)),
-                // Some(Price::new(t1, dec!(0.2), PriceSourceId::Transaction)),
             );
         }
 
@@ -415,33 +365,17 @@ mod test {
             Price::new(t1, dec!(0.8), PriceSourceId::Transaction),
         );
         {
-            let mut to_target2 = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(target2),
-            );
-            let mut to_origin = MarketPrices::new(
-                &prices,
-                &turnkeys,
-                Some(origin),
-            );
+            let mut to_target2 =
+                MarketPrices::new(&prices, &turnkeys, Some(target2));
+            let mut to_origin =
+                MarketPrices::new(&prices, &turnkeys, Some(origin));
             assert_eq!(
                 to_target2.get_price(origin, &t1),
                 Some(dec!(0.7) / dec!(0.8)),
-//                Some(Price::new(
-//                    t1,
-//                    dec!(0.7) / dec!(0.8),
-//                    PriceSourceId::Turnkey
-//                )),
             );
             assert_eq!(
                 to_origin.get_price(target2, &t1),
                 Some(dec!(0.8) / dec!(0.7)),
-//                Some(Price::new(
-//                    t1,
-//                    dec!(0.8) / dec!(0.7),
-//                    PriceSourceId::Turnkey
-//                )),
             );
         }
     }

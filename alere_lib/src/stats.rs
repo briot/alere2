@@ -81,10 +81,10 @@ impl Stats {
 
             acc.iter_splits(acc_id).for_each(|s| {
                 if s.post_ts <= ts_range.start {
-                    cumul_start.apply(&s.original_value);
+                    cumul_start.apply(&s.operation);
                 }
                 if s.post_ts <= ts_range.end {
-                    cumul_end.apply(&s.original_value);
+                    cumul_end.apply(&s.operation);
                 }
             });
 

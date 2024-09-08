@@ -259,7 +259,7 @@ impl<'a> Networth<'a> {
                 acc.iter_splits(acc_id).for_each(|s| {
                     for (idx, ts) in as_of.iter().enumerate() {
                         if s.post_ts <= *ts {
-                            row.0[idx].value.apply(&s.original_value);
+                            row.0[idx].value.apply(&s.operation);
                         }
                     }
                 });

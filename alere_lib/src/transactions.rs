@@ -1,5 +1,5 @@
 use crate::accounts::AccountId;
-use crate::multi_values::{MultiValue, Operation};
+use crate::multi_values::Operation;
 use crate::payees::PayeeId;
 use chrono::{DateTime, Local};
 use std::rc::Rc;
@@ -106,15 +106,13 @@ impl TransactionRc {
         account: AccountId,
         reconciled: ReconcileKind,
         post_ts: DateTime<Local>,
-        original_value: Operation,
-        value: Option<MultiValue>,
+        operation: Operation,
     ) -> &mut Split {
         let split = Split {
             account,
             reconciled,
             post_ts,
-            original_value,
-            value,
+            operation,
         };
         let tr = Rc::get_mut(&mut self.0)
             .expect("Couldn'get get mut ref to transation");
@@ -248,40 +246,7 @@ pub struct Split {
     // but not take advantage of it in the user interface.
     pub post_ts: DateTime<Local>,
 
-    // The amount of the split, in the original currency
-    // This is potentially given in another currency or commodity.
-    pub original_value: Operation,
-
-    // The amount of the transaction as made originally.
-    // The goal is to support multi-currency transactions.
-    // Here are various ways this value can be used:
-    //
-    // * a 1000 EUR transaction for an account in EUR. In this case, value is
-    //   useless and does not provide any additional information.
-    //       original_value = 1000 EUR  (scaled)
-    //       value          = 1000 EUR  (scaled)
-    //
-    // * an ATM operation of 100 USD for the same account in EUR while abroad.
-    //   Exchange rate at the time: 0.85 EUR = 1 USD.  Also assume there is a
-    //   bank fee that applies.
-    //      split1: account=checking account
-    //              original_value = -100 USD    (actually withdrawn)
-    //              value          = -85 EUR   (as shown on your bank statement)
-    //      split2: account=expense:cash  value= +84.7 EUR  original= +84.7 EUR
-    //      split3: account=expense:fees  value= +0.3 EUR   original= +0.3 EUR
-    //   So value is used to show you exactly the amount you manipulated. The
-    //   exchange rate can be computed from qty and value.
-    //
-    // * Buying 10 shares for AAPL at 120 USD. There are several splits here,
-    //   one where we increase the number of shares in the STOCK account.
-    //   The money came from an investment account in EUR, which has its own
-    //   split for the same transaction:
-    //       split1: account=stock       value=1200 USD   original=10 AAPL
-    //       split2: account=investment  value=-1200 USD  original=-1020 EUR
-
-    // ??? Should we use an Operation as well, though it would be in a different
-    // currency
-    pub value: Option<MultiValue>,
+    pub operation: Operation,
 }
 
 #[cfg(test)]
@@ -302,7 +267,6 @@ mod test {
             ReconcileKind::New,
             Local::now(),
             Operation::Credit(MultiValue::new(dec!(1.1), CommodityId(1))),
-            None,
         );
 
         assert!(tr.is_balanced());

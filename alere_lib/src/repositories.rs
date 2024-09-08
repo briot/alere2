@@ -119,17 +119,30 @@ impl Repository {
                 .add_transaction(tx);
 
             // Register prices from transactions
-            if let (Some(v), Operation::Buy(ov) | Operation::Credit(ov)) =
-                (&s.value, &s.original_value)
-            {
-                if let Some(p) = v / ov {
-                    // Register the price we paid
+            match &s.operation {
+                Operation::BuyAmount { qty, amount } => {
                     self.add_price(
-                        ov.commodity,
-                        v.commodity,
-                        Price::new(s.post_ts, p, PriceSourceId::Transaction),
+                        amount.commodity,
+                        qty.commodity,
+                        Price::new(
+                            s.post_ts,
+                            qty.amount / amount.amount,
+                            PriceSourceId::Transaction,
+                        ),
                     );
                 }
+                Operation::BuyPrice { qty, price } => {
+                    self.add_price(
+                        price.commodity,
+                        qty.commodity,
+                        Price::new(
+                            s.post_ts,
+                            price.amount,
+                            PriceSourceId::Transaction,
+                        ),
+                    );
+                }
+                _ => {}
             }
         }
     }

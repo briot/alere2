@@ -4,7 +4,7 @@ use crate::commodities::{Commodity, CommodityId};
 use crate::errors::AlrError;
 use crate::importers::Importer;
 use crate::institutions::{Institution, InstitutionId};
-use crate::multi_values::{MultiValue, Operation};
+use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
@@ -628,7 +628,7 @@ impl KmyMoneyImporter {
             .unwrap();
 
             let action: Option<&str> = row.get("action");
-            let (value, orig_value) = match (action, price) {
+            let operation = match (action, price) {
                 (Some("Dividend" | "IntIncome"), _) => {
                     // kmymoney has three splits/accounts involved for dividends:
                     // - the "Stock" account itself, which only registers there
@@ -638,23 +638,16 @@ impl KmyMoneyImporter {
                     // - the "Income" account which has a negative value equal
                     //   to the total value of the dividend.  It also sets the
                     //   "shares" column with the same value, not clear why.
-                    // - the user account into which the dividend is credit.
+                    // - the user account into which the dividend is credited.
                     //   Same information as above but positive value.
-                    (
-                        None,
-                        Operation::Dividend(MultiValue::new(
-                            Decimal::ZERO,
-                            *tx_currency,
-                        )),
-                    )
+                    Operation::Dividend
                 }
-                (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => (
-                    None,
+                (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => {
                     Operation::Credit(MultiValue::new(
                         shares,
                         *account_currency_id,
-                    )),
-                ),
+                    ))
+                }
                 (Some("Buy"), Some(p)) => {
                     let diff = (p * shares - value).abs();
                     if diff >= dec!(0.007) {
@@ -673,13 +666,16 @@ impl KmyMoneyImporter {
                             self.price_precisions[tx_currency]);
                     }
 
-                    (
-                        Some(MultiValue::new(value, *tx_currency)),
-                        Operation::Buy(MultiValue::new(
-                            shares,
-                            *account_currency_id,
-                        )),
-                    )
+                    Operation::BuyAmount {
+                        qty: Value {
+                            amount: shares,
+                            commodity: *account_currency_id,
+                        },
+                        amount: Value {
+                            amount: value,
+                            commodity: *tx_currency,
+                        },
+                    }
                 }
                 (Some("Split"), p)
                     if p.is_none() || p == Some(Decimal::ONE) =>
@@ -698,30 +694,21 @@ impl KmyMoneyImporter {
                     let ratio =
                         parse_price(row.get("shares"), account_precision)?
                             .unwrap();
-                    (
-                        None,
-                        Operation::Split {
-                            ratio,
-                            commodity: *account_currency_id,
-                        },
-                    )
+                    Operation::Split {
+                        ratio,
+                        commodity: *account_currency_id,
+                    }
                 }
-                (Some("Reinvest"), Some(_)) => (
-                    Some(MultiValue::new(value, *tx_currency)),
-                    Operation::Reinvest(MultiValue::new(
-                        shares,
-                        *account_currency_id,
-                    )),
-                ),
+                (Some("Reinvest"), Some(_)) => Operation::Reinvest {
+                    shares: MultiValue::new(shares, *account_currency_id),
+                    amount: MultiValue::new(value, *tx_currency),
+                },
                 (None | Some(""), _) => {
                     // Standard transaction, not for shares
-                    (
-                        Some(MultiValue::new(value, *tx_currency)),
-                        Operation::Credit(MultiValue::new(
-                            shares,
-                            *account_currency_id,
-                        )),
-                    )
+                    Operation::Credit(MultiValue::new(
+                        shares,
+                        *account_currency_id,
+                    ))
                 }
                 (Some(a), p) => {
                     Err(AlrError::Str(format!("Unknown action, {a:?} {p:?}")))?
@@ -737,8 +724,7 @@ impl KmyMoneyImporter {
                     _ => panic!("Invalid reconcile flag"),
                 },
                 post_ts,
-                orig_value,
-                value,
+                operation,
             );
 
             // ??? Not imported from kmmSplits

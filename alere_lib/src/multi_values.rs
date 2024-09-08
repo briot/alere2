@@ -7,17 +7,52 @@ pub enum Operation {
     // The amount of the transaction, as seen on the bank statement.
     // This could be a number of shares when the account is a Stock account, for
     // instance, or a number of EUR for a checking account.
+    //
+    // For instance:
+    // * a 1000 EUR transaction for an account in EUR. In this case, value is
+    //   useless and does not provide any additional information.
+    //       operation = Credit(1000 EUR)
     Credit(MultiValue),
 
     // Buying shares
-    Buy(MultiValue),
+    //
+    // For instance:
+    // * an ATM operation of 100 USD for the same account in EUR while abroad.
+    //   Exchange rate at the time: 0.85 EUR = 1 USD.  Also assume there is a
+    //   bank fee that applies.
+    //      split1: account=checking account
+    //              operation=BuyAmount(-100USD, -85EUR)
+    //      split2: account=expense:cash  operation=Credit(84.7 EUR)
+    //      split3: account=expense:fees  operation=Credit(0.3 EUR)
+    //   So value is used to show you exactly the amount you manipulated. The
+    //   exchange rate can be computed from qty and value.
+    //
+    // * Buying 10 shares for AAPL at 120 USD. There are several splits here,
+    //   one where we increase the number of shares in the STOCK account.
+    //   The money came from an investment account in EUR, which has its own
+    //   split for the same transaction:
+    //       split1: account=stock       BuyAmount(10 APPL, amount=1200 USD)
+    //       split2: account=investment  BuyAmount(-1020USD, amount=-1200 USD)
+    BuyAmount {
+        qty: Value,
+        amount: Value,
+    },
+    BuyPrice {
+        qty: Value,
+        price: Value,
+    },
 
-    // Reinvest dividends and buy shares
-    Reinvest(MultiValue),
+    // Reinvest dividends and buy shares.
+    Reinvest {
+        shares: MultiValue,
+        amount: MultiValue,
+    },
 
     // There were some dividends for one of the stocks   The amount will be
     // visible in other splits.
-    Dividend(MultiValue),
+    // This only registers there was some dividend, but the amount will be
+    // found in other splits associated with the same transaction
+    Dividend,
 
     // Used for stock splits.  The number of shares is multiplied by the ratio,
     // and their value divided by the same ratio.
@@ -143,7 +178,12 @@ impl MultiValue {
             Operation::Credit(value) => {
                 *self += value;
             }
-            Operation::Buy(shares) | Operation::Reinvest(shares) => {
+            Operation::BuyAmount { qty, .. }
+            | Operation::BuyPrice { qty, .. } => {
+                *self += MultiValue::new(qty.amount, qty.commodity);
+            }
+
+            Operation::Reinvest { shares, .. } => {
                 *self += shares;
             }
             Operation::Split { ratio, commodity } => match &mut self.0 {
@@ -159,9 +199,7 @@ impl MultiValue {
                     }
                 }
             },
-            Operation::Dividend(value) => {
-                *self += value;
-            }
+            Operation::Dividend => {}
         };
         self.normalize();
     }

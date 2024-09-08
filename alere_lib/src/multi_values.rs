@@ -41,6 +41,9 @@ pub enum Operation {
         qty: Value,
         price: Value,
     },
+    AddShares {
+        qty: Value,
+    },
 
     // Reinvest dividends and buy shares.
     Reinvest {
@@ -178,9 +181,10 @@ impl MultiValue {
             Operation::Credit(value) => {
                 *self += value;
             }
-            Operation::BuyAmount { qty, .. }
+            Operation::AddShares { qty }
+            | Operation::BuyAmount { qty, .. }
             | Operation::BuyPrice { qty, .. } => {
-                *self += MultiValue::new(qty.amount, qty.commodity);
+                *self += qty;
             }
 
             Operation::Reinvest { shares, .. } => {
@@ -335,6 +339,12 @@ impl core::ops::Add<MultiValue> for &MultiValue {
 impl core::ops::AddAssign<MultiValue> for MultiValue {
     fn add_assign(&mut self, rhs: MultiValue) {
         *self += &rhs;
+    }
+}
+
+impl core::ops::AddAssign<&Value> for MultiValue {
+    fn add_assign(&mut self, rhs: &Value) {
+        *self += MultiValue(InnerValue::One(*rhs));
     }
 }
 

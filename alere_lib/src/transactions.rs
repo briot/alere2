@@ -1,5 +1,5 @@
 use crate::accounts::AccountId;
-use crate::multi_values::Operation;
+use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::PayeeId;
 use chrono::{DateTime, Local};
 use std::rc::Rc;
@@ -68,7 +68,34 @@ impl Transaction {
     /// Check that the transaction obeys the accounting equations, i.e.
     ///    Equity = Assets + Income − Expenses
     pub fn is_balanced(&self) -> bool {
-        true
+        let mut total = MultiValue::zero();
+        for s in &self.splits {
+            match &s.operation {
+                Operation::Credit(value) => {
+                    total += value;
+                }
+                Operation::AddShares { .. } => {}
+                Operation::BuyAmount { amount, .. } => {
+                    total += amount;
+                }
+                Operation::BuyPrice { qty, price } => {
+                    total += &Value {
+                        amount: qty.amount * price.amount,
+                        commodity: price.commodity,
+                    };
+                }
+                Operation::Reinvest { amount, .. } => {
+                    total += amount;
+                }
+                Operation::Split { .. } => {}
+                Operation::Dividend => {}
+            }
+            // total.apply(&s.operation);
+        }
+        if !total.is_zero() {
+            println!("MANU not balanced, total={:?}", total);
+        }
+        total.is_zero()
     }
 }
 
@@ -268,8 +295,16 @@ mod test {
             Local::now(),
             Operation::Credit(MultiValue::new(dec!(1.1), CommodityId(1))),
         );
+        assert!(!tr.is_balanced());
 
+        tr.add_split(
+            AccountId(2),
+            ReconcileKind::New,
+            Local::now(),
+            Operation::Credit(MultiValue::new(dec!(-1.1), CommodityId(1))),
+        );
         assert!(tr.is_balanced());
+
         Ok(())
     }
 }

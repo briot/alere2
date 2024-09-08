@@ -576,13 +576,12 @@ impl KmyMoneyImporter {
             let tid = row.get::<&str, _>("transactionId");
             let k_account: &str = row.get("accountId");
             let account = *self.accounts.get(k_account).unwrap();
-            let t = tx.get_mut(tid).unwrap();
+            let (tx_currency, tx) = tx.get_mut(tid).unwrap();
             let account_currency_id = self.commodities.get(k_account).unwrap();
             let account_precision = *self
                 .price_precisions
                 .get(self.account_currency.get(k_account).unwrap())
                 .unwrap();
-            let tx_currency = &t.0;
             let post_ts = row
                 .get::<NaiveDate, _>("postDate")
                 .and_hms_opt(0, 0, 0)
@@ -590,10 +589,10 @@ impl KmyMoneyImporter {
                 .and_local_timezone(Local)
                 .unwrap();
 
-            t.1.set_check_number(row.get("checkNumber"))
+            tx.set_check_number(row.get("checkNumber"))
                 .map_err(|e| AlrError::Str(format!("{tid}/{sid} {e}")))?;
-            t.1.set_memo(row.get("memo"));
-            t.1.set_payee(
+            tx.set_memo(row.get("memo"));
+            tx.set_payee(
                 row.get::<Option<&str>, _>("payeeId")
                     .and_then(|p| self.payees.get(p)),
             );
@@ -643,10 +642,12 @@ impl KmyMoneyImporter {
                     Operation::Dividend
                 }
                 (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => {
-                    Operation::Credit(MultiValue::new(
-                        shares,
-                        *account_currency_id,
-                    ))
+                    Operation::AddShares {
+                        qty: Value {
+                            amount: shares,
+                            commodity: *account_currency_id,
+                        },
+                    }
                 }
                 (Some("Buy"), Some(p)) => {
                     let diff = (p * shares - value).abs();
@@ -704,18 +705,36 @@ impl KmyMoneyImporter {
                     amount: MultiValue::new(value, *tx_currency),
                 },
                 (None | Some(""), _) => {
-                    // Standard transaction, not for shares
-                    Operation::Credit(MultiValue::new(
-                        shares,
-                        *account_currency_id,
-                    ))
+                    // An operation in USD for an account in EUR is represented
+                    // as:
+                    //    * transaction currency = USD
+                    //    * account currency = EUR
+                    //    * split:  value in USD,  shares=EUR (beware that
+                    //       sharesFormatted is wrong).
+                    if tx_currency != account_currency_id {
+                        Operation::BuyAmount {
+                            qty: Value {
+                                amount: shares,
+                                commodity: *account_currency_id,
+                            },
+                            amount: Value {
+                                amount: value,
+                                commodity: *tx_currency,
+                            },
+                        }
+                    } else {
+                        Operation::Credit(MultiValue::new(
+                            shares,
+                            *account_currency_id,
+                        ))
+                    }
                 }
                 (Some(a), p) => {
                     Err(AlrError::Str(format!("Unknown action, {a:?} {p:?}")))?
                 }
             };
 
-            t.1.add_split(
+            tx.add_split(
                 account,
                 match row.get_unchecked::<i8, _>("reconcileFlag") {
                     0 => ReconcileKind::New,
@@ -728,7 +747,6 @@ impl KmyMoneyImporter {
             );
 
             // ??? Not imported from kmmSplits
-            //    action
             //    bankId
             //    costCenterId
             //    txType

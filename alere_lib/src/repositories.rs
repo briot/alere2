@@ -28,6 +28,12 @@ impl Repository {
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
         self.accounts.postprocess();
+
+        for tr in &self.transactions {
+            if !tr.is_balanced() {
+               println!("Transaction not balanced: {:?}", tr);
+            }
+        }
     }
 
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {

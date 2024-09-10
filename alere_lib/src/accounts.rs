@@ -32,7 +32,7 @@ impl AccountCollection {
             AccountNameKind::Full => {
                 if let Some(p) = acc.parent {
                     format!(
-                        "{}::{}",
+                        "{}:{}",
                         self.name(self.get(p).unwrap(), kind),
                         acc.name
                     )

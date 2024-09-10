@@ -41,6 +41,7 @@ fn main() -> Result<()> {
     let mut hledger = Hledger::default();
     repo.format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,
+        zero: "0",
         //  separators: Separators::None,
         ..Formatter::default()
     };

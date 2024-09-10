@@ -217,28 +217,28 @@ impl MultiValue {
 
     pub fn display(
         &self,
+        into: &mut String,
         format: &Formatter,
         commodities: &CommodityCollection,
-    ) -> String {
+    ) {
         match &self.0 {
-            InnerValue::Zero => "".to_string(),
-            InnerValue::One(pair) => format.display_from_commodity(
+            InnerValue::Zero => format.push(into, Decimal::ZERO, "", false, 0),
+            InnerValue::One(pair) => format.push_from_commodity(
+                into,
                 pair.amount,
                 commodities.get(pair.commodity).unwrap(),
             ),
             InnerValue::Multi(map) => {
-                let mut s = String::new();
-                for (c, v) in map {
-                    if !s.is_empty() {
-                        s.push_str(" + ");
+                for (idx, (c, v)) in map.iter().enumerate() {
+                    if idx > 0 {
+                        into.push_str(" + ");
                     }
                     format.push_from_commodity(
-                        &mut s,
+                        into,
                         *v,
                         commodities.get(*c).unwrap(),
                     );
                 }
-                s
             }
         }
     }

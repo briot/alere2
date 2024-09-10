@@ -415,7 +415,7 @@ mod test {
                 .with_width(Width::Auto)
                 .with_truncate(Truncate::Left),
         ];
-        let mut table = Table::new(columns);
+        let mut table = Table::new(columns, crate::tables::Settings::default());
 
         table.add_row(&["abcdefghijklmnopqrstuvwxyz", "123"], 0);
         table.add_row(&["abcdefghijklmn", "123456789"], 0);

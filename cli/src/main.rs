@@ -6,6 +6,7 @@ use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
     accounts::AccountNameKind,
     importers::Importer,
+    formatters::{Formatter, SymbolQuote},
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
     stats::Stats,

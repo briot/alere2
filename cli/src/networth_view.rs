@@ -21,6 +21,7 @@ pub struct Settings {
     pub column_percent: bool,
 
     pub account_names: AccountNameKind,
+    pub table: crate::tables::Settings,
 }
 
 pub fn networth_view(
@@ -138,7 +139,7 @@ pub fn networth_view(
         }
     }
 
-    let mut table = Table::new(columns).with_col_headers();
+    let mut table = Table::new(columns, settings.table).with_col_headers();
     networth
         .tree
         .traverse(|node| table.add_row(&node.data, node.data.depth), true);

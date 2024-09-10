@@ -96,26 +96,37 @@ enum RowData {
     Headers,
 }
 
+pub struct Settings {
+    pub colsep: String,
+    pub indent_size: usize,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            colsep: "│".to_string(),
+            indent_size: 1,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Table<'a, TRow, TCol> {
     columns: Vec<Column<'a, TRow, TCol>>,
     rows: Vec<RowData>,
     title: Option<String>,
-    colsep: String,
+    settings: Settings,
 }
 impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
-    pub fn new(columns: Vec<Column<'a, TRow, TCol>>) -> Self {
+    pub fn new(
+        columns: Vec<Column<'a, TRow, TCol>>,
+        settings: Settings,
+    ) -> Self {
         Self {
             rows: Vec::new(),
             columns,
             title: None,
-            colsep: "│".to_string(),
+            settings,
         }
-    }
-
-    pub fn with_colsep(mut self, colsep: &str) -> Self {
-        self.colsep = colsep.to_string();
-        self
     }
 
     pub fn with_title(mut self, title: &str) -> Self {
@@ -190,7 +201,8 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                                     }
                                 }
                                 RowData::Cells(indent, columns) => {
-                                    indent + columns[colidx].chars().count()
+                                    indent * self.settings.indent_size
+                                        + columns[colidx].chars().count()
                                 }
                             },
                         );
@@ -215,8 +227,13 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                                     }
                                 }
                                 RowData::Cells(indent, columns) => {
-                                    min = std::cmp::max(min, indent + col_min);
-                                    indent + columns[colidx].chars().count()
+                                    min = std::cmp::max(
+                                        min,
+                                        indent * self.settings.indent_size
+                                            + col_min,
+                                    );
+                                    indent * self.settings.indent_size
+                                        + columns[colidx].chars().count()
                                 }
                             },
                         );
@@ -261,15 +278,15 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
     }
 
     fn push_colsep(&self, into: &mut String) {
-        into.push_str(&self.colsep);
+        into.push_str(&self.settings.colsep);
     }
     fn push_rowsep(&self, into: &mut String) {
         into.push('\n');
     }
 
     pub fn to_string(&mut self, max_width: usize) -> String {
-        let total_width =
-            max_width - (self.columns.len() - 1) * self.colsep.chars().count();
+        let total_width = max_width
+            - (self.columns.len() - 1) * self.settings.colsep.chars().count();
 
         self.compute_widths(total_width);
         let mut result = String::new();
@@ -306,7 +323,11 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                         );
                     }
                     RowData::Cells(indent, columns) => {
-                        let idt = if col.show_indent { *indent } else { 0 };
+                        let idt = if col.show_indent {
+                            *indent * self.settings.indent_size
+                        } else {
+                            0
+                        };
                         push_align(
                             &mut result,
                             truncate(
@@ -351,10 +372,10 @@ fn push_align(
     value: &str,
     width: usize,
     align: Align,
-    indent: usize,
+    indent_chars: usize,
 ) {
-    if indent > 0 {
-        into.push_str(&format!("{: <indent$}", ""));
+    if indent_chars > 0 {
+        into.push_str(&format!("{: <indent_chars$}", ""));
     }
 
     match align {

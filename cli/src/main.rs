@@ -65,6 +65,10 @@ fn main() -> Result<()> {
             column_market_delta_to_last: false,
             column_percent: false,
             account_names: AccountNameKind::Short,
+            table: crate::tables::Settings {
+                colsep: "│".to_string(),
+                indent_size: 1,
+            },
         },
     );
     progress.finish_and_clear();

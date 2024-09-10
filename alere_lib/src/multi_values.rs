@@ -168,7 +168,7 @@ impl MultiValue {
 
     pub fn display(&self, commodities: &CommodityCollection) -> String {
         match &self.0 {
-            InnerValue::Zero => "0".to_string(),
+            InnerValue::Zero => "".to_string(),
             InnerValue::One(pair) => commodities
                 .get(pair.commodity)
                 .unwrap()

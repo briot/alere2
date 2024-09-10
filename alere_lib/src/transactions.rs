@@ -218,6 +218,15 @@ impl TransactionRc {
         self.0.splits.iter()
     }
 
+    /// Find a memo or description for the transaction, possibly looking into
+    /// splits themselves.
+    pub fn memo(&self) -> Option<&str> {
+        if self.0.memo.is_some() {
+            return self.0.memo.as_deref();
+        }
+        None
+    }
+
     fn timestamp_for_account(
         &self,
         account: AccountId,

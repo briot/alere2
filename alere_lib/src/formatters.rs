@@ -36,6 +36,7 @@ pub struct Formatter {
     pub negative: Negative,
     pub separators: Separators,
     pub comma: char,
+    pub zero: &'static str,
 }
 
 impl Default for Formatter {
@@ -45,6 +46,7 @@ impl Default for Formatter {
             quote_symbol: SymbolQuote::default(),
             negative: Negative::default(),
             separators: Separators::default(),
+            zero: "",
         }
     }
 }
@@ -168,6 +170,10 @@ impl Formatter {
         symbol_after: bool,
         precision: u8,
     ) {
+        if value.is_zero() {
+            into.push_str(self.zero);
+            return;
+        }
         if !symbol_after {
             if value.is_sign_negative() {
                 match self.negative {

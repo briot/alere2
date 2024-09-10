@@ -156,7 +156,9 @@ impl Repository {
     }
 
     pub fn display_multi_value(&self, value: &MultiValue) -> String {
-        value.display(&self.format, &self.commodities)
+        let mut into = String::new();
+        value.display(&mut into, &self.format, &self.commodities);
+        into
     }
     pub fn display_value(&self, value: &Value) -> String {
         self.format.display_from_commodity(

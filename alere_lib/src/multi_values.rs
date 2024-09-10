@@ -1,4 +1,5 @@
 use crate::commodities::{CommodityCollection, CommodityId};
+use crate::formatters::Formatter;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -78,6 +79,12 @@ pub struct MultiValue(InnerValue);
 pub struct Value {
     pub amount: Decimal,
     pub commodity: CommodityId,
+}
+
+impl Value {
+    pub fn abs(&self) -> Value {
+        Value { amount: self.amount.abs(), commodity: self.commodity }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -208,20 +215,28 @@ impl MultiValue {
         self.normalize();
     }
 
-    pub fn display(&self, commodities: &CommodityCollection) -> String {
+    pub fn display(
+        &self,
+        format: &Formatter,
+        commodities: &CommodityCollection,
+    ) -> String {
         match &self.0 {
             InnerValue::Zero => "".to_string(),
-            InnerValue::One(pair) => commodities
-                .get(pair.commodity)
-                .unwrap()
-                .display(&pair.amount),
+            InnerValue::One(pair) => format.display_from_commodity(
+                pair.amount,
+                commodities.get(pair.commodity).unwrap(),
+            ),
             InnerValue::Multi(map) => {
                 let mut s = String::new();
                 for (c, v) in map {
                     if !s.is_empty() {
                         s.push_str(" + ");
                     }
-                    s.push_str(&commodities.get(*c).unwrap().display(v));
+                    format.push_from_commodity(
+                        &mut s,
+                        *v,
+                        commodities.get(*c).unwrap(),
+                    );
                 }
                 s
             }

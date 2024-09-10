@@ -1,6 +1,4 @@
 use crate::price_sources::PriceSourceId;
-//use accounting::Accounting;
-use rust_decimal::{Decimal, RoundingStrategy};
 
 #[derive(Default)]
 pub struct CommodityCollection {
@@ -67,8 +65,8 @@ pub struct Commodity {
 
     // Symbol to display the commodity. For instance, it could be the
     // euro sign, or "AAPL", and whether to display before or after the value.
-    symbol: String,
-    symbol_after: bool,
+    pub(crate) symbol: String,
+    pub(crate) symbol_after: bool,
 
     /// What kind of commodity this is.
     pub is_currency: bool,
@@ -89,7 +87,7 @@ pub struct Commodity {
     pub quote_currency: Option<CommodityId>,
 
     /// Number of digits in the fractional part
-    pub display_precision: u8,
+    pub(crate) display_precision: u8,
 }
 
 impl Commodity {
@@ -112,58 +110,11 @@ impl Commodity {
             quote_currency: None,
         }
     }
-
-    //  Display a given value for a commodity
-    pub fn display(&self, value: &Decimal) -> String {
-        let rounded = value.abs().round_dp_with_strategy(
-            self.display_precision as u32,
-            RoundingStrategy::MidpointTowardZero,
-        );
-        let val: Vec<char> = rounded.to_string().chars().collect();
-        let decimal = val.iter().position(|&r| r == '.').unwrap_or(val.len());
-        let mut buffer = String::new();
-
-        if value.is_sign_negative() {
-            buffer.push('-');
-        }
-
-        if !self.symbol_after {
-            buffer.push_str(&self.symbol);
-            buffer.push(' ');
-        }
-
-        for (idx, p) in val[0..decimal].iter().enumerate() {
-            if idx > 0 && (decimal - idx) % 3 == 0 {
-                buffer.push(',');
-            }
-            buffer.push(*p);
-        }
-
-        if self.display_precision > 0 {
-            buffer.push('.');
-            let mut count = 0_u8;
-            for p in val.iter().skip(decimal + 1) {
-                buffer.push(*p);
-                count += 1;
-            }
-            for _ in count + 1..=self.display_precision {
-                buffer.push('0');
-            }
-        }
-
-        if self.symbol_after {
-            buffer.push(' ');
-            buffer.push_str(&self.symbol);
-        }
-
-        buffer
-    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::commodities::{Commodity, CommodityCollection, CommodityId};
-    use rust_decimal_macros::dec;
 
     pub fn create_currency(
         coll: &mut CommodityCollection,
@@ -193,31 +144,5 @@ mod test {
         assert_eq!(coll.find("EUR"), Some(eur));
         assert_eq!(coll.find("AAPL"), Some(aapl));
         assert_eq!(coll.find("FOO"), None);
-    }
-
-    #[test]
-    fn test_display() {
-        let mut coll = CommodityCollection::default();
-        let eur = create_currency(&mut coll, "EUR", 2, true);
-        let usd = create_currency(&mut coll, "USD", 4, false);
-        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.238)), "0.24 EUR");
-        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.234)), "0.23 EUR");
-        assert_eq!(coll.get(eur).unwrap().display(&dec!(0.235)), "0.23 EUR");
-        assert_eq!(
-            // round to nearest even
-            coll.get(eur).unwrap().display(&dec!(0.245)),
-            "0.24 EUR"
-        );
-        assert_eq!(coll.get(eur).unwrap().display(&dec!(1.00)), "1.00 EUR");
-        assert_eq!(coll.get(eur).unwrap().display(&dec!(1)), "1.00 EUR");
-
-        assert_eq!(
-            coll.get(eur).unwrap().display(&dec!(-1234567.891)),
-            "-1,234,567.89 EUR"
-        );
-        assert_eq!(
-            coll.get(usd).unwrap().display(&dec!(-1234567.891)),
-            "-USD 1,234,567.8910"
-        );
     }
 }

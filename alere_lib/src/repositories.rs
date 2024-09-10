@@ -1,9 +1,10 @@
 use crate::account_kinds::AccountKindCollection;
 use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
 use crate::commodities::{CommodityCollection, CommodityId};
+use crate::formatters::Formatter;
 use crate::institutions::{Institution, InstitutionId};
 use crate::market_prices::MarketPrices;
-use crate::multi_values::{MultiValue, Operation};
+use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
@@ -19,7 +20,8 @@ pub struct Repository {
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
     pub(crate) prices: PriceCollection,
-    transactions: Vec<TransactionRc>,
+    pub(crate) transactions: Vec<TransactionRc>,
+    pub format: Formatter,
 }
 
 impl Repository {
@@ -31,7 +33,7 @@ impl Repository {
 
         for tr in &self.transactions {
             if !tr.is_balanced() {
-               println!("Transaction not balanced: {:?}", tr);
+                println!("Transaction not balanced: {:?}", tr);
             }
         }
     }
@@ -154,10 +156,13 @@ impl Repository {
     }
 
     pub fn display_multi_value(&self, value: &MultiValue) -> String {
-        value.display(&self.commodities)
+        value.display(&self.format, &self.commodities)
     }
-    pub fn display_value(&self, value: &MultiValue) -> String {
-        value.display(&self.commodities)
+    pub fn display_value(&self, value: &Value) -> String {
+        self.format.display_from_commodity(
+            value.amount,
+            self.commodities.get(value.commodity).unwrap(),
+        )
     }
 
     pub fn market_prices(

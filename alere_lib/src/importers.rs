@@ -13,3 +13,11 @@ pub trait Importer {
         report_progress: impl Fn(u64, u64),
     ) -> impl Future<Output = Result<Repository>>;
 }
+
+pub trait Exporter {
+    fn export_file(
+        &mut self,
+        repo: &Repository,
+        export_to: &Path,
+    ) -> Result<()>;
+}

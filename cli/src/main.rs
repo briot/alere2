@@ -5,8 +5,9 @@ pub mod tables;
 use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
     accounts::AccountNameKind,
-    importers::Importer,
+    hledger::Hledger,
     formatters::{Formatter, SymbolQuote},
+    importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
     stats::Stats,
@@ -29,7 +30,7 @@ fn main() -> Result<()> {
         .with_message("importing kmy");
 
     let mut kmy = KmyMoneyImporter::default();
-    let repo = block_on(kmy.import_file(
+    let mut repo = block_on(kmy.import_file(
         Path::new("./Comptes.kmy"),
         |current, max| {
             progress.set_length(max);
@@ -37,7 +38,17 @@ fn main() -> Result<()> {
         },
     ))?;
 
+    let mut hledger = Hledger::default();
+    repo.format = Formatter {
+        quote_symbol: SymbolQuote::QuoteSpecial,
+        //  separators: Separators::None,
+        ..Formatter::default()
+    };
+    hledger.export_file(&repo, Path::new("./hledger.journal"))?;
+
     let now = Local::now();
+
+    repo.format = Formatter::default();
 
     let output = networth_view(
         &repo,

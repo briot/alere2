@@ -4,6 +4,7 @@ pub mod accounts;
 pub mod commodities;
 pub mod errors;
 pub mod formatters;
+pub mod hledger;
 pub mod importers;
 pub mod institutions;
 pub mod market_prices;

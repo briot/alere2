@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 ///
 /// The data associated with each node
 ///
@@ -80,25 +82,29 @@ impl<K, T> Tree<K, T> {
     ///
     /// If parent_first is true, then process is first call on the parent node,
     /// then on all the children.  Otherwise the order is reversed.
-    pub fn traverse_mut<F>(&mut self, mut process: F, parent_first: bool)
+    pub fn traverse_mut<F>(
+        &mut self,
+        mut process: F,
+        parent_first: bool,
+    ) -> Result<()>
     where
-        F: FnMut(&mut TreeNode<K, T>),
+        F: FnMut(&mut TreeNode<K, T>) -> Result<()>,
     {
         self.roots
-            .traverse_recursive_mut(&mut process, parent_first);
+            .traverse_recursive_mut(&mut process, parent_first)
     }
 
     /// Recursively traverse all nodes
-    pub fn traverse<F>(&self, mut process: F, parent_first: bool)
+    pub fn traverse<F>(&self, mut process: F, parent_first: bool) -> Result<()>
     where
-        F: FnMut(&TreeNode<K, T>),
+        F: FnMut(&TreeNode<K, T>) -> Result<()>,
     {
-        self.roots.traverse_recursive(&mut process, parent_first);
+        self.roots.traverse_recursive(&mut process, parent_first)
     }
 }
 
 ///
-/// A node in three.
+/// A node in tree.
 /// Every node can have children and associated data
 ///
 pub struct TreeNode<K, T> {
@@ -168,33 +174,43 @@ impl<K, T> NodeList<K, T> {
         self.0.retain(|node| filter(node));
     }
 
-    fn traverse_recursive<F>(&self, process: &mut F, parent_first: bool)
+    fn traverse_recursive<F>(
+        &self,
+        process: &mut F,
+        parent_first: bool,
+    ) -> Result<()>
     where
-        F: FnMut(&TreeNode<K, T>),
+        F: FnMut(&TreeNode<K, T>) -> Result<()>,
     {
         for node in &self.0 {
             if parent_first {
-                process(node);
+                process(node)?;
             }
-            node.children.traverse_recursive(process, parent_first);
+            node.children.traverse_recursive(process, parent_first)?;
             if !parent_first {
-                process(node);
+                process(node)?;
             }
         }
+        Ok(())
     }
-    fn traverse_recursive_mut<F>(&mut self, process: &mut F, parent_first: bool)
+    fn traverse_recursive_mut<F>(
+        &mut self,
+        process: &mut F,
+        parent_first: bool,
+    ) -> Result<()>
     where
-        F: FnMut(&mut TreeNode<K, T>),
+        F: FnMut(&mut TreeNode<K, T>) -> Result<()>,
     {
         for node in self.0.iter_mut() {
             if parent_first {
-                process(node);
+                process(node)?;
             }
-            node.children.traverse_recursive_mut(process, parent_first);
+            node.children.traverse_recursive_mut(process, parent_first)?;
             if !parent_first {
-                process(node);
+                process(node)?;
             }
         }
+        Ok(())
     }
 }
 

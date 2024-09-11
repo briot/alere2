@@ -1,7 +1,7 @@
 use crate::account_kinds::AccountKindId;
 use crate::institutions::InstitutionId;
-use crate::transactions::{Split, TransactionRc};
 use crate::multi_values::MultiValue;
+use crate::transactions::{Split, TransactionRc};
 use chrono::{DateTime, Local};
 
 #[derive(Clone, Copy)]

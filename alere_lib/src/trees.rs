@@ -205,7 +205,8 @@ impl<K, T> NodeList<K, T> {
             if parent_first {
                 process(node)?;
             }
-            node.children.traverse_recursive_mut(process, parent_first)?;
+            node.children
+                .traverse_recursive_mut(process, parent_first)?;
             if !parent_first {
                 process(node)?;
             }

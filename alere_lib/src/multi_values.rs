@@ -83,7 +83,10 @@ pub struct Value {
 
 impl Value {
     pub fn abs(&self) -> Value {
-        Value { amount: self.amount.abs(), commodity: self.commodity }
+        Value {
+            amount: self.amount.abs(),
+            commodity: self.commodity,
+        }
     }
 }
 

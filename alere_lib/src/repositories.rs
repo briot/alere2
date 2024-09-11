@@ -41,6 +41,12 @@ impl Repository {
     pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {
         self.institutions.insert(id, inst);
     }
+    pub fn get_institution_mut(
+        &mut self,
+        id: &InstitutionId,
+    ) -> Option<&mut Institution> {
+        self.institutions.get_mut(id)
+    }
 
     /// Return the institution to which an account belongs.  If the account
     /// itself doesn't specify this information, look in the parent account.

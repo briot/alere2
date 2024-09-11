@@ -1,25 +1,19 @@
 use crate::accounts::AccountNameKind;
 use crate::importers::Exporter;
-use crate::multi_values::{Operation, Value};
+use crate::multi_values::Operation;
 use crate::repositories::Repository;
 use anyhow::Result;
 use itertools::min;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
 #[derive(Default)]
-pub struct Hledger {}
+pub struct Hledger {
+    pub export_reconciliation: bool,
+}
 
 impl Hledger {
-    fn display_value(
-        &self,
-        buf: &mut impl Write,
-        repo: &Repository,
-        value: &Value,
-    ) {
-    }
 }
 
 impl Exporter for Hledger {
@@ -44,7 +38,6 @@ impl Exporter for Hledger {
             buf.write_all(b"\n")?;
 
             for split in tx.iter_splits() {
-                //  buf.write_all(b"\"")?;
                 buf.write_all(b"   ")?;
                 buf.write_all(
                     repo.get_account_name(
@@ -53,7 +46,6 @@ impl Exporter for Hledger {
                     )
                     .as_bytes(),
                 )?;
-                //  buf.write_all(b"\"")?;
                 buf.write_all(b"  ")?;
 
                 match &split.operation {
@@ -74,10 +66,21 @@ impl Exporter for Hledger {
                     }
                     Operation::AddShares { qty } => {
                         buf.write_all(repo.display_value(qty).as_bytes())?;
-                        buf.write_all(b" @@ 0")?;
+                        buf.write_all(b" @@ 0  ; add shares")?;
                     }
-                    Operation::Reinvest { shares, amount } => {}
-                    Operation::Dividend => {}
+                    Operation::Reinvest { shares, amount } => {
+                        buf.write_all(
+                            repo.display_multi_value(shares).as_bytes(),
+                        )?;
+                        buf.write_all(b" @@ ")?;
+                        buf.write_all(
+                            repo.display_multi_value(amount).as_bytes(),
+                        )?;
+                        buf.write_all(b"  ; reinvest")?;
+                    }
+                    Operation::Dividend => {
+                        buf.write_all(b"0 @@ 0 ; dividend")?;
+                    }
                     Operation::Split { ratio, commodity } => {
                         // For now, sell every shares, then buy them back at
                         // the new price.
@@ -87,6 +90,31 @@ impl Exporter for Hledger {
             }
 
             buf.write_all(b"\n")?;
+        }
+
+        // The reconciliations
+        if self.export_reconciliation {
+            for (accid, acc) in repo.iter_accounts() {
+                if !repo.account_kinds.get(acc.kind).unwrap().is_networth {
+                    continue;
+                }
+                for rec in &acc.reconciliations {
+                    buf.write_all(rec.timestamp.date_naive().to_string().as_bytes())?;
+                    buf.write_all(b" reconciliation\n  ")?;
+                    buf.write_all(
+                        repo.get_account_name(
+                            repo.get_account(accid).unwrap(),
+                            AccountNameKind::Full,
+                        )
+                        .as_bytes(),
+                    )?;
+                    buf.write_all(b"  0 = ")?;
+                    buf.write_all(
+                        repo.display_multi_value(&rec.total).as_bytes(),
+                    )?;
+                    buf.write_all(b"\n\n")?;
+                }
+            }
         }
 
         for ((from, to), pr) in &repo.prices.prices {

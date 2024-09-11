@@ -1,6 +1,7 @@
 use crate::account_kinds::AccountKindId;
 use crate::institutions::InstitutionId;
 use crate::transactions::{Split, TransactionRc};
+use crate::multi_values::MultiValue;
 use chrono::{DateTime, Local};
 
 #[derive(Clone, Copy)]
@@ -66,6 +67,12 @@ impl AccountId {
     }
 }
 
+#[derive(Debug)]
+pub struct Reconciliation {
+    pub timestamp: DateTime<Local>,
+    pub total: MultiValue,
+}
+
 /// Either an actual bank account, or a category.
 /// All accounts must be children of one of the five root accounts:
 ///    - Assets:    what the user owns
@@ -91,7 +98,7 @@ pub struct Account {
     _description: Option<String>,
 
     // Only for actual IBAN, not free-form
-    _iban: Option<String>,
+    pub(crate) iban: Option<String>,
 
     // Any code used by the bank to identify the account
     _number: Option<String>,
@@ -106,6 +113,8 @@ pub struct Account {
     // The chronologically sorted list of transactions for which at least one
     // split applies to the account.
     transactions: Vec<TransactionRc>,
+
+    pub(crate) reconciliations: Vec<Reconciliation>,
 }
 
 impl Account {
@@ -127,11 +136,12 @@ impl Account {
             parent,
             institution,
             _description: description.map(str::to_string),
-            _iban: iban.map(str::to_string),
+            iban: iban.map(str::to_string),
             _number: number.map(str::to_string),
             closed,
             _opened_on: opened_on,
             transactions: Vec::new(),
+            reconciliations: Vec::new(),
         }
     }
 

@@ -71,6 +71,9 @@ pub struct Commodity {
     /// What kind of commodity this is.
     pub is_currency: bool,
 
+    /// ISIN number
+    pub isin: Option<String>,
+
     /// For online quotes.
     /// The source refers to one of the plugins available to download
     /// online information.
@@ -108,6 +111,7 @@ impl Commodity {
             quote_symbol: quote_symbol.map(str::to_string),
             quote_source: None,
             quote_currency: None,
+            isin: None,
         }
     }
 }

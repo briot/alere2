@@ -16,6 +16,8 @@ pub struct Institution {
     _city: Option<String>,
     _phone: Option<String>,
     icon: Option<String>, // URL to the icon
+    pub(crate) bic: Option<String>,
+    pub(crate) url: Option<String>,
 }
 
 impl Institution {
@@ -35,6 +37,8 @@ impl Institution {
             _city: city.map(|s| s.into()),
             _phone: phone.map(|s| s.into()),
             icon: None,
+            bic: None,
+            url: None,
         }
     }
 

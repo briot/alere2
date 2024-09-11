@@ -1,5 +1,5 @@
 use crate::account_kinds::AccountKindId;
-use crate::accounts::{Account, AccountId};
+use crate::accounts::{Account, AccountId, Reconciliation};
 use crate::commodities::{Commodity, CommodityId};
 use crate::errors::AlrError;
 use crate::importers::Importer;
@@ -12,10 +12,9 @@ use crate::repositories::Repository;
 use crate::transactions::{ReconcileKind, TransactionDetails, TransactionRc};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDate};
-use log::error;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 // Prices are stored as text in kmy files:  "num/den".
@@ -61,11 +60,6 @@ use ::{
 pub struct KmyMoneyImporter {
     institutions: HashMap<String, InstitutionId>,
     accounts: HashMap<String, AccountId>, // kmymoney Id -> alere Id
-    account_is_closed: HashSet<String>,
-    account_has_opening_balances: HashSet<String>,
-    online_sources: HashMap<String, String>,
-    security_ids: HashMap<String, String>,
-    account_iban: HashMap<String, String>,
     account_kinds: HashMap<String, AccountKindId>,
     commodities: HashMap<String, CommodityId>,
     payees: HashMap<String, PayeeId>,
@@ -111,80 +105,6 @@ impl KmyMoneyImporter {
             self.account_kinds
                 .insert(k.name.to_lowercase(), AccountKindId(id as u32 + 1));
         }
-    }
-
-    async fn import_key_values(
-        &mut self,
-        conn: &mut SqliteConnection,
-    ) -> Result<()> {
-        let mut stream = query(
-            "SELECT kmmKeyValuePairs.* \
-             FROM kmmKeyValuePairs \
-             LEFT JOIN kmmAccounts \
-             ON (kmmKeyValuePairs.kvpId = kmmAccounts.id)",
-        )
-        .fetch(conn);
-        let mut ignored: HashSet<String> = HashSet::new();
-        while let Some(row) = stream.try_next().await? {
-            let id: &str = row.get("kvpId");
-            let key: &str = row.get("kvpKey");
-            let data: Option<&str> = row.get("kvpData");
-            match (key, data) {
-                ("mm-closed", Some(d)) => {
-                    if d.to_lowercase() == "yes" {
-                        self.account_is_closed.insert(id.into());
-                    }
-                }
-                ("iban", Some(d)) => {
-                    self.account_iban.insert(id.into(), d.into());
-                }
-                ("OpeningBalanceAccount", Some(d)) => {
-                    if d.to_lowercase() == "yes" {
-                        self.account_has_opening_balances.insert(id.into());
-                    }
-                }
-                ("Imported" | "lastStatementBalance" | "lastNumberUsed", _) => {
-                    // Not needed
-                }
-                ("priceMode", _) => {
-                    // Whether transactions are entered as price/share or
-                    // total amount. Not needed.
-                }
-                ("kmm-baseCurrency" | "kmm-id", _) => {
-                    // File-level, default currency to use for new accounts
-                }
-                (
-                    "reconciliationHistory"
-                    | "Tax"
-                    | "StatementKey"
-                    | "lastImportedTransactionDate",
-                    _,
-                ) => {
-                    if !ignored.contains(key) {
-                        error!(
-                            "Ignored keyValue: account={id} key={key} data={data:?} (may have others with same key)"
-                        );
-                        ignored.insert(key.into());
-                    }
-                }
-                ("kmm-online-source", Some(d)) => {
-                    self.online_sources.insert(id.into(), d.into());
-                }
-                ("kmm-security-id", Some(d)) => {
-                    self.security_ids.insert(id.into(), d.into());
-                }
-                (_, Some(d)) => {
-                    if !d.is_empty() {
-                        error!(
-                            "Unknown keyValue: id={id} key={key} data={d:?}"
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        Ok(())
     }
 
     async fn import_price_sources(
@@ -371,9 +291,9 @@ impl KmyMoneyImporter {
                     }
                 }),
                 description,
-                self.account_iban.get(kmm_id).map(String::as_str),
+                None,
                 row.get("accountNumber"),
-                self.account_is_closed.contains(kmm_id),
+                false,
                 row.get::<Option<NaiveDate>, _>("openingDate").map(|d| {
                     d.and_hms_opt(0, 0, 0)
                         .unwrap()
@@ -424,6 +344,121 @@ impl KmyMoneyImporter {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Import all reconciliations
+    async fn import_key_values(
+        &mut self,
+        repo: &mut Repository,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
+        let mut stream = query("SELECT * FROM kmmKeyValuePairs").fetch(conn);
+        while let Some(row) = stream.try_next().await? {
+            let kvp_type: &str = row.get("kvpType");
+            let kvp_id: &str = row.get("kvpId");
+            let kvp_key: &str = row.get("kvpKey");
+            let kvp_data: Option<&str> = row.get("kvpData");
+
+            match (kvp_type, kvp_key) {
+                ("ACCOUNT", "reconciliationHistory") => {
+                    let account_id = *self.accounts.get(kvp_id).unwrap();
+                    let account = repo.get_account_mut(account_id).unwrap();
+                    let account_precision = *self
+                        .price_precisions
+                        .get(self.account_currency.get(kvp_id).unwrap())
+                        .unwrap();
+                    let currency_id = self.commodities.get(kvp_id).unwrap();
+                    for r in kvp_data.unwrap().split(';') {
+                        let mut iter = r.split(':');
+                        let date = iter.next().unwrap();
+                        let val = iter.next().unwrap();
+                        account.reconciliations.push(Reconciliation {
+                            timestamp: date
+                                .parse::<NaiveDate>()
+                                .unwrap()
+                                .and_hms_opt(0, 0, 0)
+                                .unwrap()
+                                .and_local_timezone(Local)
+                                .unwrap(),
+                            total: MultiValue::new(
+                                parse_price(val, account_precision)?.unwrap(),
+                                *currency_id,
+                            ),
+                        });
+                    }
+                }
+                ("ACCOUNT", "iban") => {
+                    let account_id = *self.accounts.get(kvp_id).unwrap();
+                    let account = repo.get_account_mut(account_id).unwrap();
+                    account.iban = Some(kvp_data.unwrap().to_string());
+                }
+                ("ACCOUNT", "mm-closed") => {
+                    let account_id = *self.accounts.get(kvp_id).unwrap();
+                    let account = repo.get_account_mut(account_id).unwrap();
+                    account.closed = kvp_data.unwrap().to_lowercase() == "yes";
+                }
+                ("ACCOUNT", "OpeningBalanceAccount") => {
+                    // kvpData is "yes", and "kvpId" is the account used to
+                    // store the opening balance for accounts.
+                }
+                ("ACCOUNT", "lastStatementBalance" | "lastNumberUsed") => {
+                    // Unused
+                }
+                ("ACCOUNT", "Tax") => {
+                    // Whether the account identifies taxes.
+                    // Matches the "Include on Tax reports" setting
+                }
+                ("ACCOUNT", "StatementKey" | "lastImportedTransactionDate") => {
+                    // Seems to match when importing as OFX
+                }
+                ("ACCOUNT", "priceMode") => {
+                    // Whether transactions are entered as price/share or
+                    // total amount. Not needed.
+                }
+                ("INSTITUTION", "bic") => {
+                    let institution_id = self.institutions.get(kvp_id).unwrap();
+                    let institution =
+                        repo.get_institution_mut(institution_id).unwrap();
+                    institution.bic = Some(kvp_data.unwrap().to_string());
+                }
+                ("INSTITUTION", "url") => {
+                    let institution_id = self.institutions.get(kvp_id).unwrap();
+                    let institution =
+                        repo.get_institution_mut(institution_id).unwrap();
+                    institution.url = Some(kvp_data.unwrap().to_string());
+                }
+                ("SECURITY", "kmm-security-id") => {
+                    let commodity_id = self.commodities.get(kvp_id).unwrap();
+                    let commodity =
+                        repo.commodities.get_mut(*commodity_id).unwrap();
+                    commodity.isin = Some(kvp_data.unwrap().to_string());
+                }
+                (
+                    "SECURITY",
+                    "kmm-online-source" | "kmm-online-quote-system",
+                ) => {
+                    // Which online source to use.  This is a string referencing
+                    // some information elsewhere, unclear for now.
+                }
+                ("TRANSACTION", "Imported") => {
+                    // Unused
+                }
+                ("STORAGE", "kmm-baseCurrency" | "kmm-id") => {
+                    // File-level, default currency to use for new accounts
+                }
+                (
+                    "STORAGE",
+                    "CreationDate" | "FixVersion" | "LastModificationDate",
+                ) => {
+                    // Unused
+                }
+                (t, k) => {
+                    println!("Ignored key-value {t} / {k}");
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -777,40 +812,40 @@ impl Importer for KmyMoneyImporter {
         .await?;
         report_progress(2, MAX_PROGRESS);
 
-        self.import_key_values(&mut conn).await?;
+        self.import_institutions(&mut repo, &mut conn).await?;
         report_progress(3, MAX_PROGRESS);
 
-        self.import_institutions(&mut repo, &mut conn).await?;
+        self.import_account_kinds(&mut repo);
         report_progress(4, MAX_PROGRESS);
 
-        self.import_account_kinds(&mut repo);
+        self.import_price_sources(&mut repo, &mut conn).await?;
         report_progress(5, MAX_PROGRESS);
 
-        self.import_price_sources(&mut repo, &mut conn).await?;
+        self.import_currencies(&mut repo, &mut conn).await?;
         report_progress(6, MAX_PROGRESS);
 
-        self.import_currencies(&mut repo, &mut conn).await?;
+        self.import_securities(&mut repo, &mut conn).await?;
         report_progress(7, MAX_PROGRESS);
 
-        self.import_securities(&mut repo, &mut conn).await?;
+        self.import_payees(&mut repo, &mut conn).await?;
         report_progress(8, MAX_PROGRESS);
 
-        self.import_payees(&mut repo, &mut conn).await?;
+        self.import_accounts(&mut repo, &mut conn).await?;
         report_progress(9, MAX_PROGRESS);
 
-        self.import_accounts(&mut repo, &mut conn).await?;
+        self.import_account_parents(&mut repo, &mut conn).await?;
         report_progress(10, MAX_PROGRESS);
 
-        self.import_account_parents(&mut repo, &mut conn).await?;
+        self.import_prices(&mut repo, &mut conn).await?;
         report_progress(11, MAX_PROGRESS);
 
-        self.import_prices(&mut repo, &mut conn).await?;
+        let tx = self.import_transactions(&mut conn).await?;
         report_progress(12, MAX_PROGRESS);
 
-        let tx = self.import_transactions(&mut conn).await?;
+        self.import_splits(&mut repo, &mut conn, tx).await?;
         report_progress(13, MAX_PROGRESS);
 
-        self.import_splits(&mut repo, &mut conn, tx).await?;
+        self.import_key_values(&mut repo, &mut conn).await?;
         report_progress(14, MAX_PROGRESS);
 
         repo.postprocess();

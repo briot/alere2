@@ -5,8 +5,8 @@ pub mod tables;
 use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
     accounts::AccountNameKind,
-    hledger::Hledger,
     formatters::{Formatter, SymbolQuote},
+    hledger::Hledger,
     importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
@@ -38,7 +38,9 @@ fn main() -> Result<()> {
         },
     ))?;
 
-    let mut hledger = Hledger::default();
+    let mut hledger = Hledger {
+        export_reconciliation: false,
+    };
     repo.format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,
         zero: "0",

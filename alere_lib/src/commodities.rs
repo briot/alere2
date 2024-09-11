@@ -29,6 +29,15 @@ impl CommodityCollection {
         &self.currencies
     }
 
+    pub fn iter_commodities(
+        &self,
+    ) -> impl Iterator<Item = (CommodityId, &Commodity)> {
+        self.commodities
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (CommodityId(idx as u16 + 1), c))
+    }
+
     pub fn find(&self, name: &str) -> Option<CommodityId> {
         self.commodities
             .iter()

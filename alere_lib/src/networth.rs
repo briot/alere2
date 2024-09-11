@@ -282,13 +282,14 @@ impl<'a> Networth<'a> {
         });
 
         if result.settings.subtotals {
-            result.tree.traverse_mut(
+            let _ = result.tree.traverse_mut(
                 |node| {
                     let mut tmp = NetworthRow::new(col_count);
                     node.iter_children().for_each(|child| {
                         tmp += &child.data.data;
                     });
                     node.data.data += &tmp;
+                    Ok(())
                 },
                 false,
             );

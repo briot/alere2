@@ -1,3 +1,4 @@
+use anyhow::Result;
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
 use alere_lib::accounts::AccountNameKind;
 use alere_lib::networth::{Networth, NetworthRow};
@@ -28,7 +29,7 @@ pub fn networth_view(
     repo: &Repository,
     networth: Networth,
     settings: Settings,
-) -> String {
+) -> Result<String> {
     type Data<'a> = NodeData<Key<'a>, NetworthRow>;
 
     let mv_image = |row: &Data, idx: &usize| row.data.display_value(repo, *idx);
@@ -142,12 +143,15 @@ pub fn networth_view(
     let mut table = Table::new(columns, settings.table).with_col_headers();
     networth
         .tree
-        .traverse(|node| table.add_row(&node.data, node.data.depth), true);
+        .traverse(|node| {
+            table.add_row(&node.data, node.data.depth);
+            Ok(())
+        }, true)?;
 
     table.add_footer(&Data {
         data: networth.total.clone(),
         depth: 0,
         key: Key::Institution(None), //  ??? irrelevant
     });
-    table.to_string(Term::stdout().size().1 as usize)
+    Ok(table.to_string(Term::stdout().size().1 as usize))
 }

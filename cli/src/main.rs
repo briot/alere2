@@ -86,7 +86,7 @@ fn main() -> Result<()> {
         },
     );
     progress.finish_and_clear();
-    println!("{}", output);
+    println!("{}", output.unwrap());
 
     let output = stats_view(
         &repo,

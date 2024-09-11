@@ -40,6 +40,7 @@ fn main() -> Result<()> {
 
     let mut hledger = Hledger {
         export_reconciliation: false,
+        export_checks: true,
     };
     repo.format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,
@@ -48,6 +49,8 @@ fn main() -> Result<()> {
         ..Formatter::default()
     };
     hledger.export_file(&repo, Path::new("./hledger.journal"))?;
+    println!("Run
+hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liability");
 
     let now = Local::now();
 

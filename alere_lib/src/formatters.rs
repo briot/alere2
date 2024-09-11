@@ -97,12 +97,14 @@ impl Formatter {
             }
             SymbolQuote::QuoteSpecial => {
                 if symbol.contains(' ')
-                   || symbol.contains('-')
-                   || symbol.contains('+')
-                   || symbol.contains('.')
-                   || symbol.chars().next()
-                    .map(|c| c.is_ascii_digit())
-                    .unwrap_or(true)
+                    || symbol.contains('-')
+                    || symbol.contains('+')
+                    || symbol.contains('.')
+                    || symbol
+                        .chars()
+                        .next()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(true)
                 {
                     into.push('"');
                     into.push_str(symbol);

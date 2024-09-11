@@ -1,10 +1,10 @@
-use anyhow::Result;
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
 use alere_lib::accounts::AccountNameKind;
 use alere_lib::networth::{Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use alere_lib::tree_keys::Key;
 use alere_lib::trees::NodeData;
+use anyhow::Result;
 use console::Term;
 use itertools::Itertools;
 
@@ -141,12 +141,13 @@ pub fn networth_view(
     }
 
     let mut table = Table::new(columns, settings.table).with_col_headers();
-    networth
-        .tree
-        .traverse(|node| {
+    networth.tree.traverse(
+        |node| {
             table.add_row(&node.data, node.data.depth);
             Ok(())
-        }, true)?;
+        },
+        true,
+    )?;
 
     table.add_footer(&Data {
         data: networth.total.clone(),

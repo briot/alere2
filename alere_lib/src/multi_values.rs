@@ -257,11 +257,7 @@ impl core::ops::Div<&MultiValue> for &MultiValue {
             (_, InnerValue::Zero) => None,
             (InnerValue::Zero, _) => Some(Decimal::ZERO),
             (InnerValue::One(p1), InnerValue::One(p2)) => {
-                if p1.commodity == p2.commodity {
-                    Some(p1.amount / p2.amount)
-                } else {
-                    None
-                }
+                Some(p1.amount / p2.amount)
             }
             (_, InnerValue::Multi(_)) => None,
             (InnerValue::Multi(_), _) => None,

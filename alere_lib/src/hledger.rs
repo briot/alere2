@@ -1,6 +1,6 @@
 use crate::accounts::AccountNameKind;
 use crate::importers::Exporter;
-use crate::multi_values::Operation;
+use crate::multi_values::{MultiValue, Operation, Value};
 use crate::networth::Networth;
 use crate::repositories::Repository;
 use crate::times::Instant;
@@ -8,6 +8,7 @@ use crate::tree_keys::Key;
 use anyhow::Result;
 use chrono::Local;
 use itertools::min;
+use rust_decimal::Decimal;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
@@ -29,6 +30,20 @@ impl Exporter for Hledger {
         let file = File::create(export_to)?;
         let mut buf = BufWriter::new(file);
 
+        for (com_id, com) in repo.commodities.iter_commodities() {
+            buf.write_all(b"commodity ")?;
+            buf.write_all(repo.format.display_symbol(&com.symbol).as_bytes())?;
+            buf.write_all(b"\n   format ")?;
+            buf.write_all(
+                repo.display_value(&Value {
+                    commodity: com_id,
+                    amount: Decimal::ONE_THOUSAND,
+                })
+                .as_bytes(),
+            )?;
+            buf.write_all(b"\n")?;
+        }
+
         for tx in &repo.transactions {
             let ts = min(tx.iter_splits().map(|s| s.post_ts)).unwrap();
             buf.write_all(ts.date_naive().to_string().as_bytes())?;
@@ -36,19 +51,18 @@ impl Exporter for Hledger {
             // ??? Should check if any split is reconciled
             buf.write_all(b" * ")?;
 
-            //            if let Some(m) = tx.memo() {
-            //                buf.write_all(m.as_bytes())?;
-            //            }
+            //   if let Some(m) = tx.memo() {
+            //       buf.write_all(m.as_bytes())?;
+            //   }
             buf.write_all(b"\n")?;
 
             for split in tx.iter_splits() {
+                let acc = repo.get_account(split.account).unwrap();
+
                 buf.write_all(b"   ")?;
                 buf.write_all(
-                    repo.get_account_name(
-                        repo.get_account(split.account).unwrap(),
-                        AccountNameKind::Full,
-                    )
-                    .as_bytes(),
+                    repo.get_account_name(acc, AccountNameKind::Full)
+                        .as_bytes(),
                 )?;
                 buf.write_all(b"  ")?;
 
@@ -85,9 +99,38 @@ impl Exporter for Hledger {
                     Operation::Dividend => {
                         buf.write_all(b"0 @@ 0 ; dividend")?;
                     }
-                    Operation::Split { ratio, commodity } => {
+                    Operation::Split { .. } => {
                         // For now, sell every shares, then buy them back at
                         // the new price.
+
+                        // ??? Inefficient, we should have a way to move
+                        // forward in time rather than restart from start at
+                        // each split.  But then transactions themselves might
+                        // not be fully ordered.
+
+                        let mut total = MultiValue::zero();
+                        for s in acc.iter_splits(split.account) {
+                            //  Do not apply split itself
+                            if s.post_ts >= split.post_ts {
+                                break;
+                            }
+                            total.apply(&s.operation);
+                        }
+
+                        buf.write_all(
+                            repo.display_multi_value(&-&total).as_bytes(),
+                        )?;
+                        buf.write_all(b"  @ 0 ;  split\n   ")?;
+                        buf.write_all(
+                            repo.get_account_name(acc, AccountNameKind::Full)
+                                .as_bytes(),
+                        )?;
+                        buf.write_all(b"  ")?;
+                        total.apply(&split.operation);
+                        buf.write_all(
+                            repo.display_multi_value(&total).as_bytes(),
+                        )?;
+                        buf.write_all(b" @ 0 ")?;
                     }
                 }
                 buf.write_all(b"\n")?;
@@ -192,11 +235,11 @@ impl Exporter for Hledger {
                         .as_bytes(),
                 )?;
                 buf.write_all(b" ")?;
+                buf.write_all(p.price.to_string().as_bytes())?;
                 buf.write_all(
                     repo.format
-                        .display_from_commodity(
-                            p.price,
-                            repo.commodities.get(*to).unwrap(),
+                        .display_symbol(
+                            &repo.commodities.get(*to).unwrap().symbol,
                         )
                         .as_bytes(),
                 )?;

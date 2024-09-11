@@ -37,6 +37,7 @@ fn main() -> Result<()> {
             progress.set_position(current);
         },
     ))?;
+    progress.finish_and_clear();
 
     let mut hledger = Hledger {
         export_reconciliation: false,
@@ -88,7 +89,6 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
             },
         },
     );
-    progress.finish_and_clear();
     println!("{}", output.unwrap());
 
     let output = stats_view(
@@ -103,7 +103,6 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
         ),
         crate::stats_view::Settings {},
     );
-    progress.finish_and_clear();
     println!("{}", output);
 
     Ok(())

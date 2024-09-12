@@ -79,13 +79,14 @@ impl<K: PartialEq + Clone, T> Tree<K, T> {
 }
 
 impl<K, T> Tree<K, T> {
-    /// Sort the tree: the children for each node are sorted using cmp
-    pub fn sort<F>(&mut self, mut cmp: F)
+    /// Sort the tree.
+    /// From each row, it extracts one value (as displayed on the screen
+    /// presumably), and sort by those values.
+    pub fn sort<F, V: Ord>(&mut self, mut get_cell: F)
     where
-        F: FnMut(&NodeData<K, T>, &NodeData<K, T>) -> std::cmp::Ordering,
+        F: FnMut(&NodeData<K, T>) -> V,
     {
-        self.roots
-            .sort_recursive(&mut |n1, n2| cmp(&n1.data, &n2.data));
+        self.roots.sort_recursive(&mut |n| get_cell(&n.data));
     }
 
     /// First remove unwanted children, then look at the node itself, so that
@@ -195,14 +196,14 @@ impl<K, T> Default for NodeList<K, T> {
 }
 
 impl<K, T> NodeList<K, T> {
-    fn sort_recursive<F>(&mut self, cmp: &mut F)
+    fn sort_recursive<F, V: Ord>(&mut self, get_cell: &mut F)
     where
-        F: FnMut(&TreeNode<K, T>, &TreeNode<K, T>) -> std::cmp::Ordering,
+        F: FnMut(&TreeNode<K, T>) -> V,
     {
-        self.0.sort_by(|n1, n2| cmp(n1, n2));
         for node in &mut self.0 {
-            node.children.sort_recursive(cmp);
+            node.children.sort_recursive(get_cell);
         }
+        self.0.sort_by_cached_key(get_cell);
     }
 
     fn retain_recursive<F>(&mut self, filter: &mut F)

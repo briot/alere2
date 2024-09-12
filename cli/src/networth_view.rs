@@ -27,7 +27,7 @@ pub struct Settings {
 
 pub fn networth_view(
     repo: &Repository,
-    networth: Networth,
+    mut networth: Networth,
     settings: Settings,
 ) -> Result<String> {
     type Data<'a> = NodeData<Key<'a>, NetworthRow>;
@@ -63,7 +63,6 @@ pub fn networth_view(
     };
 
     let mut columns = Vec::new();
-
     columns.push(
         Column::new(0, &node_image)
             .show_indent()
@@ -144,6 +143,8 @@ pub fn networth_view(
     }
 
     let mut table = Table::new(columns, settings.table).with_col_headers();
+    networth.tree.sort(|nodedata| node_image(nodedata, &0));
+
     networth.tree.traverse(
         |node| {
             table.add_row(&node.data, node.data.depth);

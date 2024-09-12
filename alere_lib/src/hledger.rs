@@ -1,4 +1,4 @@
-use crate::accounts::AccountNameKind;
+use crate::accounts::AccountNameDepth;
 use crate::importers::Exporter;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::networth::Networth;
@@ -61,7 +61,7 @@ impl Exporter for Hledger {
 
                 buf.write_all(b"   ")?;
                 buf.write_all(
-                    repo.get_account_name(acc, AccountNameKind::Full)
+                    repo.get_account_name(acc, AccountNameDepth(1000))
                         .as_bytes(),
                 )?;
                 buf.write_all(b"  ")?;
@@ -122,7 +122,7 @@ impl Exporter for Hledger {
                         )?;
                         buf.write_all(b"  @ 0 ;  split\n   ")?;
                         buf.write_all(
-                            repo.get_account_name(acc, AccountNameKind::Full)
+                            repo.get_account_name(acc, AccountNameDepth(1000))
                                 .as_bytes(),
                         )?;
                         buf.write_all(b"  ")?;
@@ -158,7 +158,7 @@ impl Exporter for Hledger {
                     buf.write_all(
                         repo.get_account_name(
                             repo.get_account(accid).unwrap(),
-                            AccountNameKind::Full,
+                            AccountNameDepth(1000),
                         )
                         .as_bytes(),
                     )?;
@@ -187,6 +187,7 @@ impl Exporter for Hledger {
                     group_by: crate::networth::GroupBy::None,
                     subtotals: false,
                     commodity: None,
+                    collapse_one_child: false,
                 },
             );
             networth.tree.traverse(
@@ -200,7 +201,7 @@ impl Exporter for Hledger {
                             buf.write_all(
                                 repo.get_account_name(
                                     acc,
-                                    AccountNameKind::Full,
+                                    AccountNameDepth(1000),
                                 )
                                 .as_bytes(),
                             )?;

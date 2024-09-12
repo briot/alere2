@@ -4,11 +4,11 @@ use crate::multi_values::MultiValue;
 use crate::transactions::{Split, TransactionRc};
 use chrono::{DateTime, Local};
 
+/// How to display account name.
+/// This includes the basename for the account (level 1), its parent (level 2),
+/// and so on till a maximum level.
 #[derive(Clone, Copy)]
-pub enum AccountNameKind {
-    Short,
-    Full,
-}
+pub struct AccountNameDepth(pub usize);
 
 #[derive(Default)]
 pub struct AccountCollection(Vec<Account>);
@@ -27,20 +27,21 @@ impl AccountCollection {
         self.0.get(id.0 as usize - 1)
     }
 
-    pub fn name(&self, acc: &Account, kind: AccountNameKind) -> String {
-        match kind {
-            AccountNameKind::Short => acc.name.clone(),
-            AccountNameKind::Full => {
-                if let Some(p) = acc.parent {
-                    format!(
-                        "{}:{}",
-                        self.name(self.get(p).unwrap(), kind),
-                        acc.name
-                    )
-                } else {
-                    acc.name.clone()
-                }
+    pub fn name(&self, acc: &Account, kind: AccountNameDepth) -> String {
+        if kind.0 <= 1 {
+            acc.name.clone()
+        } else {
+            let mut result = acc.name.clone();
+            let mut remain = kind.0 - 1;
+            let mut current = acc.parent;
+            while remain != 0 && current.is_some() {
+                let c = self.get(current.unwrap()).unwrap();
+                result.insert(0, ':');
+                result.insert_str(0, &c.name);
+                current = c.parent;
+                remain -= 1;
             }
+            result
         }
     }
 

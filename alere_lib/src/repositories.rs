@@ -1,5 +1,7 @@
 use crate::account_kinds::AccountKindCollection;
-use crate::accounts::{Account, AccountCollection, AccountId, AccountNameKind};
+use crate::accounts::{
+    Account, AccountCollection, AccountId, AccountNameDepth,
+};
 use crate::commodities::{CommodityCollection, CommodityId};
 use crate::formatters::Formatter;
 use crate::institutions::{Institution, InstitutionId};
@@ -95,7 +97,7 @@ impl Repository {
     pub fn get_account_name(
         &self,
         acc: &Account,
-        kind: AccountNameKind,
+        kind: AccountNameDepth,
     ) -> String {
         self.accounts.name(acc, kind)
     }

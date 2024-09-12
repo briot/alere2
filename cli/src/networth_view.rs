@@ -1,5 +1,5 @@
 use crate::tables::{Align, Column, ColumnFooter, Table, Truncate, Width};
-use alere_lib::accounts::AccountNameKind;
+use alere_lib::accounts::AccountNameDepth;
 use alere_lib::networth::{Networth, NetworthRow};
 use alere_lib::repositories::Repository;
 use alere_lib::tree_keys::Key;
@@ -21,7 +21,7 @@ pub struct Settings {
     // Whether to show percent of total
     pub column_percent: bool,
 
-    pub account_names: AccountNameKind,
+    pub account_names: AccountNameDepth,
     pub table: crate::tables::Settings,
 }
 
@@ -46,7 +46,10 @@ pub fn networth_view(
     };
     let node_image = |row: &Data, _idx: &usize| {
         match row.key {
-            Key::Account(a) => repo.get_account_name(a, settings.account_names),
+            Key::Account(a) => repo.get_account_name(
+                a,
+                AccountNameDepth(settings.account_names.0 + row.collapse_depth),
+            ),
             Key::Institution(Some(inst)) => inst.name.clone(),
             Key::Institution(None) => "Unknown".to_string(),
             Key::AccountKind(Some(kind)) => kind.name.clone(),
@@ -149,10 +152,9 @@ pub fn networth_view(
         true,
     )?;
 
-    table.add_footer(&Data {
-        data: networth.total.clone(),
-        depth: 0,
-        key: Key::Institution(None), //  ??? irrelevant
-    });
+    table.add_footer(&Data::new(
+        Key::Institution(None), //  ??? irrelevant
+        networth.total.clone(),
+    ));
     Ok(table.to_string(Term::stdout().size().1 as usize))
 }

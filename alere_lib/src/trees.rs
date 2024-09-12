@@ -10,7 +10,26 @@ pub struct NodeData<K, T> {
 
     // The depth of the node in the tree, starting at 0 for root nodes
     pub depth: usize,
+
+    // non-zero if the node was collapsed into its parent (see
+    // collapse_if_one_child)
+    pub collapse_depth: usize,
 }
+
+impl<K, T> NodeData<K, T> {
+    pub fn new(key: K, data: T) -> Self {
+        NodeData {
+            key,
+            data,
+            depth: 0,
+            collapse_depth: 0,
+        }
+    }
+}
+
+///
+/// A tree of data
+///
 
 pub struct Tree<K, T> {
     roots: NodeList<K, T>,
@@ -117,7 +136,12 @@ impl<K, T> TreeNode<K, T> {
     fn new(key: K, data: T, depth: usize) -> Self {
         Self {
             children: NodeList::default(),
-            data: NodeData { key, data, depth },
+            data: NodeData {
+                key,
+                data,
+                depth,
+                collapse_depth: 0,
+            },
         }
     }
 
@@ -138,6 +162,23 @@ impl<K, T> TreeNode<K, T> {
     /// Iterate over direct children
     pub fn iter_children(&self) -> impl Iterator<Item = &TreeNode<K, T>> {
         self.children.0.iter()
+    }
+}
+
+impl<K: Clone, T: Clone> TreeNode<K, T> {
+    /// Collapse the node: if it has a single child, replace the node by
+    /// this child.  This loses any data associated with self though.
+    pub fn collapse_if_one_child(&mut self) {
+        if self.children.0.len() == 1 {
+            let c = &self.children.0[0].data;
+            self.data = NodeData {
+                key: c.key.clone(),
+                data: c.data.clone(),
+                depth: self.data.depth,
+                collapse_depth: self.data.collapse_depth + c.collapse_depth + 1,
+            };
+            self.children.0.clear();
+        }
     }
 }
 

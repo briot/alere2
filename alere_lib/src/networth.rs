@@ -43,6 +43,19 @@ pub struct Settings {
 
     // Currency for market values
     pub commodity: Option<CommodityId>,
+
+    // Collapse nodes if they have a single child.  Instead of showing
+    //     Asset
+    //        MyBank
+    //            MyAccount     $100
+    //        OtherBank         $200
+    // We now show
+    //     Asset
+    //        MyBank:MyAccount  $100
+    //        OtherBank         $200
+    // Only relevant for GroupBy::ParentAccount
+    // A node is not collapsed if any operation applied to it directly.
+    pub collapse_one_child: bool,
 }
 
 //--------------------------------------------------------------
@@ -280,6 +293,20 @@ impl<'a> Networth<'a> {
                 && (!result.settings.hide_all_same
                     || !node.data.data.is_all_same()))
         });
+
+        if result.settings.collapse_one_child
+            && matches!(result.settings.group_by, GroupBy::ParentAccount)
+        {
+            let _ = result.tree.traverse_mut(
+                |node| {
+                    if node.data.data.is_zero() {
+                        node.collapse_if_one_child();
+                    }
+                    Ok(())
+                },
+                false,
+            );
+        }
 
         if result.settings.subtotals {
             let _ = result.tree.traverse_mut(

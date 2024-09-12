@@ -4,7 +4,7 @@ pub mod tables;
 
 use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
-    accounts::AccountNameKind,
+    accounts::AccountNameDepth,
     formatters::{Formatter, SymbolQuote},
     hledger::Hledger,
     importers::{Exporter, Importer},
@@ -71,6 +71,7 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 group_by: GroupBy::ParentAccount,
                 subtotals: true,
                 commodity: repo.commodities.find("Euro"),
+                collapse_one_child: true,
             },
         ),
         crate::networth_view::Settings {
@@ -82,7 +83,7 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
             column_market_delta: false,
             column_market_delta_to_last: false,
             column_percent: false,
-            account_names: AccountNameKind::Short,
+            account_names: AccountNameDepth(1),
             table: crate::tables::Settings {
                 colsep: "│".to_string(),
                 indent_size: 1,

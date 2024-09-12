@@ -207,6 +207,7 @@ impl core::ops::AddAssign<&NetworthRow> for NetworthRow {
 
 /// A view that shows the value (as of any timestamp) of all user accounts.
 /// This ignores all accounts that are not marked as "networth".
+/// The result tree is unsorted.
 pub struct Networth<'a> {
     pub tree: Tree<Key<'a>, NetworthRow>,
     pub total: NetworthRow,
@@ -322,7 +323,6 @@ impl<'a> Networth<'a> {
             );
         }
 
-        result.tree.sort(|n1, n2| n1.key.cmp(&n2.key));
         result
     }
 }

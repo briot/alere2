@@ -41,7 +41,10 @@ fn main() -> Result<()> {
 
     let mut hledger = Hledger {
         export_reconciliation: false,
-        export_checks: true,
+        assertions: alere_lib::hledger::AssertionMode::AtTime(
+            //  vec![Instant::YearsAgo(2), Instant::YearsAgo(1), Instant::Now]
+            vec![Instant::Now]
+        ),
     };
     repo.format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,

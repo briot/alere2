@@ -14,9 +14,23 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 #[derive(Default)]
+pub enum AssertionMode {
+    // Never output assertions (to check that the current balance matches
+    // between alere and hledger for instance)
+    #[default]
+    None,
+
+    // We output the checks at the end, after all transactions, and for the
+    // given list of timestamps.  When outputting for ledger, this should only
+    // contain Instance::Now, because ledger checks in the order that things
+    // are written.
+    AtTime(Vec<Instant>),
+}
+
+#[derive(Default)]
 pub struct Hledger {
     pub export_reconciliation: bool,
-    pub export_checks: bool,
+    pub assertions: AssertionMode,
 }
 
 impl Hledger {}
@@ -29,6 +43,7 @@ impl Exporter for Hledger {
     ) -> Result<()> {
         let file = File::create(export_to)?;
         let mut buf = BufWriter::new(file);
+        let now = Local::now();
 
         for (com_id, com) in repo.commodities.iter_commodities() {
             buf.write_all(b"commodity ")?;
@@ -46,6 +61,13 @@ impl Exporter for Hledger {
 
         for tx in &repo.transactions {
             let ts = min(tx.iter_splits().map(|s| s.post_ts)).unwrap();
+
+            //  Do not output future/scheduled transactions.  This breaks
+            //  assertions in ledger (though hledger is happy with them)
+            if ts > now {
+                continue;
+            }
+
             buf.write_all(ts.date_naive().to_string().as_bytes())?;
 
             // ??? Should check if any split is reconciled
@@ -97,7 +119,7 @@ impl Exporter for Hledger {
                         buf.write_all(b"  ; reinvest")?;
                     }
                     Operation::Dividend => {
-                        buf.write_all(b"0 @@ 0 ; dividend")?;
+                        buf.write_all(b" ; dividend")?;
                     }
                     Operation::Split { .. } => {
                         // For now, sell every shares, then buy them back at
@@ -173,54 +195,56 @@ impl Exporter for Hledger {
 
         // Export checks with balances we computed ourselves, to ensure hledger
         // and us have the same view of things
-        if self.export_checks {
-            let now = Local::now();
-            let networth = Networth::new(
-                repo,
-                &[Instant::YearsAgo(2), Instant::YearsAgo(1), Instant::Now]
-                    .iter()
-                    .map(|ts| ts.to_time(now))
-                    .collect::<Vec<_>>(),
-                crate::networth::Settings {
-                    hide_zero: false,
-                    hide_all_same: false,
-                    group_by: crate::networth::GroupBy::None,
-                    subtotals: false,
-                    commodity: None,
-                    collapse_one_child: false,
-                },
-            );
-            networth.tree.traverse(
-                |node| {
-                    for (colidx, ts) in networth.as_of.iter().enumerate() {
-                        if let Key::Account(acc) = node.data.key {
-                            buf.write_all(
-                                ts.date_naive().to_string().as_bytes(),
-                            )?;
-                            buf.write_all(b" asserts\n  ")?;
-                            buf.write_all(
-                                repo.get_account_name(
-                                    acc,
-                                    AccountNameDepth(1000),
-                                )
-                                .as_bytes(),
-                            )?;
-                            buf.write_all(b"  0 = ")?;
-                            buf.write_all(
-                                node.data
-                                    .data
-                                    .display_value(repo, colidx)
+        match &self.assertions {
+            AssertionMode::None => {}
+            AssertionMode::AtTime(instants) => {
+                let networth = Networth::new(
+                    repo,
+                    &instants
+                        .iter()
+                        .map(|ts| ts.to_time(now))
+                        .collect::<Vec<_>>(),
+                    crate::networth::Settings {
+                        hide_zero: false,
+                        hide_all_same: false,
+                        group_by: crate::networth::GroupBy::None,
+                        subtotals: false,
+                        commodity: None,
+                        collapse_one_child: false,
+                    },
+                );
+                networth.tree.traverse(
+                    |node| {
+                        for (colidx, ts) in networth.as_of.iter().enumerate() {
+                            if let Key::Account(acc) = node.data.key {
+                                buf.write_all(
+                                    ts.date_naive().to_string().as_bytes(),
+                                )?;
+                                buf.write_all(b" asserts\n  ")?;
+                                buf.write_all(
+                                    repo.get_account_name(
+                                        acc,
+                                        AccountNameDepth(1000),
+                                    )
                                     .as_bytes(),
-                            )?;
-                            buf.write_all(b"\n\n")?;
-                        } else {
-                            anyhow::bail!("Excepted account name".to_string());
+                                )?;
+                                buf.write_all(b"  0 = ")?;
+                                buf.write_all(
+                                    node.data
+                                        .data
+                                        .display_value(repo, colidx)
+                                        .as_bytes(),
+                                )?;
+                                buf.write_all(b"\n\n")?;
+                            } else {
+                                anyhow::bail!("Excepted account name".to_string());
+                            }
                         }
-                    }
-                    Ok(())
-                },
-                true,
-            )?;
+                        Ok(())
+                    },
+                    true,
+                )?;
+            }
         }
 
         for ((from, to), pr) in &repo.prices.prices {

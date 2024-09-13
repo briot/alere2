@@ -11,6 +11,7 @@ use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
 use crate::transactions::TransactionRc;
+use itertools::min;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -32,6 +33,10 @@ impl Repository {
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
         self.accounts.postprocess();
+
+        self.transactions.sort_by_cached_key(
+            |tx| min(tx.iter_splits().map(|s| s.post_ts)).unwrap()
+        );
 
         for tr in &self.transactions {
             if !tr.is_balanced() {

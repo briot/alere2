@@ -74,7 +74,7 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 group_by: GroupBy::ParentAccount,
                 subtotals: true,
                 commodity: repo.commodities.find("Euro"),
-                collapse_one_child: true,
+                elide_boring_accounts: true,
             },
         ),
         crate::networth_view::Settings {

@@ -210,7 +210,7 @@ impl Exporter for Hledger {
                         group_by: crate::networth::GroupBy::None,
                         subtotals: false,
                         commodity: None,
-                        collapse_one_child: false,
+                        elide_boring_accounts: false,
                     },
                 );
                 networth.tree.traverse(

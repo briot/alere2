@@ -44,7 +44,10 @@ pub struct Settings {
     // Currency for market values
     pub commodity: Option<CommodityId>,
 
-    // Collapse nodes if they have a single child.  Instead of showing
+    // "boring" accounts are combined with their subaccount, unless no elide
+    // is used.  Boring accounts have no balance of their own and just one
+    // subaccount.
+    // Instead of showing
     //     Asset
     //        MyBank
     //            MyAccount     $100
@@ -55,7 +58,8 @@ pub struct Settings {
     //        OtherBank         $200
     // Only relevant for GroupBy::ParentAccount
     // A node is not collapsed if any operation applied to it directly.
-    pub collapse_one_child: bool,
+    //
+    pub elide_boring_accounts: bool,
 }
 
 //--------------------------------------------------------------
@@ -295,7 +299,7 @@ impl<'a> Networth<'a> {
                     || !node.data.data.is_all_same()))
         });
 
-        if result.settings.collapse_one_child
+        if result.settings.elide_boring_accounts
             && matches!(result.settings.group_by, GroupBy::ParentAccount)
         {
             let _ = result.tree.traverse_mut(

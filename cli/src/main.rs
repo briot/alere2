@@ -39,12 +39,13 @@ fn main() -> Result<()> {
     ))?;
     progress.finish_and_clear();
 
+    let now = Local::now();
+
     let mut hledger = Hledger {
         export_reconciliation: false,
-        assertions: alere_lib::hledger::AssertionMode::AtTime(
-            //  vec![Instant::YearsAgo(2), Instant::YearsAgo(1), Instant::Now]
-            vec![Instant::Now]
-        ),
+        assertions: alere_lib::hledger::AssertionMode::AtTime(vec![
+            Instant::Now,
+        ]),
     };
     repo.format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,
@@ -56,18 +57,12 @@ fn main() -> Result<()> {
     println!("Run
 hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liability");
 
-    let now = Local::now();
-
     repo.format = Formatter::default();
 
     let output = networth_view(
         &repo,
         Networth::new(
             &repo,
-            &[Instant::YearsAgo(1), Instant::Now]
-                .iter()
-                .map(|ts| ts.to_time(now))
-                .collect::<Vec<_>>(),
             alere_lib::networth::Settings {
                 hide_zero: true,
                 hide_all_same: false,
@@ -75,7 +70,13 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 subtotals: true,
                 commodity: repo.commodities.find("Euro"),
                 elide_boring_accounts: true,
+                intervals: vec![
+                    Interval::UpTo(Instant::YearsAgo(1)),
+                    Interval::UpTo(Instant::MonthsAgo(1)),
+                    Interval::UpTo(Instant::Now),
+                ],
             },
+            now,
         ),
         crate::networth_view::Settings {
             column_market: true,
@@ -99,12 +100,12 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
         &repo,
         Stats::new(
             &repo,
-            Interval::Years(1),
             alere_lib::stats::Settings {
                 commodity: repo.commodities.find("Euro"),
+                over: Interval::LastNYears(1),
             },
             now,
-        ),
+        )?,
         crate::stats_view::Settings {},
     );
     println!("{}", output);

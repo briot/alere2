@@ -72,11 +72,13 @@ pub fn networth_view(
             .with_footer(ColumnFooter::Hide),
     );
 
-    for (pos, (idx, ts)) in networth.as_of.iter().enumerate().with_position() {
+    for (pos, (idx, ts)) in
+        networth.intervals.iter().enumerate().with_position()
+    {
         if settings.column_value {
             columns.push(
                 Column::new(idx, &mv_image)
-                    .with_title(&format!("Value {}", ts.date_naive()))
+                    .with_title(&format!("Value {}", ts.right.0.date_naive()))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left)
                     .with_footer(ColumnFooter::Hide),
@@ -85,7 +87,7 @@ pub fn networth_view(
         if settings.column_market {
             columns.push(
                 Column::new(idx, &market_image)
-                    .with_title(&format!("Mkt {}", ts.date_naive()))
+                    .with_title(&format!("Mkt {}", ts.right.0.date_naive()))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );
@@ -93,7 +95,7 @@ pub fn networth_view(
         if settings.column_price {
             columns.push(
                 Column::new(idx, &price_image)
-                    .with_title(&format!("Price {}", ts.date_naive()))
+                    .with_title(&format!("Price {}", ts.right.0.date_naive()))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );

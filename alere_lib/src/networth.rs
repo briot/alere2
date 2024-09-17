@@ -2,6 +2,7 @@ use crate::commodities::CommodityId;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
 use crate::repositories::Repository;
+use crate::times::{Interval, TimeInterval};
 use crate::tree_keys::Key;
 use crate::trees::Tree;
 use crate::utils::is_all_same;
@@ -60,6 +61,10 @@ pub struct Settings {
     // A node is not collapsed if any operation applied to it directly.
     //
     pub elide_boring_accounts: bool,
+
+    // What columns to display.  Each column aggregates all transaction within
+    // a time interval.
+    pub intervals: Vec<Interval>,
 }
 
 //--------------------------------------------------------------
@@ -216,17 +221,27 @@ pub struct Networth<'a> {
     pub tree: Tree<Key<'a>, NetworthRow>,
     pub total: NetworthRow,
     pub settings: Settings,
-    pub as_of: Vec<DateTime<Local>>,
+    pub intervals: Vec<TimeInterval>, //  Each column
 }
 
 impl<'a> Networth<'a> {
     /// Cumulate all operations, for all accounts, to get the current total.
     pub fn new(
         repo: &'a Repository,
-        as_of: &[DateTime<Local>],
         settings: Settings,
+        now: DateTime<Local>,
     ) -> Self {
-        let col_count = as_of.len();
+        let intervals = settings
+            .intervals
+            .iter()
+            .flat_map(|intv| {
+                intv.to_ranges(now)
+                    .unwrap() //  ??? Can we propagate errors
+                    .into_iter()
+            })
+            .collect::<Vec<TimeInterval>>();
+
+        let col_count = intervals.len();
 
         // We keep one cache for market prices per entry in as_of, since
         // otherwise the current cache would keeping wiped out as we move from
@@ -235,7 +250,7 @@ impl<'a> Networth<'a> {
         let mut market = repo.market_prices(settings.commodity);
         let mut result = Networth {
             settings,
-            as_of: as_of.into(),
+            intervals,
             tree: Tree::default(),
             total: NetworthRow::new(col_count),
         };
@@ -275,15 +290,20 @@ impl<'a> Networth<'a> {
                 //  ??? Could we use fold() here, though we are applying in
                 //  place.
                 acc.iter_splits(acc_id).for_each(|s| {
-                    for (idx, ts) in as_of.iter().enumerate() {
-                        if s.post_ts <= *ts {
+                    for (idx, intv) in result.intervals.iter().enumerate() {
+                        if intv.contains(s.post_ts) {
                             row.0[idx].value.apply(&s.operation);
                         }
                     }
                 });
 
                 for (idx, v) in row.0.iter_mut().enumerate() {
-                    v.compute_market(&mut market, &as_of[idx]);
+                    v.compute_market(
+                        &mut market,
+                        // At end of interval (but this is open, so is not
+                        // full accurate).
+                        &result.intervals[idx].right.0,
+                    );
                     result.total.0[idx] += v;
                 }
             });

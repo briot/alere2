@@ -34,9 +34,9 @@ impl Repository {
         self.prices.postprocess();
         self.accounts.postprocess();
 
-        self.transactions.sort_by_cached_key(
-            |tx| min(tx.iter_splits().map(|s| s.post_ts)).unwrap()
-        );
+        self.transactions.sort_by_cached_key(|tx| {
+            min(tx.iter_splits().map(|s| s.post_ts)).unwrap()
+        });
 
         for tr in &self.transactions {
             if !tr.is_balanced() {

@@ -1,6 +1,6 @@
 use crate::accounts::AccountNameDepth;
 use crate::importers::Exporter;
-use crate::multi_values::{MultiValue, Operation, Value};
+use crate::multi_values::{Operation, Value};
 use crate::networth::Networth;
 use crate::repositories::Repository;
 use crate::times::Instant;
@@ -121,26 +121,12 @@ impl Exporter for Hledger {
                     Operation::Dividend => {
                         buf.write_all(b" ; dividend")?;
                     }
-                    Operation::Split { .. } => {
+                    Operation::SplitInto { old_amount, new_amount } => {
                         // For now, sell every shares, then buy them back at
                         // the new price.
 
-                        // ??? Inefficient, we should have a way to move
-                        // forward in time rather than restart from start at
-                        // each split.  But then transactions themselves might
-                        // not be fully ordered.
-
-                        let mut total = MultiValue::zero();
-                        for s in acc.iter_splits(split.account) {
-                            //  Do not apply split itself
-                            if s.post_ts >= split.post_ts {
-                                break;
-                            }
-                            total.apply(&s.operation);
-                        }
-
                         buf.write_all(
-                            repo.display_multi_value(&-&total).as_bytes(),
+                            repo.display_value(&-old_amount).as_bytes(),
                         )?;
                         buf.write_all(b"  @ 0 ;  split\n   ")?;
                         buf.write_all(
@@ -148,9 +134,8 @@ impl Exporter for Hledger {
                                 .as_bytes(),
                         )?;
                         buf.write_all(b"  ")?;
-                        total.apply(&split.operation);
                         buf.write_all(
-                            repo.display_multi_value(&total).as_bytes(),
+                            repo.display_multi_value(&new_amount).as_bytes(),
                         )?;
                         buf.write_all(b" @ 0 ")?;
                     }

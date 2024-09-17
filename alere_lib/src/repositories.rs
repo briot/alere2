@@ -163,6 +163,16 @@ impl Repository {
                         ),
                     );
                 }
+                Operation::SplitInto { old_amount, new_amount } => {
+                    for v in new_amount.iter() {
+                        if v.commodity == old_amount.commodity {
+                            // ??? The price is divided by
+                            //    new_amount.commodity / old_amount.commodity
+                            // but we do not know the old price
+                            break;
+                        }
+                    }
+                }
                 _ => {}
             }
         }

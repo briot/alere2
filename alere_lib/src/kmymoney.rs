@@ -716,21 +716,10 @@ impl KmyMoneyImporter {
                 (Some("Split"), p)
                     if p.is_none() || p == Some(Decimal::ONE) =>
                 {
-                    // Split could be represented as:
-                    // - an entry in a separate table. Useful to take them into
-                    //   account when looking at performance.
-                    // - splits with a ratio field (which could also be
-                    //   detected when looking at performance). Perhaps these
-                    //   need to store how many shares we have in the end, so
-                    //   that even if earlier splits are changed we preserve
-                    //   the same values ?
-                    //                    assert_eq!(value, Decimal::ZERO);
-                    //                    ratio = shares;
-                    // extra_msg.push_str("Split");
                     let ratio =
                         parse_price(row.get("shares"), account_precision)?
                             .unwrap();
-                    Operation::Split {
+                    Operation::SplitInto {
                         ratio,
                         commodity: *account_currency_id,
                     }

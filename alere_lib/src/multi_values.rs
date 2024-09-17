@@ -54,15 +54,25 @@ pub enum Operation {
 
     // There were some dividends for one of the stocks   The amount will be
     // visible in other splits.
-    // This only registers there was some dividend, but the amount will be
-    // found in other splits associated with the same transaction
+    // ??? This only registers there was some dividend, but the amount will be
+    // found in other splits associated with the same transaction  Makes it
+    // harder to compute performance though, or to have dividends as "shares"
+    // (this case is handled via AddShares)
     Dividend,
 
-    // Used for stock splits.  The number of shares is multiplied by the ratio,
-    // and their value divided by the same ratio.
-    Split {
-        ratio: Decimal,
-        commodity: CommodityId,
+    // Used for stock splits.
+    // We store the new number of shares, which handles a number of things:
+    //  - when computing the ledger, we do not have to compute the ongoing
+    //    balance to be able to display the effect of a split (and do not need
+    //    ordering of transactions).
+    //  - handles unusual splits like Google Class C, where one share resulted
+    //    in both two shares and additional "class C" shares.  The MultiValue
+    //    handles this
+    // Drawback is: what happens if user adds an earlier transaction that
+    // changes the number of shares owned.
+    SplitInto {
+        old_amount: Value,
+        new_amount: MultiValue,
     },
 }
 
@@ -200,19 +210,13 @@ impl MultiValue {
             Operation::Reinvest { shares, .. } => {
                 *self += shares;
             }
-            Operation::Split { ratio, commodity } => match &mut self.0 {
-                InnerValue::Zero => {}
-                InnerValue::One(pair) => {
-                    if pair.commodity == *commodity {
-                        pair.amount *= ratio;
-                    }
-                }
-                InnerValue::Multi(map) => {
-                    if let Some(v) = map.get_mut(commodity) {
-                        *v *= ratio;
-                    }
-                }
-            },
+            Operation::SplitInto {
+                old_amount,
+                new_amount,
+            } => {
+                *self -= *old_amount;
+                *self += new_amount;
+            }
             Operation::Dividend => {}
         };
         self.normalize();

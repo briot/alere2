@@ -162,9 +162,9 @@ impl Account {
         self.transactions.push(transaction.clone());
     }
 
-    pub fn postprocess(&mut self, self_id: AccountId) {
-        self.transactions
-            .sort_by(|tr1, tr2| tr1.earlier_than_for_account(tr2, self_id));
+    pub fn postprocess(&mut self, _self_id: AccountId) {
+//        self.transactions
+//            .sort_by(|tr1, tr2| tr1.earlier_than_for_account(tr2, self_id));
     }
 
     pub fn iter_transactions(&self) -> impl Iterator<Item = &TransactionRc> {

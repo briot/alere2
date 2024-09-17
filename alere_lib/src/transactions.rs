@@ -84,10 +84,13 @@ impl Transaction {
                         commodity: price.commodity,
                     };
                 }
-                Operation::Reinvest { amount, .. } => {
-                    total += amount;
+                Operation::Reinvest { shares, .. } => {
+                    total += shares;
                 }
-                Operation::Split { .. } => {}
+                Operation::SplitInto { old_amount, new_amount } => {
+                    total -= *old_amount;
+                    total += new_amount;
+                }
                 Operation::Dividend => {}
             }
             // total.apply(&s.operation);

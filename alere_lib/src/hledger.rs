@@ -3,7 +3,7 @@ use crate::importers::Exporter;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::networth::Networth;
 use crate::repositories::Repository;
-use crate::times::Instant;
+use crate::times::{Instant, Interval};
 use crate::tree_keys::Key;
 use anyhow::Result;
 use chrono::Local;
@@ -200,10 +200,6 @@ impl Exporter for Hledger {
             AssertionMode::AtTime(instants) => {
                 let networth = Networth::new(
                     repo,
-                    &instants
-                        .iter()
-                        .map(|ts| ts.to_time(now))
-                        .collect::<Vec<_>>(),
                     crate::networth::Settings {
                         hide_zero: false,
                         hide_all_same: false,
@@ -211,14 +207,25 @@ impl Exporter for Hledger {
                         subtotals: false,
                         commodity: None,
                         elide_boring_accounts: false,
+                        intervals: instants
+                            .iter()
+                            .map(|ts| Interval::UpTo(ts.clone()))
+                            .collect::<Vec<_>>(),
                     },
+                    now,
                 );
                 networth.tree.traverse(
                     |node| {
-                        for (colidx, ts) in networth.as_of.iter().enumerate() {
+                        for (colidx, ts) in
+                            networth.intervals.iter().enumerate()
+                        {
                             if let Key::Account(acc) = node.data.key {
                                 buf.write_all(
-                                    ts.date_naive().to_string().as_bytes(),
+                                    ts.right
+                                        .0
+                                        .date_naive()
+                                        .to_string()
+                                        .as_bytes(),
                                 )?;
                                 buf.write_all(b" asserts\n  ")?;
                                 buf.write_all(
@@ -237,7 +244,9 @@ impl Exporter for Hledger {
                                 )?;
                                 buf.write_all(b"\n\n")?;
                             } else {
-                                anyhow::bail!("Excepted account name".to_string());
+                                anyhow::bail!(
+                                    "Excepted account name".to_string()
+                                );
                             }
                         }
                         Ok(())

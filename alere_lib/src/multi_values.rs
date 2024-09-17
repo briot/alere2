@@ -410,6 +410,17 @@ impl core::ops::AddAssign<&MultiValue> for MultiValue {
     }
 }
 
+impl core::ops::Neg for &Value {
+    type Output = Value;
+
+    fn neg(self) -> Self::Output {
+        Value {
+            commodity: self.commodity,
+            amount: -self.amount,
+        }
+    }
+}
+
 impl core::ops::Neg for &MultiValue {
     type Output = MultiValue;
 
@@ -515,6 +526,12 @@ impl core::ops::Sub<&MultiValue> for &MultiValue {
                 result
             }
         }
+    }
+}
+
+impl core::ops::SubAssign<Value> for MultiValue {
+    fn sub_assign(&mut self, rhs: Value) {
+        *self -= MultiValue(InnerValue::One(rhs));
     }
 }
 

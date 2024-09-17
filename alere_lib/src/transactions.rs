@@ -92,9 +92,6 @@ impl Transaction {
             }
             // total.apply(&s.operation);
         }
-        if !total.is_zero() {
-            println!("MANU not balanced, total={:?}", total);
-        }
         total.is_zero()
     }
 }

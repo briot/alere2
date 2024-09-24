@@ -6,7 +6,9 @@ use crate::times::{Interval, TimeInterval};
 use crate::tree_keys::Key;
 use crate::trees::Tree;
 use crate::utils::is_all_same;
+use anyhow::Result;
 use chrono::{DateTime, Local};
+use itertools::Itertools;
 use rust_decimal::Decimal;
 
 //--------------------------------------------------------------
@@ -230,16 +232,13 @@ impl<'a> Networth<'a> {
         repo: &'a Repository,
         settings: Settings,
         now: DateTime<Local>,
-    ) -> Self {
+    ) -> Result<Self> {
         let intervals = settings
             .intervals
             .iter()
-            .flat_map(|intv| {
-                intv.to_ranges(now)
-                    .unwrap() //  ??? Can we propagate errors
-                    .into_iter()
-            })
-            .collect::<Vec<TimeInterval>>();
+            .map(|intv| intv.to_ranges(now))
+            .flatten_ok() // itertools: preserve errors
+            .collect::<Result<Vec<TimeInterval>>>()?;
 
         let col_count = intervals.len();
 
@@ -347,6 +346,6 @@ impl<'a> Networth<'a> {
             );
         }
 
-        result
+        Ok(result)
     }
 }

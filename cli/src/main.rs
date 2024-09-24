@@ -77,7 +77,7 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 ],
             },
             now,
-        ),
+        )?,
         crate::networth_view::Settings {
             column_market: true,
             column_value: false,

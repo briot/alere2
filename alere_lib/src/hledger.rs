@@ -213,7 +213,7 @@ impl Exporter for Hledger {
                             .collect::<Vec<_>>(),
                     },
                     now,
-                );
+                )?;
                 networth.tree.traverse(
                     |node| {
                         for (colidx, ts) in

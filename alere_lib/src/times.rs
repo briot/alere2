@@ -97,17 +97,89 @@ impl Instant {
     }
 }
 
-/// A range of time [start; end[ not including the end
-pub type TimeInterval = BoundedInterval<DateTime<Local>>;
+impl std::fmt::Display for Instant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instant::Epoch => write!(f, "")?,
+            Instant::Now => write!(f, "now")?,
+            Instant::Armageddon => write!(f, "∞")?,
+            Instant::DaysAgo(count) => {
+                if *count == 1 {
+                    write!(f, "yesterday")?
+                } else {
+                    write!(f, "{} days ago", count)?
+                }
+            }
+            Instant::StartDaysAgo(count) => {
+                if *count == 1 {
+                    write!(f, "start of yesterday")?
+                } else {
+                    write!(f, "start of {} days ago", count)?
+                }
+            }
+            Instant::EndDaysAgo(count) => {
+                if *count == 1 {
+                    write!(f, "end of yesterday")?
+                } else {
+                    write!(f, "end of {} days ago", count)?
+                }
+            }
+            Instant::StartDay(day) => write!(f, "start of {}", day)?,
+            Instant::EndDay(day) => write!(f, "end of {}", day)?,
+            Instant::MonthsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "last month")?
+                } else {
+                    write!(f, "{} months ago", count)?
+                }
+            }
+            Instant::StartMonthsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "start of last month")?
+                } else {
+                    write!(f, "start of {} months ago", count)?
+                }
+            }
+            Instant::EndMonthsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "end of last month")?
+                } else {
+                    write!(f, "end of {} months ago", count)?
+                }
+            }
+            Instant::YearsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "last year")?
+                } else {
+                    write!(f, "{} years ago", count)?
+                }
+            }
+            Instant::StartYearsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "start of last year")?
+                } else {
+                    write!(f, "start of {} years ago", count)?
+                }
+            }
+            Instant::EndYearsAgo(count) => {
+                if *count == 1 {
+                    write!(f, "end of last year")?
+                } else {
+                    write!(f, "end of {} years ago", count)?
+                }
+            }
+            Instant::StartYear(year) => write!(f, "start of {}", year)?,
+            Instant::EndYear(year) => write!(f, "end of {}", year)?,
+            Instant::Timestamp(ts) => write!(f, "{}", ts)?,
+        }
+        Ok(())
+    }
+}
 
-fn to_intv(
-    begin: Instant,
-    end: Instant,
-    now: DateTime<Local>,
-) -> Result<TimeInterval> {
-    let s = begin.to_time(now)?;
-    let e = end.to_time(now)?;
-    Ok(TimeInterval::lcro(s, e))
+/// A range of time [start; end[ not including the end
+pub struct TimeInterval {
+    pub descr: String,
+    pub intv: BoundedInterval<DateTime<Local>>,
 }
 
 /// A high-level description of time ranges
@@ -131,48 +203,84 @@ impl Interval {
     pub fn to_ranges(&self, now: DateTime<Local>) -> Result<Vec<TimeInterval>> {
         let r = match self {
             Interval::UpTo(then) => {
-                vec![to_intv(Instant::Epoch, then.clone(), now)?]
+                let lower = Instant::Epoch.to_time(now)?;
+                let upper = then.to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: format!("{}", then),
+                }]
             }
             Interval::LastNDays(count) => {
-                vec![to_intv(Instant::DaysAgo(*count), Instant::Now, now)?]
+                let lower = Instant::DaysAgo(*count).to_time(now)?;
+                let upper = Instant::Now.to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: if *count == 1 {
+                        "Over 1 day".to_string()
+                    } else {
+                        format!("Over {} days", *count)
+                    },
+                }]
             }
             Interval::LastNMonths(count) => {
-                vec![to_intv(Instant::MonthsAgo(*count), Instant::Now, now)?]
+                let lower = Instant::MonthsAgo(*count).to_time(now)?;
+                let upper = Instant::Now.to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: if *count == 1 {
+                        "Over 1 month".to_string()
+                    } else {
+                        format!("Over {} months", *count)
+                    },
+                }]
             }
             Interval::LastNYears(count) => {
-                vec![to_intv(Instant::YearsAgo(*count), Instant::Now, now)?]
+                let lower = Instant::YearsAgo(*count).to_time(now)?;
+                let upper = Instant::Now.to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: if *count == 1 {
+                        "Over 1 year".to_string()
+                    } else {
+                        format!("Over {} years", *count)
+                    },
+                }]
             }
             Interval::YearAgo(count) => {
-                vec![to_intv(
-                    Instant::StartYearsAgo(*count),
-                    Instant::StartYearsAgo(*count - 1), //  not included
-                    now,
-                )?]
+                let lower = Instant::StartYearsAgo(*count).to_time(now)?;
+                let upper = Instant::StartYearsAgo(*count - 1).to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: format!("{}", lower.year()),
+                }]
             }
             Interval::MonthAgo(count) => {
-                vec![to_intv(
-                    Instant::StartMonthsAgo(*count),
-                    Instant::StartMonthsAgo(*count - 1), //  not included
-                    now,
-                )?]
+                let lower = Instant::StartMonthsAgo(*count).to_time(now)?;
+                let upper = Instant::StartMonthsAgo(*count - 1).to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: format!("{}-{}", lower.year(), lower.month()),
+                }]
             }
             Interval::SpecificYear(year) => {
-                vec![to_intv(
-                    Instant::StartYear(*year),
-                    Instant::StartYear(*year + 1), //  not included
-                    now,
-                )?]
+                let lower = Instant::StartYear(*year).to_time(now)?;
+                let upper = Instant::StartYear(*year + 1).to_time(now)?;
+                vec![TimeInterval {
+                    intv: BoundedInterval::lcro(lower, upper),
+                    descr: format!("{}", lower.year()),
+                }]
             }
             Interval::Yearly { begin, end } => {
                 let mut result = Vec::new();
                 let mut year = begin.to_time(now)?.year() as u16;
                 let end_year = end.to_time(now)?.year() as u16;
                 while year <= end_year {
-                    result.push(to_intv(
-                        Instant::StartYear(year),
-                        Instant::StartYear(year + 1), //  not included
-                        now,
-                    )?);
+                    let lower = Instant::StartYear(year).to_time(now)?;
+                    let upper = Instant::StartYear(year + 1).to_time(now)?;
+                    result.push(TimeInterval {
+                        intv: BoundedInterval::lcro(lower, upper),
+                        descr: format!("{}", year),
+                    });
                     year += 1;
                 }
                 result
@@ -186,9 +294,14 @@ impl Interval {
                         current + chrono::Months::new(1),
                         &Local,
                     )?;
-                    result.push(TimeInterval::lcro(
-                        current, next_start, //  not included
-                    ));
+                    result.push(TimeInterval {
+                        intv: BoundedInterval::lcro(current, next_start),
+                        descr: format!(
+                            "{}-{}",
+                            current.year(),
+                            current.month()
+                        ),
+                    });
                     current = next_start;
                 }
                 result
@@ -278,7 +391,7 @@ mod test {
         Ok(intv
             .to_ranges(now)?
             .iter()
-            .map(|intv| format!("{}", intv))
+            .map(|intv| format!("{}", intv.intv))
             .collect::<Vec<String>>())
     }
 

@@ -1,3 +1,4 @@
+use crate::accounts::{AccountId, Account};
 use crate::commodities::CommodityId;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
@@ -228,11 +229,13 @@ pub struct Networth<'a> {
 
 impl<'a> Networth<'a> {
     /// Cumulate all operations, for all accounts, to get the current total.
-    pub fn new(
+    pub fn new<F : FnMut(&(AccountId, &Account)) -> bool>(
         repo: &'a Repository,
         settings: Settings,
         now: DateTime<Local>,
-    ) -> Result<Self> {
+        account_filter: F,
+    ) -> Result<Self>
+    {
         let intervals = settings
             .intervals
             .iter()
@@ -255,9 +258,7 @@ impl<'a> Networth<'a> {
         };
 
         repo.iter_accounts()
-            .filter(move |(_, acc)| {
-                repo.account_kinds.get(acc.kind).unwrap().is_networth
-            })
+            .filter(account_filter)
             .for_each(|(acc_id, acc)| {
                 let key = Key::Account(acc);
                 let newcol = |_: &Key| NetworthRow::new(col_count);
@@ -290,7 +291,7 @@ impl<'a> Networth<'a> {
                 //  place.
                 acc.iter_splits(acc_id).for_each(|s| {
                     for (idx, intv) in result.intervals.iter().enumerate() {
-                        if intv.contains(&s.post_ts) {
+                        if intv.intv.contains(&s.post_ts) {
                             row.0[idx].value.apply(&s.operation);
                         }
                     }
@@ -301,7 +302,7 @@ impl<'a> Networth<'a> {
                         &mut market,
                         // At end of interval (but this is open, so is not
                         // full accurate).
-                        &result.intervals[idx].upper(),
+                        &result.intervals[idx].intv.upper(),
                     );
                     result.total.0[idx] += v;
                 }

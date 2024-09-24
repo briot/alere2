@@ -213,6 +213,9 @@ impl Exporter for Hledger {
                             .collect::<Vec<_>>(),
                     },
                     now,
+                    |(_acc_id, acc)| {
+                        repo.account_kinds.get(acc.kind).unwrap().is_networth
+                    },
                 )?;
                 networth.tree.traverse(
                     |node| {
@@ -221,7 +224,8 @@ impl Exporter for Hledger {
                         {
                             if let Key::Account(acc) = node.data.key {
                                 buf.write_all(
-                                    ts.upper()
+                                    ts.intv
+                                        .upper()
                                         .date_naive()
                                         .to_string()
                                         .as_bytes(),

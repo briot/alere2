@@ -74,7 +74,7 @@ impl Stats {
         now: DateTime<Local>,
     ) -> Result<Self> {
         let ts_range = settings.over.to_ranges(now)?;
-        let ts_range = ts_range[0].clone();
+        let ts_range = ts_range[0].intv.clone();
         let mut stats = Stats::default();
         let mut start_prices = repo.market_prices(settings.commodity);
         let mut end_prices = repo.market_prices(settings.commodity);

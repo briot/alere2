@@ -1,7 +1,7 @@
 use crate::errors::AlrError;
+use crate::intervals::BoundedInterval;
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
-use intervals::LCRO;
 
 /// Specifies an instant in time, that is relative to some "now".
 /// Such a specification can be stored in configuration files, for instance
@@ -98,7 +98,7 @@ impl Instant {
 }
 
 /// A range of time [start; end[ not including the end
-pub type TimeInterval = LCRO<DateTime<Local>>;
+pub type TimeInterval = BoundedInterval<DateTime<Local>>;
 
 fn to_intv(
     begin: Instant,
@@ -107,8 +107,7 @@ fn to_intv(
 ) -> Result<TimeInterval> {
     let s = begin.to_time(now)?;
     let e = end.to_time(now)?;
-    TimeInterval::lcro(s, e)
-        .map_err(|err| AlrError::Str(format!("Error {:?}", err)).into())
+    Ok(TimeInterval::lcro(s, e))
 }
 
 /// A high-level description of time ranges
@@ -187,14 +186,9 @@ impl Interval {
                         current + chrono::Months::new(1),
                         &Local,
                     )?;
-                    result.push(
-                        TimeInterval::lcro(
-                            current, next_start, //  not included
-                        )
-                        .map_err(|err| {
-                            AlrError::Str(format!("Error {:?}", err))
-                        })?,
-                    );
+                    result.push(TimeInterval::lcro(
+                        current, next_start, //  not included
+                    ));
                     current = next_start;
                 }
                 result

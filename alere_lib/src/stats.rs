@@ -74,7 +74,7 @@ impl Stats {
         now: DateTime<Local>,
     ) -> Result<Self> {
         let ts_range = settings.over.to_ranges(now)?;
-        let ts_range = ts_range[0];
+        let ts_range = ts_range[0].clone();
         let mut stats = Stats::default();
         let mut start_prices = repo.market_prices(settings.commodity);
         let mut end_prices = repo.market_prices(settings.commodity);
@@ -85,10 +85,10 @@ impl Stats {
             let mut cumul_end = MultiValue::default();
 
             acc.iter_splits(acc_id).for_each(|s| {
-                if s.post_ts < ts_range.left.0 {
+                if ts_range.strictly_right_of(&s.post_ts) {
                     cumul_start.apply(&s.operation);
                 }
-                if s.post_ts < ts_range.right.0 {
+                if !ts_range.strictly_left_of(&s.post_ts) {
                     cumul_end.apply(&s.operation);
                 }
             });
@@ -116,26 +116,28 @@ impl Stats {
         });
 
         stats.start.mkt_all_income = start_prices
-            .convert_multi_value(&stats.start.all_income, &ts_range.left.0);
+            .convert_multi_value(&stats.start.all_income, &ts_range.lower());
         stats.start.mkt_all_expense = start_prices
-            .convert_multi_value(&stats.start.all_expense, &ts_range.left.0);
+            .convert_multi_value(&stats.start.all_expense, &ts_range.lower());
         stats.start.mkt_networth = start_prices
-            .convert_multi_value(&stats.start.networth, &ts_range.left.0);
-        stats.start.mkt_passive_income = start_prices
-            .convert_multi_value(&stats.start.passive_income, &ts_range.left.0);
+            .convert_multi_value(&stats.start.networth, &ts_range.lower());
+        stats.start.mkt_passive_income = start_prices.convert_multi_value(
+            &stats.start.passive_income,
+            &ts_range.lower(),
+        );
         stats.start.mkt_unrealized = start_prices
-            .convert_multi_value(&stats.start.unrealized, &ts_range.left.0);
+            .convert_multi_value(&stats.start.unrealized, &ts_range.lower());
 
         stats.end.mkt_all_income = end_prices
-            .convert_multi_value(&stats.end.all_income, &ts_range.right.0);
+            .convert_multi_value(&stats.end.all_income, &ts_range.upper());
         stats.end.mkt_all_expense = end_prices
-            .convert_multi_value(&stats.end.all_expense, &ts_range.right.0);
+            .convert_multi_value(&stats.end.all_expense, &ts_range.upper());
         stats.end.mkt_networth = end_prices
-            .convert_multi_value(&stats.end.networth, &ts_range.right.0);
+            .convert_multi_value(&stats.end.networth, &ts_range.upper());
         stats.end.mkt_passive_income = end_prices
-            .convert_multi_value(&stats.end.passive_income, &ts_range.right.0);
+            .convert_multi_value(&stats.end.passive_income, &ts_range.upper());
         stats.end.mkt_unrealized = end_prices
-            .convert_multi_value(&stats.end.unrealized, &ts_range.right.0);
+            .convert_multi_value(&stats.end.unrealized, &ts_range.upper());
 
         Ok(stats)
     }

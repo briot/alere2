@@ -18,7 +18,7 @@ use std::collections::HashMap;
 pub struct Repository {
     institutions: HashMap<InstitutionId, Institution>,
     accounts: AccountCollection,
-    pub(crate) account_kinds: AccountKindCollection,
+    pub account_kinds: AccountKindCollection,
     pub commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,

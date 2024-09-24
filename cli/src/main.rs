@@ -4,6 +4,7 @@ pub mod tables;
 
 use crate::{networth_view::networth_view, stats_view::stats_view};
 use alere_lib::{
+    account_categories::AccountCategory,
     accounts::AccountNameDepth,
     formatters::{Formatter, SymbolQuote},
     hledger::Hledger,
@@ -77,6 +78,9 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 ],
             },
             now,
+            |(_acc_id, acc)| {
+                repo.account_kinds.get(acc.kind).unwrap().is_networth
+            },
         )?,
         crate::networth_view::Settings {
             column_market: true,
@@ -95,6 +99,52 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
         },
     );
     println!("{}", output.unwrap());
+
+    let income_expenses = networth_view(
+        &repo,
+        Networth::new(
+            &repo,
+            alere_lib::networth::Settings {
+                hide_zero: true,
+                hide_all_same: false,
+                group_by: GroupBy::ParentAccount,
+                subtotals: true,
+                commodity: repo.commodities.find("Euro"),
+                elide_boring_accounts: true,
+                intervals: vec![
+                    Interval::Yearly {
+                        begin: Instant::YearsAgo(2),
+                        end: Instant::YearsAgo(1),
+                    },
+                    Interval::LastNYears(1),
+                ],
+            },
+            now,
+            |(_acc_id, acc)| {
+                matches!(
+                    repo.account_kinds.get(acc.kind).unwrap().category,
+                    AccountCategory::EXPENSE
+                    | AccountCategory::INCOME
+                )
+            },
+        )?,
+        crate::networth_view::Settings {
+            column_market: true,
+            column_value: false,
+            column_delta: false,
+            column_delta_to_last: false,
+            column_price: false,
+            column_market_delta: false,
+            column_market_delta_to_last: false,
+            column_percent: false,
+            account_names: AccountNameDepth(1),
+            table: crate::tables::Settings {
+                colsep: "│".to_string(),
+                indent_size: 1,
+            },
+        },
+    );
+    println!("{}", income_expenses.unwrap());
 
     let output = stats_view(
         &repo,

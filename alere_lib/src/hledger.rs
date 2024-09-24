@@ -221,8 +221,7 @@ impl Exporter for Hledger {
                         {
                             if let Key::Account(acc) = node.data.key {
                                 buf.write_all(
-                                    ts.right
-                                        .0
+                                    ts.upper()
                                         .date_naive()
                                         .to_string()
                                         .as_bytes(),

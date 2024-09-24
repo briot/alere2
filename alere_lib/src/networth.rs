@@ -290,7 +290,7 @@ impl<'a> Networth<'a> {
                 //  place.
                 acc.iter_splits(acc_id).for_each(|s| {
                     for (idx, intv) in result.intervals.iter().enumerate() {
-                        if intv.contains(s.post_ts) {
+                        if intv.contains(&s.post_ts) {
                             row.0[idx].value.apply(&s.operation);
                         }
                     }
@@ -301,7 +301,7 @@ impl<'a> Networth<'a> {
                         &mut market,
                         // At end of interval (but this is open, so is not
                         // full accurate).
-                        &result.intervals[idx].right.0,
+                        &result.intervals[idx].upper(),
                     );
                     result.total.0[idx] += v;
                 }

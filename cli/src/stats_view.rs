@@ -8,64 +8,40 @@ pub fn stats_view(
     stats: Stats,
     _settings: Settings,
 ) -> String {
-    let period_mkt_income =  // Sign is negative, so negate the diff
-        &stats.start.mkt_all_income - &stats.end.mkt_all_income;
-    let period_income =  // Sign is negative, so negate the diff
-        &stats.start.all_income - &stats.end.all_income;
-    let period_mkt_passive_income =
-        &stats.start.mkt_passive_income - &stats.end.mkt_passive_income;
-    let period_mkt_unrealized =
-        &stats.start.mkt_unrealized - &stats.end.mkt_unrealized;
-    let period_unrealized = &stats.start.unrealized - &stats.end.unrealized;
-    let period_mkt_expense =
-        &stats.end.mkt_all_expense - &stats.start.mkt_all_expense;
-    let period_expense = &stats.end.all_expense - &stats.start.all_expense;
-    let mkt_cashflow = &period_mkt_income - &period_mkt_expense;
+    let abs_income = -&stats.mkt_income;
+    let abs_passive_income = -&stats.mkt_passive_income;
+    let neg_expense = -&stats.mkt_expense;
+    let mkt_cashflow = &abs_income + &neg_expense;
 
     format!(
         "
 Networth:               {} to {}
-Income:                 {} ({} to {})
-Passive income:            {}
-Expenses:               {} ({} to {})
+Income:                 {} = passive {} + ...
+Expenses:               {}
 Cashflow:               {}
-Unrealized:             {}
-Computed delta:         {} (networth delta {})
+Unrealized:             + {}
 Computed Market delta:  {} (networth delta {})
 Savings Rate:           {:.1?}%
 Financial Independence: {:.1?}%
 Passive Income:         {:.1?}%
 ",
-        repo.display_multi_value(&stats.start.mkt_networth),
-        repo.display_multi_value(&stats.end.mkt_networth),
-        repo.display_multi_value(&period_mkt_income),
-        repo.display_multi_value(&stats.start.mkt_all_income),
-        repo.display_multi_value(&stats.end.mkt_all_income),
-        repo.display_multi_value(&period_mkt_passive_income),
-        repo.display_multi_value(&period_mkt_expense),
-        repo.display_multi_value(&stats.start.mkt_all_expense),
-        repo.display_multi_value(&stats.end.mkt_all_expense),
+        repo.display_multi_value(&stats.mkt_start_networth),
+        repo.display_multi_value(&stats.mkt_end_networth),
+        repo.display_multi_value(&abs_income),
+        repo.display_multi_value(&abs_passive_income),
+        repo.display_multi_value(&neg_expense),
         repo.display_multi_value(&mkt_cashflow),
-        repo.display_multi_value(&period_mkt_unrealized),
+        repo.display_multi_value(&stats.mkt_unrealized),
+        repo.display_multi_value(&(&mkt_cashflow + &stats.mkt_unrealized)),
         repo.display_multi_value(
-            &(&period_income - &period_expense + &period_unrealized)
+            &(&stats.mkt_end_networth - &stats.mkt_start_networth)
         ),
-        repo.display_multi_value(
-            &(&stats.end.networth - &stats.start.networth)
-        ),
-        repo.display_multi_value(
-            &(&period_mkt_income - &period_mkt_expense
-                + &period_mkt_unrealized)
-        ),
-        repo.display_multi_value(
-            &(&stats.end.mkt_networth - &stats.start.mkt_networth)
-        ),
-        (&mkt_cashflow / &period_mkt_income).map(|p| p * Decimal::ONE_HUNDRED),
-        (&(&period_mkt_passive_income + &period_mkt_unrealized)
-            / &period_mkt_expense)
+        (&mkt_cashflow / &abs_income).map(|p| p * Decimal::ONE_HUNDRED),
+        (&(&abs_passive_income + &stats.mkt_unrealized)
+            / &stats.mkt_expense)
             .map(|p| p * Decimal::ONE_HUNDRED),
-        (&(&period_mkt_passive_income + &period_mkt_unrealized)
-            / &period_mkt_income)
+        (&(&abs_passive_income + &stats.mkt_unrealized)
+            / &abs_income)
             .map(|p| p * Decimal::ONE_HUNDRED),
     )
 }

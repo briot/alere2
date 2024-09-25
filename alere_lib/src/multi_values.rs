@@ -362,6 +362,12 @@ impl core::ops::AddAssign<&Value> for MultiValue {
     }
 }
 
+impl core::ops::AddAssign<Value> for MultiValue {
+    fn add_assign(&mut self, rhs: Value) {
+        *self += MultiValue(InnerValue::One(rhs));
+    }
+}
+
 impl core::ops::AddAssign<&MultiValue> for MultiValue {
     fn add_assign(&mut self, rhs: &MultiValue) {
         assert!(self.is_normalized());

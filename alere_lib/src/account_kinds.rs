@@ -13,6 +13,13 @@ impl AccountKindCollection {
     pub fn get(&self, id: AccountKindId) -> Option<&AccountKind> {
         self.0.get(id.0 as usize - 1)
     }
+
+    pub fn lookup(&self, name: &str) -> Option<AccountKindId> {
+        self.0.iter()
+           .enumerate()
+           .find(|(_, k)| k.name == name)
+           .map(|(idx, _)| AccountKindId(idx as u32 + 1))
+    }
 }
 
 impl Default for AccountKindCollection {

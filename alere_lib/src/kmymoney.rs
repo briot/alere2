@@ -525,6 +525,7 @@ impl KmyMoneyImporter {
     /// Example of multi-currency transaction:
     ///   kmmTransactions:
     ///   *  id=1   currencyId=USD
+    ///
     ///   kmmSplits:
     ///   *  transactionId=1  account=brokerage(currency=EUR)
     ///      value=-1592.12 (expressed in kmmTransactions.currencyId USD)
@@ -604,6 +605,8 @@ impl KmyMoneyImporter {
         conn: &mut SqliteConnection,
         mut tx: HashMap<String, (CommodityId, TransactionRc)>,
     ) -> Result<()> {
+        let mut equity_account: Option<AccountId> = None;
+
         let mut stream =
             query("SELECT * FROM kmmSplits ORDER BY transactionId").fetch(conn);
         while let Some(row) = stream.try_next().await? {
@@ -677,6 +680,34 @@ impl KmyMoneyImporter {
                     Operation::Dividend
                 }
                 (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) => {
+                    // kmymoney doesn't balance those add shares transactions.
+                    // So we create an extra split to make them balanced.
+                    if equity_account.is_none() {
+                        let eacc = Account::new(
+                            "kmymoney_import",
+                            repo.account_kinds.lookup("Equity").unwrap(),
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            false,
+                            None,
+                        );
+                        equity_account = Some(repo.add_account(eacc));
+                    }
+
+                    tx.add_split(
+                        equity_account.unwrap(),
+                        ReconcileKind::New,
+                        post_ts,
+                        Operation::Credit(MultiValue::new(
+                            -shares,
+                            *account_currency_id,
+                        )),
+                    );
+
+                    // The actual AddShares operation
                     Operation::AddShares {
                         qty: Value {
                             amount: shares,

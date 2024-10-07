@@ -106,7 +106,6 @@ impl Exporter for Hledger {
                     }
                     Operation::AddShares { qty } => {
                         buf.write_all(repo.display_value(qty).as_bytes())?;
-                        buf.write_all(b" @@ 0  ; add shares")?;
                     }
                     Operation::Reinvest { shares, amount } => {
                         buf.write_all(

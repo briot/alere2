@@ -74,7 +74,9 @@ impl Transaction {
                 Operation::Credit(value) => {
                     total += value;
                 }
-                Operation::AddShares { .. } => {}
+                Operation::AddShares { qty } => {
+                    total += qty;
+                }
                 Operation::BuyAmount { amount, .. } => {
                     total += amount;
                 }

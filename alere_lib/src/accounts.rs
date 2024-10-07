@@ -175,8 +175,7 @@ impl Account {
         &self,
         acc_id: AccountId,
     ) -> impl Iterator<Item = &Split> {
-        self.transactions
-            .iter()
+        self.iter_transactions()
             .flat_map(|tx| tx.iter_splits())
             .filter(move |s| s.account == acc_id)
     }

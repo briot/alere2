@@ -50,6 +50,7 @@ dependencies = [
  "regex",
  "rust_decimal",
  "rust_decimal_macros",
+ "rust_intervals",
  "serde",
  "serde_json",
  "sqlx",
@@ -1606,6 +1607,13 @@ checksum = "a05bf7103af0797dbce0667c471946b29b9eaea34652eff67324f360fec027de"
 dependencies = [
  "quote",
  "rust_decimal",
+]
+
+[[package]]
+name = "rust_intervals"
+version = "0.1.0"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

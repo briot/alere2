@@ -1,68 +1,59 @@
-//! This create provides operations for mathematical intervals.
-//! Such intervals include all values between two bounds.
-//!
-//! This library supports multiple kinds of intervals.  Let's call E the
-//! set of valid values in the interval,
-//!
-//!  |Interval|Constructor                       |Description
-//!  |--------|----------------------------------|--------------
-//!  | `[A,B]`|[`Interval::new_closed_closed`]   |left-closed, right-closed
-//!  | `[A,B)`|[`Interval::new_closed_open`]     |left-closed, right-open
-//!  | `(A,B)`|[`Interval::new_open_open`]       |left-open, right-open
-//!  | `(A,B]`|[`Interval::new_open_closed`]     |left-open, right-closed
-//!  | `(,B]` |[`Interval::new_unbounded_closed`]|left-unbounded, right-closed
-//!  | `(,B)` |[`Interval::new_unbounded_open`]  |left-unbounded, right-open
-//!  | `[A,)` |[`Interval::new_closed_unbounded`]|left-closed, right-unbounded
-//!  | `(A,)` |[`Interval::new_open_unbounded`]  |left-open, right-unbounded
-//!  | `(,)`  |[`Interval::doubly_unbounded`]    |doubly unbounded
-//!  | `empty`|[`Interval::default()`]           |empty
-//!
-//! Any type can be used for the bounds, though operations on the interval
-//! depends on the traits that the bound type implements.
-//!
-//! Intervals on floats (like any code using float) can be tricky.  For
-//! instance, the two intervals `[1.0, 100.0)` and `[1.0, 100.0 - f32:EPSILON)`
-//! are not considered equivalent, since the machine thinks the two upper
-//! bounds have the same value, but one of them is closed and the other is
-//! open.
-//!
-//! Although this type is mostly intended to be used when T can be ordered,
-//! it is in fact possible to define intervals using any type.  But only a few
-//! functions are then available (like [`Interval::lower()`],
-//! [`Interval::upper()`],...)
-//!
-//! Given two intervals, and assuming T is orderable, we can compute the
-//! following:
-//!
-//! ```text
-//!        [------ A ------]
-//!               [----- B -------]
-//!
-//!        [----------------------]     Convex hull
-//!        [------)                     Difference (A - B)
-//!                        (------]     Difference (B - A)
-//!        [------)        (------]     Symmetric difference (A ^ B)
-//!               [--------]            Intersection (A & B)
-//!                                     Between is empty
-//!        [----------------------]     Union (A | B)
-//! ```
-//!
-//! When the two intervals do not overlap, we can compute:
-//! ```text
-//!      [---A---]   [----B----]
-//!
-//!      [---------------------]    Convex hull
-//!      [-------]                  Difference (A - B)
-//!                  [---------]    Difference (B - A)
-//!      [-------]   [---------]    Symmetric difference (A ^ B)
-//!                                 Intersection (A & B) is empty
-//!              (---)              Between
-//!                                 Union (A | B) is empty, non contiguous
-//! ```
-//!
-
-use chrono::{DateTime, TimeZone};
 use std::cmp::{Ordering, PartialOrd};
+use crate::bounds::Bound;
+use crate::multi_intervals::MultiInterval;
+use crate::nothing_between::NothingBetween;
+
+//extern crate proc_macro;
+//use proc_macro::{TokenStream, TokenTree};
+//
+//#[proc_macro]
+//pub fn intv(input: TokenStream) -> TokenStream {
+//    let mut iter = input.intoiter();
+//    let lower = iter.next().unwrap();
+//    let comma = iter.next().unwrap();
+//    assert!(matches!(comma, TokenTree::Punct(',')));
+//    let upper = iter.next().unwrap();
+//    match iter.next() {
+//        None => Interval::new_closed_open(lower, comma),
+//        TokenTree::Punct(',') => {
+//            let typ = iter.next().unwrap();
+//        }
+//        _ => panic!("Invalid arguments for macro"),
+//    }
+
+//    let mut source = input.to_string();
+//
+//    // If it starts with `- ` then get rid of the extra space
+//    // to_string will put a space between tokens
+//    if source.starts_with("- ") {
+//        source.remove(1);
+//    }
+//
+//    let decimal = if source.contains('e') || source.contains('E') {
+//        match Decimal::from_scientific(&source[..]) {
+//            Ok(d) => d,
+//            Err(e) => panic!("{}", e),
+//        }
+//    } else {
+//        match Decimal::from_str_exact(&source[..]) {
+//            Ok(d) => d,
+//            Err(e) => panic!("{}", e),
+//        }
+//    };
+//
+//    let unpacked = decimal.unpack();
+//    expand(
+//        unpacked.lo,
+//        unpacked.mid,
+//        unpacked.hi,
+//        unpacked.negative,
+//        unpacked.scale,
+//    )
+//        let expanded = quote! {
+//        ::rust_decimal::Decimal::from_parts(#lo, #mid, #hi, #negative, #scale)
+//    };
+//    expanded.into()
+//}
 
 /// An interval of values.
 // ??? Should T be an associated type instead ?
@@ -225,14 +216,14 @@ impl<T: PartialOrd + NothingBetween> Interval<T> {
     /// is empty, since we cannot represent any number from this interval.
     ///
     /// ```
-    ///    use alere_lib::intervals::Interval;
+    ///    use rust_intervals::Interval;
     ///    assert!(Interval::new_open_open(1.0, 1.0 + f32::EPSILON)
     ///        .is_empty());
     /// ```
     ///
     /// But if you implement your own wrapper type as
     /// ```
-    ///     use alere_lib::intervals::NothingBetween;
+    ///     use rust_intervals::NothingBetween;
     ///     #[derive(PartialEq, PartialOrd)]
     ///     struct Real(f32);
     ///     impl NothingBetween for Real {
@@ -315,7 +306,7 @@ impl<T: PartialEq + NothingBetween> Interval<T> {
     /// This returns false for any other kind of interval, even if they
     /// happen to contain a single value.
     /// ```
-    /// use alere_lib::intervals::Interval;
+    /// use rust_intervals::Interval;
     /// assert!(!Interval::new_open_open(0, 2).is_single());
     /// ```
     pub fn is_single(&self) -> bool {
@@ -494,7 +485,7 @@ impl<T: PartialOrd + NothingBetween + Clone> std::ops::BitXor<&Interval<T>>
     type Output = MultiInterval<T>;
 
     fn bitxor(self, rhs: &Interval<T>) -> Self::Output {
-        self.symmetric_difference(&rhs)
+        self.symmetric_difference(rhs)
     }
 }
 
@@ -538,7 +529,7 @@ impl<T: PartialOrd + NothingBetween + Clone> std::ops::BitAnd<&Interval<T>>
     type Output = Interval<T>;
 
     fn bitand(self, rhs: &Interval<T>) -> Self::Output {
-        self.intersection(&rhs)
+        self.intersection(rhs)
     }
 }
 
@@ -644,303 +635,6 @@ impl<T: ::core::fmt::Display + NothingBetween + PartialOrd> ::core::fmt::Display
     }
 }
 
-pub trait NothingBetween {
-    fn nothing_between(&self, other: &Self) -> bool;
-    //  Should return True if no value exists between self and other in this
-    //  type.
-    //  This is only called with self < other.
-}
-
-impl NothingBetween for u8 {
-    fn nothing_between(&self, other: &u8) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for u16 {
-    fn nothing_between(&self, other: &u16) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for u32 {
-    fn nothing_between(&self, other: &u32) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for u64 {
-    fn nothing_between(&self, other: &u64) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for i8 {
-    fn nothing_between(&self, other: &i8) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for i16 {
-    fn nothing_between(&self, other: &i16) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for i32 {
-    fn nothing_between(&self, other: &i32) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for i64 {
-    fn nothing_between(&self, other: &i64) -> bool {
-        other - self <= 1
-    }
-}
-impl NothingBetween for f32 {
-    fn nothing_between(&self, other: &f32) -> bool {
-        // In general, comparing with EPSILON is wrong.  There are however two
-        // cases:
-        // * the user has used V + EPSILON with a large V.  The addition had no
-        //   effect, and this sum is equal to V.
-
-        // Note that this is incorrect for large values of floats, since adding
-        // EPSILON has no effect.
-        self + f32::EPSILON >= *other
-    }
-}
-impl NothingBetween for f64 {
-    fn nothing_between(&self, other: &f64) -> bool {
-        self + f64::EPSILON >= *other
-    }
-}
-impl<T: TimeZone> NothingBetween for DateTime<T> {
-    fn nothing_between(&self, _other: &DateTime<T>) -> bool {
-        false
-    }
-}
-impl NothingBetween for char {
-    fn nothing_between(&self, other: &Self) -> bool {
-        (*other as u32) - (*self as u32) <= 1
-    }
-}
-
-// Blanket implementation so that we can create intervals of references (used in
-// particular to avoid cloning in the implementation of left_of)
-impl<T: NothingBetween> NothingBetween for &T {
-    fn nothing_between(&self, other: &Self) -> bool {
-        (*self).nothing_between(*other)
-    }
-}
-
-/// The result of the difference between two intervals.  This might be a
-/// single interval, or two (in which case the first one is always the
-/// left-most).
-#[derive(PartialEq)]
-pub enum MultiInterval<T: PartialOrd + NothingBetween> {
-    One(Interval<T>),
-    Two(Interval<T>, Interval<T>),
-}
-impl<T: ::core::fmt::Debug + PartialOrd + NothingBetween> ::core::fmt::Debug
-    for MultiInterval<T>
-{
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        match self {
-            MultiInterval::One(i1) => write!(f, "{:?}", *i1)?,
-            MultiInterval::Two(i1, i2) => write!(f, "({:?} + {:?})", i1, i2)?,
-        };
-        Ok(())
-    }
-}
-
-impl<T: PartialOrd + NothingBetween> MultiInterval<T> {
-    fn new_from_two(intv1: Interval<T>, intv2: Interval<T>) -> Self {
-        if intv1.is_empty() {
-            MultiInterval::One(intv2)
-        } else if intv2.is_empty() {
-            MultiInterval::One(intv1)
-        } else {
-            MultiInterval::Two(intv1, intv2)
-        }
-    }
-}
-
-/// One bound of an interval
-/// LeftOf, applied to value, represents a conceptual point halfway between
-/// the value and its predecessor value.
-/// Likewise, RightOf represents a conceptual point halfway between the value
-/// and its successor.
-enum Bound<T> {
-    LeftUnbounded,
-    LeftOf(T),
-    RightOf(T),
-    RightUnbounded,
-}
-
-impl<T: PartialOrd> Bound<T> {
-    /// True if value is to the right of the bound
-    fn left_of(&self, value: &T) -> bool {
-        match self {
-            Bound::LeftUnbounded => true,
-            Bound::LeftOf(point) => *point <= *value,
-            Bound::RightOf(point) => *point < *value,
-            Bound::RightUnbounded => false,
-        }
-    }
-
-    /// True if the value is to the left of the bound
-    fn right_of(&self, value: &T) -> bool {
-        match self {
-            Bound::LeftUnbounded => false,
-            Bound::LeftOf(point) => *value < *point,
-            Bound::RightOf(point) => *value <= *point,
-            Bound::RightUnbounded => true,
-        }
-    }
-}
-
-impl<T: PartialOrd + NothingBetween + Clone> Bound<T> {
-    fn min(&self, right: &Self) -> Self {
-        if self < right {
-            self.clone()
-        } else {
-            right.clone()
-        }
-    }
-
-    fn max(&self, right: &Self) -> Self {
-        if self > right {
-            self.clone()
-        } else {
-            right.clone()
-        }
-    }
-}
-
-impl<T: ::core::fmt::Debug> ::core::fmt::Debug for Bound<T> {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        match self {
-            Bound::LeftUnbounded => write!(f, "-infinity")?,
-            Bound::LeftOf(point) => write!(f, "LeftOf({point:?})")?,
-            Bound::RightOf(point) => write!(f, "RightOf({point:?})")?,
-            Bound::RightUnbounded => write!(f, "+infinity")?,
-        }
-        Ok(())
-    }
-}
-
-impl<T> Bound<T> {
-    /// Return the bound's value (which might be included in the interval
-    /// or not).  This returns None for an unbounded bound.
-    fn value(&self) -> Option<&T> {
-        match self {
-            Bound::LeftUnbounded | Bound::RightUnbounded => None,
-            Bound::LeftOf(p) | Bound::RightOf(p) => Some(p),
-        }
-    }
-
-    /// Converts from `Bound<T>` to `Bound<&T>`
-    fn as_ref(&self) -> Bound<&T> {
-        match self {
-            Bound::LeftUnbounded => Bound::LeftUnbounded,
-            Bound::LeftOf(point) => Bound::LeftOf(&point),
-            Bound::RightOf(point) => Bound::RightOf(&point),
-            Bound::RightUnbounded => Bound::RightUnbounded,
-        }
-    }
-}
-
-impl<T: PartialOrd + NothingBetween> PartialEq<Bound<&T>> for Bound<T> {
-    //  Bound is never equal to an exact value.  Doesn't matter since we only
-    //  compare for strict inequality
-    fn eq(&self, other: &Bound<&T>) -> bool {
-        match (self, other) {
-            (Bound::LeftUnbounded, Bound::LeftUnbounded)
-            | (Bound::RightUnbounded, Bound::RightUnbounded) => true,
-            (Bound::LeftOf(s), Bound::LeftOf(o))
-            | (Bound::RightOf(s), Bound::RightOf(o)) => *s == **o,
-            (Bound::LeftOf(s), Bound::RightOf(o)) => match s.partial_cmp(o) {
-                None | Some(Ordering::Less | Ordering::Equal) => false,
-                Some(Ordering::Greater) => (*o).nothing_between(s),
-            },
-            (Bound::RightOf(s), Bound::LeftOf(o)) => match s.partial_cmp(o) {
-                None | Some(Ordering::Equal | Ordering::Greater) => false,
-                Some(Ordering::Less) => s.nothing_between(o),
-            },
-            (Bound::LeftUnbounded, _)
-            | (_, Bound::LeftUnbounded)
-            | (_, Bound::RightUnbounded)
-            | (Bound::RightUnbounded, _) => false,
-        }
-    }
-}
-
-impl<T: PartialOrd + NothingBetween> PartialEq for Bound<T> {
-    //  Bound is never equal to an exact value.  Doesn't matter since we only
-    //  compare for strict inequality
-    fn eq(&self, other: &Bound<T>) -> bool {
-        self.eq(&other.as_ref())
-    }
-}
-
-impl<T: PartialOrd + NothingBetween> PartialOrd for Bound<T> {
-    fn partial_cmp(&self, other: &Bound<T>) -> Option<Ordering> {
-        self.partial_cmp(&other.as_ref())
-    }
-}
-
-impl<T: PartialOrd + NothingBetween> PartialOrd<Bound<&T>> for Bound<T> {
-    /// Two bounds (either lower and upper of same interval, or possibly
-    /// lowers from two intervals) might be equivalent if there is nothing
-    /// between them.
-    /// For instance, for f32:
-    ///     RightOf(1.0) is equivalent to LeftOf(1.0 + EPSILON)
-    ///     since there is nothing between 1.0 and 1.0 + EPSILON
-    /// (this would not be true when talking about mathematical reals for
-    /// instance).
-    /// This function returns Equal if there is nothing between the two
-    /// bounds.
-    fn partial_cmp(&self, other: &Bound<&T>) -> Option<Ordering> {
-        match (self, other) {
-            (Bound::LeftUnbounded, Bound::LeftUnbounded)
-            | (Bound::RightUnbounded, Bound::RightUnbounded) => {
-                Some(Ordering::Equal)
-            }
-            (Bound::LeftOf(s), Bound::LeftOf(o))
-            | (Bound::RightOf(s), Bound::RightOf(o)) => s.partial_cmp(*o),
-            (Bound::LeftOf(s), Bound::RightOf(o)) => match s.partial_cmp(o) {
-                None => None,
-                Some(Ordering::Less | Ordering::Equal) => Some(Ordering::Less),
-                Some(Ordering::Greater) => Some(if (*o).nothing_between(s) {
-                    Ordering::Equal
-                } else {
-                    Ordering::Greater
-                }),
-            },
-            (Bound::RightOf(s), Bound::LeftOf(o)) => match s.partial_cmp(*o) {
-                None => None,
-                Some(Ordering::Less) => Some(if s.nothing_between(*o) {
-                    Ordering::Equal
-                } else {
-                    Ordering::Less
-                }),
-                Some(Ordering::Equal | Ordering::Greater) => {
-                    Some(Ordering::Greater)
-                }
-            },
-            (Bound::LeftUnbounded, _) => Some(Ordering::Less),
-            (_, Bound::LeftUnbounded) => Some(Ordering::Greater),
-            (_, Bound::RightUnbounded) => Some(Ordering::Less),
-            (Bound::RightUnbounded, _) => Some(Ordering::Greater),
-        }
-    }
-}
-
-impl<T: Clone> std::clone::Clone for Bound<T> {
-    fn clone(&self) -> Self {
-        match self {
-            Bound::LeftUnbounded => Bound::LeftUnbounded,
-            Bound::RightUnbounded => Bound::RightUnbounded,
-            Bound::LeftOf(point) => Bound::LeftOf(point.clone()),
-            Bound::RightOf(point) => Bound::RightOf(point.clone()),
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -973,14 +667,8 @@ mod test {
     ) {
         assert_ne!(left, right);
         assert_ne!(right, left);
-        assert!(
-            !left.equivalent(right),
-            "{left:?} not equivalent to {right:?}"
-        );
-        assert!(
-            !right.equivalent(left),
-            "{right:?} not equivalent to {left:?}"
-        );
+        assert!(!left.equivalent(right));
+        assert!(!right.equivalent(left));
     }
 
     #[test]
@@ -1178,6 +866,56 @@ mod test {
         assert!(!Interval::new_closed_unbounded(5.0).is_empty());
         assert!(!Interval::new_open_unbounded(5.0).is_empty());
         assert!(!Interval::<u32>::doubly_unbounded().is_empty());
+
+        // Test NothingBetween for standard types
+        assert!(Interval::new_closed_open(1_u8, 1).is_empty());
+        assert!(Interval::new_open_open(0_u8, 1).is_empty());
+        assert!(Interval::new_open_open(2_u8, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_u16, 1).is_empty());
+        assert!(Interval::new_open_open(0_u16, 1).is_empty());
+        assert!(Interval::new_open_open(2_u16, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_u32, 1).is_empty());
+        assert!(Interval::new_open_open(0_u32, 1).is_empty());
+        assert!(Interval::new_open_open(2_u32, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_u64, 1).is_empty());
+        assert!(Interval::new_open_open(0_u64, 1).is_empty());
+        assert!(Interval::new_open_open(2_u64, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_i8, 1).is_empty());
+        assert!(Interval::new_open_open(0_i8, 1).is_empty());
+        assert!(Interval::new_open_open(2_i8, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_i16, 1).is_empty());
+        assert!(Interval::new_open_open(0_i16, 1).is_empty());
+        assert!(Interval::new_open_open(2_i16, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_i32, 1).is_empty());
+        assert!(Interval::new_open_open(0_i32, 1).is_empty());
+        assert!(Interval::new_open_open(2_i32, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1_i64, 1).is_empty());
+        assert!(Interval::new_open_open(0_i64, 1).is_empty());
+        assert!(Interval::new_open_open(2_i64, 1).is_empty());
+
+        assert!(Interval::new_closed_open(1.0_f32, 1.0).is_empty());
+        assert!(!Interval::new_open_open(0.0_f32, 1.0).is_empty());
+        assert!(Interval::new_open_open(2.0_f32, 1.0).is_empty());
+
+        assert!(Interval::new_closed_open(1.0_f64, 1.0).is_empty());
+        assert!(!Interval::new_open_open(0.0_f64, 1.0).is_empty());
+        assert!(Interval::new_open_open(2.0_f64, 1.0).is_empty());
+
+        assert!(Interval::new_closed_open('b', 'b').is_empty());
+        assert!(Interval::new_open_open('a', 'b').is_empty());
+        assert!(Interval::new_open_open('c', 'b').is_empty());
+
+        assert!(Interval::new_closed_open(&1_u64, &1).is_empty());
+        assert!(Interval::new_open_open(&0_u64, &1).is_empty());
+        assert!(Interval::new_open_open(&2_u64, &1).is_empty());
+
     }
 
     #[test]
@@ -1207,10 +945,15 @@ mod test {
         let intv2 = Interval::new_closed_closed(1, 3);
         let intv4 = Interval::new_open_closed(0, 3);
         let intv5 = Interval::new_open_open(0, 4);
+        let intv6 = Interval::new_open_open(-1, 3);
+        let intv7 = Interval::new_closed_closed(1, 5);
         assert_equivalent(&intv1, &intv1);
         assert_equivalent(&intv1, &intv2);
         assert_equivalent(&intv1, &intv4);
         assert_equivalent(&intv1, &intv5);
+        assert_equivalent(&intv5, &intv2);
+        assert_not_equivalent(&intv1, &intv7);
+        assert_not_equivalent(&intv5, &intv6);
 
         let intv3 = Interval::new_closed_closed(1, 4);
         assert_not_equivalent(&intv1, &intv3);
@@ -1237,10 +980,16 @@ mod test {
         let u1 = Interval::new_unbounded_open(10);
         let u2 = Interval::new_unbounded_closed(9);
         assert_equivalent(&u1, &u2);
+        assert_not_equivalent(&u1, &intv1);
 
         let u1 = Interval::new_open_unbounded(9);
         let u2 = Interval::new_closed_unbounded(10);
         assert_equivalent(&u1, &u2);
+        assert_not_equivalent(&u1, &intv1);
+
+        let empty = Interval::default();
+        assert_equivalent(&empty, &empty);
+        assert_not_equivalent(&empty, &intv1);
     }
 
     #[test]
@@ -1270,6 +1019,11 @@ mod test {
             ),
             "(LeftOf(1.0),RightOf(4.0))",
         );
+        assert_eq!(format!("{:?}", Interval::<f32>::empty()), "empty");
+        assert_eq!(
+            format!("{:?}", Interval::<f32>::doubly_unbounded()),
+            "(-infinity,+infinity)"
+        );
     }
 
     #[test]
@@ -1286,7 +1040,7 @@ mod test {
 
     #[test]
     fn test_left_of() {
-        let intv1 = Interval::new_closed_open(3, 5); // [3,5)
+        let intv1 = Interval::new_closed_open(3_i8, 5); // [3,5)
         assert!(intv1.strictly_left_of(&6));
         assert!(intv1.strictly_left_of(&5));
         assert!(!intv1.strictly_left_of(&0));
@@ -1313,7 +1067,7 @@ mod test {
         assert!(!intv1.strictly_left_of_interval(&intv2));
         assert!(!intv2.strictly_left_of_interval(&intv1));
 
-        let empty = Interval::<i32>::empty();
+        let empty = Interval::<i8>::empty();
         assert!(empty.strictly_left_of(&1));
         assert!(empty.left_of(&1));
         assert!(empty.strictly_right_of(&1));
@@ -1334,6 +1088,13 @@ mod test {
 
         let intv5 = Interval::new_closed_unbounded(1); // [1,)
         assert!(!intv5.strictly_left_of_interval(&intv1));
+        assert!(!intv5.right_of(&10));
+        assert!(intv5.strictly_right_of(&0));
+        assert!(intv5.right_of(&0));
+
+        let intv7 = Interval::new_unbounded_closed(10_i16);
+        assert!(!intv7.right_of(&0));
+        assert!(!intv7.strictly_right_of(&0));
     }
 
     #[test]
@@ -1364,26 +1125,31 @@ mod test {
         let intv2 = Interval::new_closed_closed(20, 30); // nested
         assert_eq!(intv1.convex_hull(&intv2), intv1);
         assert_eq!(intv2.convex_hull(&intv1), intv1);
+        assert_eq!(intv2.union(&intv1), Some(intv1));
 
         let intv1 = Interval::new_open_open(10, 30);
         let intv2 = Interval::new_open_open(40, 50); // nested
         assert_eq!(intv1.convex_hull(&intv2), Interval::new_open_open(10, 50));
         assert_eq!(intv2.convex_hull(&intv1), Interval::new_open_open(10, 50));
+        assert_eq!(intv2.union(&intv1), None); //  not contiguous
 
         let intv1 = Interval::empty();
         let intv2 = Interval::new_open_open(40, 50); // nested
         assert_eq!(intv1.convex_hull(&intv2), intv2);
         assert_eq!(intv2.convex_hull(&intv1), intv2);
+        assert_eq!(intv2.union(&intv1), Some(intv2));
 
         let intv1 = Interval::new_open_unbounded(10);
         let intv2 = Interval::new_open_open(40, 50); // nested
         assert_eq!(intv1.convex_hull(&intv2), intv1);
         assert_eq!(intv2.convex_hull(&intv1), intv1);
+        assert_eq!(intv2.union(&intv1), Some(intv1));
 
         let intv1 = Interval::new_unbounded_open(10);
         let intv2 = Interval::new_open_open(40, 50); // nested
         assert_eq!(intv1.convex_hull(&intv2), Interval::new_unbounded_open(50));
         assert_eq!(intv2.convex_hull(&intv1), Interval::new_unbounded_open(50));
+        assert_eq!(intv2.union(&intv1), None);
     }
 
     #[test]
@@ -1402,10 +1168,18 @@ mod test {
                 Interval::new_open_closed(30, 50),
             )
         );
+        assert_eq!(
+            format!("{:?}", intv2.difference(&intv1)),
+            "((LeftOf(1),LeftOf(10)) + (RightOf(30),RightOf(50)))"
+        );
 
         let intv3 = Interval::new_closed_closed(1, 5); // disjoint
         assert_eq!(intv1.difference(&intv3), MultiInterval::One(intv1.clone()));
         assert_eq!(intv3.difference(&intv1), MultiInterval::One(intv3.clone()));
+        assert_eq!(
+            format!("{:?}", intv1.difference(&intv3)),
+            "(LeftOf(10),RightOf(30))"
+        );
 
         let intv4 = Interval::new_closed_closed(1, 15); // overlaps left
         assert_eq!(
@@ -1436,23 +1210,30 @@ mod test {
         // compare, although a lot of the functions are not available
         let intv1 = Interval::new_closed_open("abc", "def");
         assert_eq!(intv1.lower(), Some(&"abc"));
-        assert_eq!(intv1.lower_inclusive(), true);
-        assert_eq!(intv1.lower_unbounded(), false);
+        assert!(intv1.lower_inclusive());
+        assert!(!intv1.lower_unbounded());
         assert_eq!(intv1.upper(), Some(&"def"));
-        assert_eq!(intv1.upper_inclusive(), false);
-        assert_eq!(intv1.upper_unbounded(), false);
+        assert!(!intv1.upper_inclusive());
+        assert!(!intv1.upper_unbounded());
 
         let intv2 = Interval::new_closed_unbounded("abc");
         assert_eq!(intv2.lower(), Some(&"abc"));
-        assert_eq!(intv2.lower_inclusive(), true);
-        assert_eq!(intv2.lower_unbounded(), false);
+        assert!(intv2.lower_inclusive());
+        assert!(!intv2.lower_unbounded());
         assert_eq!(intv2.upper(), None);
-        assert_eq!(intv2.upper_inclusive(), false);
-        assert_eq!(intv2.upper_unbounded(), true);
+        assert!(!intv2.upper_inclusive());
+        assert!(intv2.upper_unbounded());
 
         let intv3 =
             Interval::new_closed_open("abc".to_string(), "def".to_string());
         let _intv4 = intv3.as_ref();
+
+        let intv5 = Interval::new_closed_open('a', 'c');
+        assert!(!intv5.is_empty());
+
+        // With references
+        let intv5 = Interval::new_closed_open(&'a', &'c');
+        assert!(!intv5.is_empty());
     }
 
     #[test]
@@ -1476,9 +1257,9 @@ mod test {
 
     #[test]
     fn test_intersection() {
-        let intv1 = Interval::new_closed_closed(10, 30);
-        let intv2 = Interval::new_closed_open(40, 50);
-        let intv3 = Interval::new_open_unbounded(35);
+        let intv1 = Interval::new_closed_closed(10_u8, 30);
+        let intv2 = Interval::new_closed_open(40_u8, 50);
+        let intv3 = Interval::new_open_unbounded(35_u8);
         let empty = Interval::empty();
         assert!(!intv1.intersects(&intv2));
         assert_eq!(intv1.intersection(&intv2), empty.clone());
@@ -1487,6 +1268,16 @@ mod test {
             intv2.intersection(&intv3),
             Interval::new_closed_open(40, 50)
         );
+
+        //  Check the variants of "&"
+        assert_eq!(&intv1 & &intv2, empty.clone());
+        let iv2 = intv2.clone();
+        assert_eq!(&intv1 & iv2, empty.clone());
+        let iv1 = intv1.clone();
+        let iv2 = intv2.clone();
+        assert_eq!(iv1 & &iv2, empty.clone());
+        let iv1 = intv1.clone();
+        assert_eq!(iv1 & iv2, empty.clone());
     }
 
     #[test]

@@ -7,7 +7,6 @@ pub mod formatters;
 pub mod hledger;
 pub mod importers;
 pub mod institutions;
-pub mod intervals;
 pub mod market_prices;
 pub mod multi_values;
 pub mod networth;

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "alere_lib", "cli" ]
+members = [ "alere_lib", "cli" , "rust_intervals"]
 
 [workspace.dependencies]
 anyhow = "1.0.86"

@@ -1,5 +1,5 @@
 use crate::errors::AlrError;
-use crate::intervals::Interval;
+use rust_intervals::Interval;
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
 

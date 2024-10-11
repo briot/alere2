@@ -3,7 +3,7 @@ use crate::commodities::CommodityId;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
 use crate::repositories::Repository;
-use crate::times::{Interval, TimeInterval};
+use crate::times::{Intv, TimeInterval};
 use crate::tree_keys::Key;
 use crate::trees::Tree;
 use crate::utils::is_all_same;
@@ -67,7 +67,9 @@ pub struct Settings {
 
     // What columns to display.  Each column aggregates all transaction within
     // a time interval.
-    pub intervals: Vec<Interval>,
+    pub intervals: Vec<Intv>,
+
+    // ??? Could have max_depth parameter
 }
 
 //--------------------------------------------------------------
@@ -302,7 +304,8 @@ impl<'a> Networth<'a> {
                         &mut market,
                         // At end of interval (but this is open, so is not
                         // full accurate).
-                        &result.intervals[idx].intv.upper(),
+                        &result.intervals[idx].intv.upper()
+                           .expect("bounded interval"),
                     );
                     result.total.0[idx] += v;
                 }

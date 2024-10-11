@@ -3,7 +3,7 @@ use crate::importers::Exporter;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::networth::Networth;
 use crate::repositories::Repository;
-use crate::times::{Instant, Interval};
+use crate::times::{Instant, Intv};
 use crate::tree_keys::Key;
 use anyhow::Result;
 use chrono::Local;
@@ -208,7 +208,7 @@ impl Exporter for Hledger {
                         elide_boring_accounts: false,
                         intervals: instants
                             .iter()
-                            .map(|ts| Interval::UpTo(ts.clone()))
+                            .map(|ts| Intv::UpTo(ts.clone()))
                             .collect::<Vec<_>>(),
                     },
                     now,
@@ -225,6 +225,7 @@ impl Exporter for Hledger {
                                 buf.write_all(
                                     ts.intv
                                         .upper()
+                                        .expect("Bounded interval")
                                         .date_naive()
                                         .to_string()
                                         .as_bytes(),

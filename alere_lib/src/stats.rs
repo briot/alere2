@@ -1,7 +1,7 @@
 use crate::commodities::CommodityId;
-use crate::multi_values::{MultiValue, Operation, Value};
+use crate::multi_values::{MultiValue, Operation};
 use crate::repositories::Repository;
-use crate::times::Interval;
+use crate::times::Intv;
 use anyhow::Result;
 use chrono::{DateTime, Local};
 
@@ -10,7 +10,7 @@ pub struct Settings {
 
     // What columns to display.  Each column aggregates all transaction within
     // a time interval.
-    pub over: Interval,
+    pub over: Intv,
 }
 
 /// Changes in one time range

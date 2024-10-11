@@ -12,7 +12,7 @@ use alere_lib::{
     kmymoney::KmyMoneyImporter,
     networth::{GroupBy, Networth},
     stats::Stats,
-    times::{Instant, Interval},
+    times::{Instant, Intv},
 };
 use anyhow::Result;
 use chrono::Local;
@@ -72,9 +72,9 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 commodity: repo.commodities.find("Euro"),
                 elide_boring_accounts: true,
                 intervals: vec![
-                    Interval::UpTo(Instant::YearsAgo(1)),
-                    Interval::UpTo(Instant::MonthsAgo(1)),
-                    Interval::UpTo(Instant::Now),
+                    Intv::UpTo(Instant::YearsAgo(1)),
+                    Intv::UpTo(Instant::MonthsAgo(1)),
+                    Intv::UpTo(Instant::Now),
                 ],
             },
             now,
@@ -112,11 +112,11 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
                 commodity: repo.commodities.find("Euro"),
                 elide_boring_accounts: true,
                 intervals: vec![
-                    Interval::Yearly {
+                    Intv::Yearly {
                         begin: Instant::YearsAgo(2),
                         end: Instant::YearsAgo(1),
                     },
-                    Interval::LastNYears(1),
+                    Intv::LastNYears(1),
                 ],
             },
             now,
@@ -152,7 +152,7 @@ hledger -f hledger.journal bal --value=end,€  --end=today --tree Asset Liabili
             &repo,
             alere_lib::stats::Settings {
                 commodity: repo.commodities.find("Euro"),
-                over: Interval::LastNYears(1),
+                over: Intv::LastNYears(1),
             },
             now,
         )?,

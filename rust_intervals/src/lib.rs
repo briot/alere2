@@ -65,7 +65,69 @@ mod bounds;
 mod intervals;
 mod nothing_between;
 mod multi_intervals;
+mod tests;
 
 pub use crate::intervals::Interval;
 pub use crate::multi_intervals::MultiInterval;
 pub use crate::nothing_between::NothingBetween;
+
+/// This macro lets you create intervals with a syntax closer to what Postgresql
+/// provides.
+/// There are multiple variants of this macro:
+///
+/// - `interval!(a, b)` and `interval!(a, b, "[)")`:
+///    Creates a closed-open interval `[a,b)`
+/// - `interval!(a, b, "[]")`:
+///    Creates a closed-closed interval `[a,b]`
+/// - `interval!(a, b, "()")`:
+///    Creates an open-open interval `(a,b)`
+/// - `interval!(a, b, "(]")`:
+///    Creates an open-closed interval `(a,b]`
+/// - `interval!(a, "inf")` or `interval!(a, "[inf]")`:
+///    Creates a closed-unbounded interval `[a,)`
+/// - `interval!(a, "(inf")`:
+///    Creates an open-unbounded interval `(a,)`
+/// - `interval!("-inf", b)` or `interval!("-inf", b, ")")`:
+///    Creates an unbounded-open interval `(,b)`
+/// - `interval!("-inf", b, "]")`:
+///    Creates an unbounded-closed interval `(,b]`
+///
+#[macro_export]
+macro_rules! interval {
+    ("empty") => {
+        $crate::Interval::empty()
+    };
+    ($a:expr, "inf") => {
+        $crate::Interval::new_closed_unbounded($a)
+    };
+    ($a:expr, "[inf") => {
+        $crate::Interval::new_closed_unbounded($a)
+    };
+    ($a:expr, "(inf") => {
+        $crate::Interval::new_open_unbounded($a)
+    };
+    ("-inf", $b:expr) => {
+        $crate::Interval::new_unbounded_open($b)
+    };
+    ("-inf", $b:expr, "]") => {
+        $crate::Interval::new_unbounded_closed($b)
+    };
+    ("-inf", $b:expr, ")") => {
+        $crate::Interval::new_unbounded_open($b)
+    };
+    ($a:expr, $b:expr) => {
+        $crate::Interval::new_closed_open($a, $b)
+    };
+    ($a:expr, $b:expr, "[)") => {
+        $crate::Interval::new_closed_open($a, $b)
+    };
+    ($a:expr, $b:expr, "[]") => {
+        $crate::Interval::new_closed_closed($a, $b)
+    };
+    ($a:expr, $b:expr, "(]") => {
+        $crate::Interval::new_open_closed($a, $b)
+    };
+    ($a:expr, $b:expr, "()") => {
+        $crate::Interval::new_open_open($a, $b)
+    };
+}

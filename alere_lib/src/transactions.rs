@@ -289,8 +289,8 @@ mod test {
     use crate::accounts::AccountId;
     use crate::commodities::CommodityId;
     use crate::errors::AlrError;
-    use crate::multi_values::MultiValue;
-    use crate::transactions::{Operation, ReconcileKind, TransactionRc};
+    use crate::multi_values::{MultiValue, Operation};
+    use crate::transactions::{ReconcileKind, TransactionRc};
     use chrono::Local;
     use rust_decimal_macros::dec;
 

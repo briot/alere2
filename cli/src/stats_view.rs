@@ -37,11 +37,9 @@ Passive Income:         {:.1?}%
             &(&stats.mkt_end_networth - &stats.mkt_start_networth)
         ),
         (&mkt_cashflow / &abs_income).map(|p| p * Decimal::ONE_HUNDRED),
-        (&(&abs_passive_income + &stats.mkt_unrealized)
-            / &stats.mkt_expense)
+        (&(&abs_passive_income + &stats.mkt_unrealized) / &stats.mkt_expense)
             .map(|p| p * Decimal::ONE_HUNDRED),
-        (&(&abs_passive_income + &stats.mkt_unrealized)
-            / &abs_income)
+        (&(&abs_passive_income + &stats.mkt_unrealized) / &abs_income)
             .map(|p| p * Decimal::ONE_HUNDRED),
     )
 }

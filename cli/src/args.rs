@@ -33,19 +33,13 @@ pub(crate) fn build_cli() -> Command {
                 .about("Export data to other formats")
                 .subcommand_required(true)
                 .flatten_help(true)
-                .subcommand(Command::new("hledger")
-                    .arg(
+                .subcommand(
+                    Command::new("hledger").arg(
                         arg!(-o --output [FILE] "Name of output file")
-                            .default_value("hledger.journal")
-                    )
+                            .default_value("hledger.journal"),
+                    ),
                 ),
         )
-        .subcommand(
-           Command::new("networth")
-                .about("Show current networth")
-        )
-        .subcommand(
-           Command::new("cashflow")
-                .about("Show cashflow")
-        )
+        .subcommand(Command::new("networth").about("Show current networth"))
+        .subcommand(Command::new("cashflow").about("Show cashflow"))
 }

@@ -482,7 +482,6 @@ impl KmyMoneyImporter {
     ///    we could either store 84/100  (differs by -0.1% of the original)
     ///    or store the reverse 1250/1051=1.189343  as 1.18
     ///       (1 / 1.18 = 0.847457, which differs by 0.8% of the original)
-
     async fn import_prices(
         &mut self,
         repo: &mut Repository,
@@ -535,7 +534,6 @@ impl KmyMoneyImporter {
     ///      value=1592.12 (in kmmTransactions.currencyId USD)
     ///      shares=32     (in STOCK)
     ///      price=48.85   (in USD)
-
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,

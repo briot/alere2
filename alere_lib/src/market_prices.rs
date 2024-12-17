@@ -1,5 +1,5 @@
 use crate::commodities::CommodityId;
-use crate::multi_values::MultiValue;
+use crate::multi_values::{MultiValue, Value};
 use crate::price_sources::PriceSourceId;
 use crate::prices::{Price, PriceCollection};
 use bisection::bisect_right_by;
@@ -54,6 +54,19 @@ impl<'a> MarketPrices<'a> {
             };
         }
         result
+    }
+
+    pub fn convert_value(
+        &mut self,
+        value: &Value,
+        as_of: &DateTime<Local>,
+    ) -> MultiValue {
+        match self.get_price(value.commodity, as_of) {
+            None => MultiValue::new(value.amount, value.commodity),
+            Some(p) => {
+                MultiValue::new(p * value.amount, self.to_commodity.unwrap())
+            }
+        }
     }
 
     /// Return the price for the specified commodity.

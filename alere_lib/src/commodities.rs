@@ -66,7 +66,6 @@ impl CommodityId {
 /// COCA COLA for instance.  Each of them will have its own performance
 /// statistics, depending on when you bought, the fees applied by the
 /// institution, and so on.
-
 pub struct Commodity {
     /// Name as displayed in selection boxes in the GUI.  For instance, it
     /// could be "Euro", "Apple Inc.", ...

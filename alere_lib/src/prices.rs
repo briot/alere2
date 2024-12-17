@@ -11,7 +11,6 @@ pub struct PriceCollection {
 
 impl PriceCollection {
     /// Register a new historical price
-
     pub fn add(
         &mut self,
         origin: CommodityId,
@@ -27,7 +26,6 @@ impl PriceCollection {
 
     /// Pre-process all prices to ensure that prices are sorted in a way that
     /// we can quickly look them up later on.
-
     pub fn postprocess(&mut self) {
         for (_, v) in self.prices.iter_mut() {
             v.sort_by(Price::older_than);

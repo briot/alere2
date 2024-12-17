@@ -1,0 +1,42 @@
+# Install
+#    cargo install --force cargo-make cargo-fuzz
+
+[config]
+default_to_workspace = false
+
+[tasks.default]
+alias = "workflow"
+
+[tasks.workflow]
+dependencies = [ "test-all", "format", "clippy", "doc" ]
+
+[tasks.test-all]
+dependencies = ["test-all-features" ]
+
+[tasks.test-all-features]
+command = "cargo"
+args = ["test", "--all-features"]
+
+[tasks.cov]
+toolchain = "nightly"
+install_crate = "cargo-llvm-cov"
+command = "cargo"
+# Could add  --branch  (superceded by --mcdc)
+# Could add --show-instantiations to show how functions are instantiated
+args = [ "llvm-cov", "test", "--show-missing-lines", "--doctests", "--html", "--all-features", "--color=always", "--mcdc" ]
+
+[tasks.doc]
+command = "cargo"
+args = [ "doc", "-p", "alere_lib" ]
+
+[tasks.fuzz]
+dependencies = [ "fuzz_intv", "fuzz_set" ]
+
+[tasks.clippy]
+command = "cargo"
+args = ["clippy", "--all-features"]
+
+# Find areas in the code that can be modified without impacting any of the tests
+[tasks.mutants]
+command = "cargo"
+args = ["mutants", "--all-features", "--jobs=4"]

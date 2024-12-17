@@ -18,6 +18,9 @@ pub struct Settings {
     pub column_market_delta_to_last: bool,
     pub column_price: bool,
 
+    // ???
+    // pub column_gain: bool,   // unrealized gains
+
     // Whether to show percent of total
     pub column_percent: bool,
 

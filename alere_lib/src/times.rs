@@ -1,7 +1,7 @@
 use crate::errors::AlrError;
-use rust_intervals::Interval;
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
+use rust_intervals::Interval;
 
 /// Specifies an instant in time, that is relative to some "now".
 /// Such a specification can be stored in configuration files, for instance
@@ -384,10 +384,7 @@ mod test {
     use crate::times::Instant;
     use chrono::{DateTime, FixedOffset, Local, TimeZone, Utc};
 
-    fn intv_to_string(
-        intv: Intv,
-        now: DateTime<Local>,
-    ) -> Result<Vec<String>> {
+    fn intv_to_string(intv: Intv, now: DateTime<Local>) -> Result<Vec<String>> {
         Ok(intv
             .to_ranges(now)?
             .iter()

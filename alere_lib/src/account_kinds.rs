@@ -15,10 +15,11 @@ impl AccountKindCollection {
     }
 
     pub fn lookup(&self, name: &str) -> Option<AccountKindId> {
-        self.0.iter()
-           .enumerate()
-           .find(|(_, k)| k.name == name)
-           .map(|(idx, _)| AccountKindId(idx as u32 + 1))
+        self.0
+            .iter()
+            .enumerate()
+            .find(|(_, k)| k.name == name)
+            .map(|(idx, _)| AccountKindId(idx as u32 + 1))
     }
 }
 

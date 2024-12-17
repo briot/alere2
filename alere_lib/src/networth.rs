@@ -1,4 +1,4 @@
-use crate::accounts::{AccountId, Account};
+use crate::accounts::{Account, AccountId};
 use crate::commodities::CommodityId;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
@@ -68,7 +68,6 @@ pub struct Settings {
     // What columns to display.  Each column aggregates all transaction within
     // a time interval.
     pub intervals: Vec<Intv>,
-
     // ??? Could have max_depth parameter
 }
 
@@ -231,13 +230,12 @@ pub struct Networth<'a> {
 
 impl<'a> Networth<'a> {
     /// Cumulate all operations, for all accounts, to get the current total.
-    pub fn new<F : FnMut(&(AccountId, &Account)) -> bool>(
+    pub fn new<F: FnMut(&(AccountId, &Account)) -> bool>(
         repo: &'a Repository,
         settings: Settings,
         now: DateTime<Local>,
         account_filter: F,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let intervals = settings
             .intervals
             .iter()
@@ -259,9 +257,8 @@ impl<'a> Networth<'a> {
             total: NetworthRow::new(col_count),
         };
 
-        repo.iter_accounts()
-            .filter(account_filter)
-            .for_each(|(acc_id, acc)| {
+        repo.iter_accounts().filter(account_filter).for_each(
+            |(acc_id, acc)| {
                 let key = Key::Account(acc);
                 let newcol = |_: &Key| NetworthRow::new(col_count);
                 let row = match &result.settings.group_by {
@@ -304,12 +301,15 @@ impl<'a> Networth<'a> {
                         &mut market,
                         // At end of interval (but this is open, so is not
                         // full accurate).
-                        &result.intervals[idx].intv.upper()
-                           .expect("bounded interval"),
+                        &result.intervals[idx]
+                            .intv
+                            .upper()
+                            .expect("bounded interval"),
                     );
                     result.total.0[idx] += v;
                 }
-            });
+            },
+        );
 
         // Filter out rows.  This needs to be done after we have inserted them
         // all above, including the parents, since the values might not be known

@@ -10,7 +10,7 @@ pub enum Key<'a> {
     AccountKind(Option<&'a AccountKind>),
 }
 
-impl<'a> PartialEq for Key<'a> {
+impl PartialEq for Key<'_> {
     fn eq(&self, right: &Self) -> bool {
         match self {
             Key::Account(la) => match right {
@@ -29,9 +29,9 @@ impl<'a> PartialEq for Key<'a> {
     }
 }
 
-impl<'a> Eq for Key<'a> {}
+impl Eq for Key<'_> {}
 
-impl<'a> Ord for Key<'a> {
+impl Ord for Key<'_> {
     fn cmp(&self, right: &Self) -> std::cmp::Ordering {
         match self {
             Key::Account(ka) => match right {
@@ -68,7 +68,7 @@ impl<'a> Ord for Key<'a> {
     }
 }
 
-impl<'a> PartialOrd for Key<'a> {
+impl PartialOrd for Key<'_> {
     fn partial_cmp(&self, right: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(right))
     }

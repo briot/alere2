@@ -1,9 +1,6 @@
 use anyhow::Result;
 
-///
 /// The data associated with each node
-///
-
 pub struct NodeData<K, T> {
     pub key: K,
     pub data: T,
@@ -27,10 +24,7 @@ impl<K, T> NodeData<K, T> {
     }
 }
 
-///
 /// A tree of data
-///
-
 pub struct Tree<K, T> {
     roots: NodeList<K, T>,
 }
@@ -183,10 +177,7 @@ impl<K: Clone, T: Clone> TreeNode<K, T> {
     }
 }
 
-///
 /// A list of nodes
-///
-
 struct NodeList<K, T>(Vec<TreeNode<K, T>>);
 
 impl<K, T> Default for NodeList<K, T> {

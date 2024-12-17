@@ -22,7 +22,7 @@ futures = { workspace = true }
 log = "0.4"
 rust_decimal = { workspace = true }
 rust_decimal_macros = "1.35"
-rust_intervals = { path = "../rust_intervals", features = [ "chrono" ] }
+rust_intervals = { git = "https://github.com/briot/rust_intervals", rev="248d24080ec0508b9555a6037015bd7615af8766", features = [ "chrono" ] }
 regex = "1"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

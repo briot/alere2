@@ -12,4 +12,7 @@ pub enum AlrError {
     #[cfg(feature = "kmymoney")]
     #[error("{0}")]
     Sqlx(#[from] sqlx::Error),
+
+    #[error("{0}")]
+    ParseError(String),
 }

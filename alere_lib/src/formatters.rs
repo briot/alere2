@@ -37,6 +37,9 @@ pub struct Formatter {
     pub separators: Separators,
     pub comma: char,
     pub zero: &'static str,
+    // ??? support for printing currencies as EUR rather than the symbol
+    // (non-unicode)
+    // ??? support for color
 }
 
 impl Default for Formatter {

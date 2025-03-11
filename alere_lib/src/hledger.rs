@@ -1,10 +1,10 @@
-use crate::accounts::AccountNameDepth;
 use crate::importers::Exporter;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::networth::Networth;
 use crate::repositories::Repository;
 use crate::times::{Instant, Intv};
 use crate::tree_keys::Key;
+use crate::{accounts::AccountNameDepth, formatters::Formatter};
 use anyhow::Result;
 use chrono::Local;
 use itertools::min;
@@ -40,6 +40,7 @@ impl Exporter for Hledger {
         &mut self,
         repo: &Repository,
         export_to: &Path,
+        format: &Formatter,
     ) -> Result<()> {
         let file = File::create(export_to)?;
         let mut buf = BufWriter::new(file);
@@ -47,13 +48,16 @@ impl Exporter for Hledger {
 
         for (com_id, com) in repo.commodities.iter_commodities() {
             buf.write_all(b"commodity ")?;
-            buf.write_all(repo.format.display_symbol(&com.symbol).as_bytes())?;
+            buf.write_all(format.display_symbol(&com.symbol).as_bytes())?;
             buf.write_all(b"\n   format ")?;
             buf.write_all(
-                repo.display_value(&Value {
-                    commodity: com_id,
-                    amount: Decimal::ONE_THOUSAND,
-                })
+                repo.display_value(
+                    &Value {
+                        commodity: com_id,
+                        amount: Decimal::ONE_THOUSAND,
+                    },
+                    format,
+                )
                 .as_bytes(),
             )?;
             buf.write_all(b"\n")?;
@@ -90,30 +94,41 @@ impl Exporter for Hledger {
 
                 match &split.operation {
                     Operation::Credit(mv) => {
-                        buf.write_all(repo.display_multi_value(mv).as_bytes())?;
+                        buf.write_all(
+                            repo.display_multi_value(mv, format).as_bytes(),
+                        )?;
                     }
                     Operation::BuyAmount { qty, amount } => {
-                        buf.write_all(repo.display_value(qty).as_bytes())?;
+                        buf.write_all(
+                            repo.display_value(qty, format).as_bytes(),
+                        )?;
                         buf.write_all(b" @@ ")?;
                         buf.write_all(
-                            repo.display_value(&amount.abs()).as_bytes(),
+                            repo.display_value(&amount.abs(), format)
+                                .as_bytes(),
                         )?;
                     }
                     Operation::BuyPrice { qty, price } => {
-                        buf.write_all(repo.display_value(qty).as_bytes())?;
+                        buf.write_all(
+                            repo.display_value(qty, format).as_bytes(),
+                        )?;
                         buf.write_all(b" @ ")?;
-                        buf.write_all(repo.display_value(price).as_bytes())?;
+                        buf.write_all(
+                            repo.display_value(price, format).as_bytes(),
+                        )?;
                     }
                     Operation::AddShares { qty } => {
-                        buf.write_all(repo.display_value(qty).as_bytes())?;
+                        buf.write_all(
+                            repo.display_value(qty, format).as_bytes(),
+                        )?;
                     }
                     Operation::Reinvest { shares, amount } => {
                         buf.write_all(
-                            repo.display_multi_value(shares).as_bytes(),
+                            repo.display_multi_value(shares, format).as_bytes(),
                         )?;
                         buf.write_all(b" @@ ")?;
                         buf.write_all(
-                            repo.display_multi_value(amount).as_bytes(),
+                            repo.display_multi_value(amount, format).as_bytes(),
                         )?;
                         buf.write_all(b"  ; reinvest")?;
                     }
@@ -139,7 +154,8 @@ impl Exporter for Hledger {
                         }
 
                         buf.write_all(
-                            repo.display_multi_value(&-&total).as_bytes(),
+                            repo.display_multi_value(&-&total, format)
+                                .as_bytes(),
                         )?;
                         buf.write_all(b"  @ 0 ;  split\n   ")?;
                         buf.write_all(
@@ -149,7 +165,7 @@ impl Exporter for Hledger {
                         buf.write_all(b"  ")?;
                         total.apply(&split.operation);
                         buf.write_all(
-                            repo.display_multi_value(&total).as_bytes(),
+                            repo.display_multi_value(&total, format).as_bytes(),
                         )?;
                         buf.write_all(b" @ 0 ")?;
                     }
@@ -185,7 +201,7 @@ impl Exporter for Hledger {
                     )?;
                     buf.write_all(b"  0 = ")?;
                     buf.write_all(
-                        repo.display_multi_value(&rec.total).as_bytes(),
+                        repo.display_multi_value(&rec.total, format).as_bytes(),
                     )?;
                     buf.write_all(b"\n\n")?;
                 }
@@ -242,7 +258,7 @@ impl Exporter for Hledger {
                                 buf.write_all(
                                     node.data
                                         .data
-                                        .display_value(repo, colidx)
+                                        .display_value(repo, colidx, format)
                                         .as_bytes(),
                                 )?;
                                 buf.write_all(b"\n\n")?;
@@ -265,7 +281,7 @@ impl Exporter for Hledger {
                 buf.write_all(p.timestamp.date_naive().to_string().as_bytes())?;
                 buf.write_all(b" ")?;
                 buf.write_all(
-                    repo.format
+                    format
                         .display_symbol(
                             &repo.commodities.get(*from).unwrap().symbol,
                         )
@@ -274,7 +290,7 @@ impl Exporter for Hledger {
                 buf.write_all(b" ")?;
                 buf.write_all(p.price.to_string().as_bytes())?;
                 buf.write_all(
-                    repo.format
+                    format
                         .display_symbol(
                             &repo.commodities.get(*to).unwrap().symbol,
                         )

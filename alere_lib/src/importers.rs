@@ -1,4 +1,4 @@
-use crate::repositories::Repository;
+use crate::{formatters::Formatter, repositories::Repository};
 use anyhow::Result;
 use std::future::Future;
 use std::path::Path;
@@ -19,5 +19,6 @@ pub trait Exporter {
         &mut self,
         repo: &Repository,
         export_to: &Path,
+        format: &Formatter,
     ) -> Result<()>;
 }

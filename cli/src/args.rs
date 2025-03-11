@@ -1,4 +1,5 @@
 use clap::{arg, Arg, Command};
+use crate::global_settings::GlobalSettings;
 
 pub(crate) fn build_cli() -> Command {
     Command::new("alere")
@@ -8,11 +9,7 @@ pub(crate) fn build_cli() -> Command {
         .subcommand_precedence_over_arg(true) // --x val1 val2 subcommand
         .flatten_help(true) // show help for all subcommands
         .arg_required_else_help(true) // show full help if nothing given
-        .args([
-            arg!(--currency [CURRENCY] "Show market values with this currency")
-                .global(true),
-            //.action(ArgAction::SetTrue),
-        ])
+        .args(GlobalSettings::cli())
         .subcommand(Command::new("stats").about("Show statistics"))
         .subcommand(
             // Use    eval "$(alere completions zsh)"
@@ -40,6 +37,10 @@ pub(crate) fn build_cli() -> Command {
                     ),
                 ),
         )
-        .subcommand(Command::new("networth").about("Show current networth"))
+        .subcommand(
+            Command::new("networth")
+                .about("Show current networth")
+                .args(crate::networth_view::Settings::cli()),
+        )
         .subcommand(Command::new("cashflow").about("Show cashflow"))
 }

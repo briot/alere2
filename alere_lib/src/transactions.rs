@@ -61,6 +61,8 @@ pub struct Transaction {
 
     // The splits that make up the transaction.  The sum of these splits must
     // always be balanced.  The transaction owns the splits.
+    // ??? Those splits are sorted for the sake of Operation::Split.  If the
+    // latter had "the new number of shares" we would not need the sorting.
     splits: Vec<Split>,
 }
 

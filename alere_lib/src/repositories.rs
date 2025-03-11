@@ -24,7 +24,6 @@ pub struct Repository {
     price_sources: HashMap<PriceSourceId, PriceSource>,
     pub(crate) prices: PriceCollection,
     pub(crate) transactions: Vec<TransactionRc>,
-    pub format: Formatter,
 }
 
 impl Repository {
@@ -168,13 +167,17 @@ impl Repository {
         }
     }
 
-    pub fn display_multi_value(&self, value: &MultiValue) -> String {
+    pub fn display_multi_value(
+        &self,
+        value: &MultiValue,
+        format: &Formatter,
+    ) -> String {
         let mut into = String::new();
-        value.display(&mut into, &self.format, &self.commodities);
+        value.display(&mut into, format, &self.commodities);
         into
     }
-    pub fn display_value(&self, value: &Value) -> String {
-        self.format.display_from_commodity(
+    pub fn display_value(&self, value: &Value, format: &Formatter) -> String {
+        format.display_from_commodity(
             value.amount,
             self.commodities.get(value.commodity).unwrap(),
         )

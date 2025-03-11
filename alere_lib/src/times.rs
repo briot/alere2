@@ -1,6 +1,7 @@
 use crate::errors::AlrError;
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
+use regex::Regex;
 use rust_intervals::Interval;
 
 /// Specifies an instant in time, that is relative to some "now".
@@ -168,11 +169,96 @@ impl std::fmt::Display for Instant {
                     write!(f, "end of {} years ago", count)?
                 }
             }
-            Instant::StartYear(year) => write!(f, "start of {}", year)?,
-            Instant::EndYear(year) => write!(f, "end of {}", year)?,
+            Instant::StartYear(year) => write!(f, "start of year {}", year)?,
+            Instant::EndYear(year) => write!(f, "end of year {}", year)?,
             Instant::Timestamp(ts) => write!(f, "{}", ts)?,
         }
         Ok(())
+    }
+}
+
+macro_rules! check_regexp {
+    ($s:expr, $re:literal, $typ:tt) => {{
+        let re = Regex::new($re).unwrap();
+        match re.captures($s) {
+            Some(d) => d.get(1).unwrap().as_str().parse::<$typ>().ok(),
+            None => None,
+        }
+    }};
+}
+
+impl ::core::str::FromStr for Instant {
+    type Err = AlrError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "" => Ok(Instant::Epoch),
+            "now" => Ok(Instant::Now),
+            "∞" => Ok(Instant::Armageddon),
+            "yesterday" => Ok(Instant::DaysAgo(1)),
+            "start of yesterday" => Ok(Instant::StartDaysAgo(1)),
+            "end of yesterday" => Ok(Instant::EndDaysAgo(1)),
+            "last month" => Ok(Instant::MonthsAgo(1)),
+            "start of last month" => Ok(Instant::StartMonthsAgo(1)),
+            "end of last month" => Ok(Instant::EndMonthsAgo(1)),
+            "last year" => Ok(Instant::YearsAgo(1)),
+            "start of last year" => Ok(Instant::StartYearsAgo(1)),
+            "end of last year" => Ok(Instant::EndYearsAgo(1)),
+            _ => {
+                if let Some(d) = check_regexp!(s, r"(\d+) days ago", i32) {
+                    return Ok(Instant::DaysAgo(d));
+                }
+                if let Some(d) =
+                    check_regexp!(s, r"start of (\d+) days ago", i32)
+                {
+                    return Ok(Instant::StartDaysAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"end of (\d+) days ago", i32)
+                {
+                    return Ok(Instant::EndDaysAgo(d));
+                }
+                if Regex::new(r"start of (\d{4}-\d{2}-\d{2})")
+                    .unwrap()
+                    .is_match(s)
+                {
+                    return Ok(Instant::StartDay(s.to_string()));
+                }
+                if Regex::new(r"end of (\d{4}-\d{2}-\d{2})")
+                    .unwrap()
+                    .is_match(s)
+                {
+                    return Ok(Instant::EndDay(s.to_string()));
+                }
+                if let Some(d) = check_regexp!(s, r"(\d+) months ago", i32) {
+                    return Ok(Instant::MonthsAgo(d));
+                }
+                if let Some(d) =
+                    check_regexp!(s, r"start of (\d+) months ago", i32)
+                {
+                    return Ok(Instant::StartMonthsAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"(\d+) years ago", i32) {
+                    return Ok(Instant::YearsAgo(d));
+                }
+                if let Some(d) =
+                    check_regexp!(s, r"start of (\d+) years ago", i32)
+                {
+                    return Ok(Instant::StartYearsAgo(d));
+                }
+                if let Some(d) =
+                    check_regexp!(s, r"end of (\d+) years ago", i32)
+                {
+                    return Ok(Instant::EndYearsAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"start of year (\d+)", u16) {
+                    return Ok(Instant::StartYear(d));
+                }
+                if let Some(d) = check_regexp!(s, r"end of year (\d+)", u16) {
+                    return Ok(Instant::EndYear(d));
+                }
+                Ok(Instant::Timestamp(s.to_string()))
+            }
+        }
     }
 }
 

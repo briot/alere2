@@ -96,6 +96,7 @@ enum RowData {
     Headers,
 }
 
+#[derive(Clone)]
 pub struct Settings {
     pub colsep: String,
     pub indent_size: usize,
@@ -119,13 +120,13 @@ pub struct Table<'a, TRow, TCol> {
 impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
     pub fn new(
         columns: Vec<Column<'a, TRow, TCol>>,
-        settings: Settings,
+        settings: &Settings,
     ) -> Self {
         Self {
             rows: Vec::new(),
             columns,
             title: None,
-            settings,
+            settings: settings.clone(),
         }
     }
 
@@ -415,7 +416,8 @@ mod test {
                 .with_width(Width::Auto)
                 .with_truncate(Truncate::Left),
         ];
-        let mut table = Table::new(columns, crate::tables::Settings::default());
+        let mut table =
+            Table::new(columns, &crate::tables::Settings::default());
 
         table.add_row(&["abcdefghijklmnopqrstuvwxyz", "123"], 0);
         table.add_row(&["abcdefghijklmn", "123456789"], 0);

@@ -1,5 +1,6 @@
 use crate::accounts::{Account, AccountId};
 use crate::commodities::CommodityId;
+use crate::formatters::Formatter;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
 use crate::repositories::Repository;
@@ -150,42 +151,64 @@ impl NetworthRow {
         is_all_same(&self.0)
     }
 
-    pub fn display_value(&self, repo: &Repository, idx: usize) -> String {
-        repo.display_multi_value(&self.0[idx].value)
+    pub fn display_value(
+        &self,
+        repo: &Repository,
+        idx: usize,
+        format: &Formatter,
+    ) -> String {
+        repo.display_multi_value(&self.0[idx].value, format)
     }
     pub fn display_market_value(
         &self,
         repo: &Repository,
         idx: usize,
+        format: &Formatter,
     ) -> String {
-        repo.display_multi_value(&self.0[idx].market_value)
+        repo.display_multi_value(&self.0[idx].market_value, format)
     }
-    pub fn display_delta(&self, repo: &Repository, idx: usize) -> String {
-        repo.display_multi_value(&(&self.0[idx + 1] - &self.0[idx]).value)
+    pub fn display_delta(
+        &self,
+        repo: &Repository,
+        idx: usize,
+        format: &Formatter,
+    ) -> String {
+        repo.display_multi_value(
+            &(&self.0[idx + 1] - &self.0[idx]).value,
+            format,
+        )
     }
     pub fn display_delta_to_last(
         &self,
         repo: &Repository,
         idx: usize,
+        format: &Formatter,
     ) -> String {
-        repo.display_multi_value(&(self.0.last().unwrap() - &self.0[idx]).value)
+        repo.display_multi_value(
+            &(self.0.last().unwrap() - &self.0[idx]).value,
+            format,
+        )
     }
     pub fn display_market_delta(
         &self,
         repo: &Repository,
         idx: usize,
+        format: &Formatter,
     ) -> String {
         repo.display_multi_value(
             &(&self.0[idx + 1] - &self.0[idx]).market_value,
+            format,
         )
     }
     pub fn display_market_delta_to_last(
         &self,
         repo: &Repository,
         idx: usize,
+        format: &Formatter,
     ) -> String {
         repo.display_multi_value(
             &(self.0.last().unwrap() - &self.0[idx]).market_value,
+            format,
         )
     }
 

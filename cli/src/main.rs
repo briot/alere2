@@ -1,33 +1,31 @@
 mod args;
+mod global_settings;
 mod networth_view;
 mod stats_view;
 pub mod tables;
 
 use crate::{
-    args::build_cli, networth_view::networth_view, stats_view::stats_view,
+    args::build_cli, global_settings::GlobalSettings,
+    networth_view::networth_view, stats_view::stats_view,
 };
 use alere_lib::{
     account_categories::AccountCategory,
-    accounts::AccountNameDepth,
-    commodities::CommodityId,
     formatters::{Formatter, SymbolQuote},
     hledger::Hledger,
     importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
-    networth::{GroupBy, Networth},
     repositories::Repository,
-    stats::Stats,
-    times::{Instant, Intv},
+    times::Instant,
 };
 use anyhow::Result;
-use chrono::Local;
+use clap::ArgMatches;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 /// Export all transaction to hledger format
 fn export_hledger(repo: &mut Repository, output: &Path) -> Result<()> {
-    repo.format = Formatter {
+    let format = Formatter {
         quote_symbol: SymbolQuote::QuoteSpecial,
         zero: "0",
         //  separators: Separators::None,
@@ -40,7 +38,7 @@ fn export_hledger(repo: &mut Repository, output: &Path) -> Result<()> {
             Instant::Now,
         ]),
     };
-    hledger.export_file(repo, output)?;
+    hledger.export_file(repo, output, &format)?;
     println!(
         "Run
 hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
@@ -51,20 +49,11 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
 }
 
 /// Display stats
-fn stats(repo: &Repository, commodity: Option<CommodityId>) -> Result<()> {
-    let now = Local::now();
+fn stats(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
     let output = stats_view(
         repo,
-        Stats::new(
-            repo,
-            alere_lib::stats::Settings {
-                commodity,
-                over: Intv::LastNYears(1),
-            },
-            now,
-        )?,
-        crate::stats_view::Settings {},
-    );
+        globals,
+    )?;
     println!("{}", output);
     Ok(())
 }
@@ -72,107 +61,37 @@ fn stats(repo: &Repository, commodity: Option<CommodityId>) -> Result<()> {
 /// Show networth
 fn networth(
     repo: &mut Repository,
-    commodity: Option<CommodityId>,
+    globals: &GlobalSettings,
+    args: &ArgMatches,
 ) -> Result<()> {
-    let now = Local::now();
-    repo.format = Formatter::default();
-    let output = networth_view(
-        repo,
-        Networth::new(
-            repo,
-            alere_lib::networth::Settings {
-                hide_zero: true,
-                hide_all_same: false,
-                group_by: GroupBy::ParentAccount,
-                subtotals: true,
-                commodity,
-                elide_boring_accounts: true,
-                intervals: vec![
-                    Intv::UpTo(Instant::YearsAgo(1)),
-                    Intv::UpTo(Instant::MonthsAgo(1)),
-                    Intv::UpTo(Instant::Now),
-                ],
-            },
-            now,
-            |(_acc_id, acc)| {
-                repo.account_kinds.get(acc.kind).unwrap().is_networth
-            },
-        )?,
-        crate::networth_view::Settings {
-            column_market: true,
-            column_value: false,
-            column_delta: false,
-            column_delta_to_last: false,
-            column_price: false,
-            column_market_delta: false,
-            column_market_delta_to_last: false,
-            column_percent: false,
-            account_names: AccountNameDepth(1),
-            table: crate::tables::Settings {
-                colsep: "│".to_string(),
-                indent_size: 1,
-            },
-        },
-    );
-    println!("{}", output.unwrap());
+    let output = networth_view(repo, args, globals, |(_acc_id, acc)| {
+        repo.account_kinds.get(acc.kind).unwrap().is_networth
+    })?;
+    println!("{}", output);
     Ok(())
 }
 
 /// Show income-expenses
 fn cashflow(
     repo: &mut Repository,
-    commodity: Option<CommodityId>,
+    globals: &GlobalSettings,
+    args: &ArgMatches,
 ) -> Result<()> {
-    let now = Local::now();
-    repo.format = Formatter::default();
-    let income_expenses = networth_view(
-        repo,
-        Networth::new(
-            repo,
-            alere_lib::networth::Settings {
-                hide_zero: true,
-                hide_all_same: false,
-                group_by: GroupBy::ParentAccount,
-                subtotals: true,
-                commodity,
-                elide_boring_accounts: true,
-                intervals: vec![
-                    Intv::Yearly {
-                        begin: Instant::YearsAgo(2),
-                        end: Instant::YearsAgo(1),
-                    },
-                    Intv::LastNYears(1),
-                ],
-            },
-            now,
-            |(_acc_id, acc)| {
-                matches!(
-                    repo.account_kinds.get(acc.kind).unwrap().category,
-                    AccountCategory::EXPENSE | AccountCategory::INCOME
-                )
-            },
-        )?,
-        crate::networth_view::Settings {
-            column_market: true,
-            column_value: false,
-            column_delta: false,
-            column_delta_to_last: false,
-            column_price: false,
-            column_market_delta: false,
-            column_market_delta_to_last: false,
-            column_percent: false,
-            account_names: AccountNameDepth(1),
-            table: crate::tables::Settings {
-                colsep: "│".to_string(),
-                indent_size: 1,
-            },
-        },
-    );
+    let income_expenses =
+        networth_view(repo, args, globals, |(_acc_id, acc)| {
+            matches!(
+                repo.account_kinds.get(acc.kind).unwrap().category,
+                AccountCategory::EXPENSE | AccountCategory::INCOME
+            )
+        });
     println!("{}", income_expenses.unwrap());
     Ok(())
 }
 
 fn main() -> Result<()> {
+    let args = build_cli().get_matches();
+    let mut settings = GlobalSettings::new(&args);
+
     let progress = ProgressBar::new(1) //  we do not know the length
         .with_style(
             ProgressStyle::with_template(
@@ -192,10 +111,8 @@ fn main() -> Result<()> {
     ))?;
     progress.finish_and_clear();
 
-    let args = build_cli().get_matches();
-    let commodity = args
-        .get_one::<String>("currency")
-        .and_then(|m| repo.commodities.find(m));
+    settings.postprocess(&repo);
+
     match args.subcommand() {
         Some(("completions", sub_matches)) => {
             if let Some(shell) =
@@ -216,14 +133,14 @@ fn main() -> Result<()> {
             }
             _ => unreachable!(),
         },
-        Some(("networth", _)) => {
-            networth(&mut repo, commodity)?;
+        Some(("networth", args)) => {
+            networth(&mut repo, &settings, args)?;
         }
-        Some(("cashflow", _)) => {
-            cashflow(&mut repo, commodity)?;
+        Some(("cashflow", args)) => {
+            cashflow(&mut repo, &settings, args)?;
         }
         Some(("stats", _)) => {
-            stats(&repo, commodity)?;
+            stats(&repo, &settings)?;
         }
         _ => unreachable!(),
     }

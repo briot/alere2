@@ -17,21 +17,21 @@ use itertools::Itertools;
 
 pub struct Settings {
     // Which columns to show
-    pub column_value: bool,
-    pub column_market: bool,
-    pub column_delta: bool,
-    pub column_market_delta: bool,
-    pub column_delta_to_last: bool,
-    pub column_market_delta_to_last: bool,
-    pub column_price: bool,
+    column_value: bool,
+    column_market: bool,
+    column_delta: bool,
+    column_market_delta: bool,
+    column_delta_to_last: bool,
+    column_market_delta_to_last: bool,
+    column_price: bool,
 
     // ???
     // pub column_gain: bool,   // unrealized gains
 
     // Whether to show percent of total
-    pub column_percent: bool,
+    column_percent: bool,
 
-    pub account_names: AccountNameDepth,
+    account_names: AccountNameDepth,
 }
 
 impl Settings {

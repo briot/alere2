@@ -1,7 +1,7 @@
 use crate::commodities::Commodity;
 use rust_decimal::{Decimal, RoundingStrategy};
 
-/// Whether the name of commodities should be quotes
+/// Whether the name of commodities should be quoted
 #[derive(Clone, Copy, Default)]
 pub enum SymbolQuote {
     #[default]

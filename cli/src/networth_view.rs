@@ -72,7 +72,7 @@ where
         column_market_delta: false,
         column_market_delta_to_last: false,
         column_percent: false,
-        account_names: AccountNameDepth(1),
+        account_names: AccountNameDepth::Basename,
     };
     let mut networth =
         Networth::new(repo, nw_settings, globals.reftime, account_filter)?;
@@ -102,9 +102,13 @@ where
         match row.key {
             Key::Account(a) => repo.get_account_name(
                 a,
-                AccountNameDepth(
-                    view_settings.account_names.0 + row.collapse_depth,
-                ),
+                match view_settings.account_names {
+                    AccountNameDepth::Basename =>
+                        AccountNameDepth::Limit(1 + row.collapse_depth),
+                    AccountNameDepth::Unlimited => AccountNameDepth::Unlimited,
+                    AccountNameDepth::Limit(lim) =>
+                        AccountNameDepth::Limit(lim + row.collapse_depth),
+                },
             ),
             Key::Institution(Some(inst)) => inst.name.clone(),
             Key::Institution(None) => "Unknown".to_string(),

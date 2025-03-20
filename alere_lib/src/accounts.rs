@@ -8,7 +8,11 @@ use chrono::{DateTime, Local};
 /// This includes the basename for the account (level 1), its parent (level 2),
 /// and so on till a maximum level.
 #[derive(Clone, Copy)]
-pub struct AccountNameDepth(pub usize);
+pub enum AccountNameDepth {
+    Basename,
+    Unlimited,
+    Limit(usize),
+}
 
 #[derive(Default)]
 pub struct AccountCollection(Vec<Account>);
@@ -28,20 +32,32 @@ impl AccountCollection {
     }
 
     pub fn name(&self, acc: &Account, kind: AccountNameDepth) -> String {
-        if kind.0 <= 1 {
-            acc.name.clone()
-        } else {
-            let mut result = acc.name.clone();
-            let mut remain = kind.0 - 1;
-            let mut current = acc.parent;
-            while remain != 0 && current.is_some() {
-                let c = self.get(current.unwrap()).unwrap();
-                result.insert(0, ':');
-                result.insert_str(0, &c.name);
-                current = c.parent;
-                remain -= 1;
+        match kind {
+            AccountNameDepth::Basename => acc.name.clone(),
+            AccountNameDepth::Unlimited => {
+                let mut result = acc.name.clone();
+                let mut current = acc.parent;
+                while current.is_some() {
+                    let c = self.get(current.unwrap()).unwrap();
+                    result.insert(0, ':');
+                    result.insert_str(0, &c.name);
+                    current = c.parent;
+                }
+                result
             }
-            result
+            AccountNameDepth::Limit(lim) => {
+                let mut result = acc.name.clone();
+                let mut remain = lim - 1;
+                let mut current = acc.parent;
+                while remain != 0 && current.is_some() {
+                    let c = self.get(current.unwrap()).unwrap();
+                    result.insert(0, ':');
+                    result.insert_str(0, &c.name);
+                    current = c.parent;
+                    remain -= 1;
+                }
+                result
+            }
         }
     }
 

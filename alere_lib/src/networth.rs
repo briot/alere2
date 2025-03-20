@@ -1,5 +1,5 @@
-use crate::accounts::{Account, AccountId};
-use crate::commodities::CommodityId;
+use crate::accounts::Account;
+use crate::commodities::Commodity;
 use crate::formatters::Formatter;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
@@ -47,7 +47,7 @@ pub struct Settings {
     pub subtotals: bool,
 
     // Currency for market values
-    pub commodity: Option<CommodityId>,
+    pub commodity: Option<Commodity>,
 
     // "boring" accounts are combined with their subaccount, unless no elide
     // is used.  Boring accounts have no balance of their own and just one
@@ -153,63 +153,57 @@ impl NetworthRow {
 
     pub fn display_value(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(&self.0[idx].value, format)
+        let v = &self.0[idx].value;
+        v.display(format)
     }
     pub fn display_market_value(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(&self.0[idx].market_value, format)
+        let v = &self.0[idx].market_value;
+        v.display(format)
     }
     pub fn display_delta(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(
-            &(&self.0[idx + 1] - &self.0[idx]).value,
-            format,
-        )
+        let v = &(&self.0[idx + 1] - &self.0[idx]).value;
+        v.display(format)
     }
     pub fn display_delta_to_last(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(
-            &(self.0.last().unwrap() - &self.0[idx]).value,
-            format,
-        )
+        let v = &(self.0.last().unwrap() - &self.0[idx]).value;
+        v.display(format)
     }
     pub fn display_market_delta(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(
-            &(&self.0[idx + 1] - &self.0[idx]).market_value,
-            format,
-        )
+        let v = &(&self.0[idx + 1] - &self.0[idx]).market_value;
+        v.display(format)
     }
     pub fn display_market_delta_to_last(
         &self,
-        repo: &Repository,
+        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
-        repo.display_multi_value(
-            &(self.0.last().unwrap() - &self.0[idx]).market_value,
-            format,
-        )
+        let v = &(self.0.last().unwrap() - &self.0[idx]).market_value;
+        v.display(format)
     }
 
     /// Show the price used to compute the market value of the idx-th column
@@ -244,17 +238,17 @@ impl core::ops::AddAssign<&NetworthRow> for NetworthRow {
 /// A view that shows the value (as of any timestamp) of all user accounts.
 /// This ignores all accounts that are not marked as "networth".
 /// The result tree is unsorted.
-pub struct Networth<'a> {
-    pub tree: Tree<Key<'a>, NetworthRow>,
+pub struct Networth {
+    pub tree: Tree<Key, NetworthRow>,
     pub total: NetworthRow,
     pub settings: Settings,
     pub intervals: Vec<TimeInterval>, //  Each column
 }
 
-impl<'a> Networth<'a> {
+impl Networth {
     /// Cumulate all operations, for all accounts, to get the current total.
-    pub fn new<F: FnMut(&(AccountId, &Account)) -> bool>(
-        repo: &'a Repository,
+    pub fn new<F: FnMut(&Account) -> bool>(
+        repo: &Repository,
         settings: Settings,
         now: DateTime<Local>,
         account_filter: F,
@@ -272,7 +266,7 @@ impl<'a> Networth<'a> {
         // otherwise the current cache would keeping wiped out as we move from
         // one column to the next.
 
-        let mut market = repo.market_prices(settings.commodity);
+        let mut market = repo.market_prices(settings.commodity.clone());
         let mut result = Networth {
             settings,
             intervals,
@@ -280,59 +274,53 @@ impl<'a> Networth<'a> {
             total: NetworthRow::new(col_count),
         };
 
-        repo.iter_accounts().filter(account_filter).for_each(
-            |(acc_id, acc)| {
-                let key = Key::Account(acc);
-                let newcol = |_: &Key| NetworthRow::new(col_count);
-                let row = match &result.settings.group_by {
-                    GroupBy::None => {
-                        result.tree.try_get(&key, std::iter::empty(), newcol)
-                    }
-                    GroupBy::ParentAccount => result.tree.try_get(
-                        &key,
-                        repo.iter_parent_accounts(acc).map(Key::Account),
-                        newcol,
-                    ),
-                    GroupBy::AccountKind => result.tree.try_get(
-                        &key,
-                        std::iter::once(Key::AccountKind(
-                            repo.account_kinds.get(acc.kind),
-                        )),
-                        newcol,
-                    ),
-                    GroupBy::Institution => result.tree.try_get(
-                        &key,
-                        std::iter::once(Key::Institution(
-                            repo.get_account_institution(acc),
-                        )),
-                        newcol,
-                    ),
-                };
-
-                //  ??? Could we use fold() here, though we are applying in
-                //  place.
-                acc.iter_splits(acc_id).for_each(|s| {
-                    for (idx, intv) in result.intervals.iter().enumerate() {
-                        if intv.intv.contains(s.post_ts) {
-                            row.0[idx].value.apply(&s.operation);
-                        }
-                    }
-                });
-
-                for (idx, v) in row.0.iter_mut().enumerate() {
-                    v.compute_market(
-                        &mut market,
-                        // At end of interval (but this is open, so is not
-                        // full accurate).
-                        result.intervals[idx]
-                            .intv
-                            .upper()
-                            .expect("bounded interval"),
-                    );
-                    result.total.0[idx] += v;
+        repo.iter_accounts().filter(account_filter).for_each(|acc| {
+            let key = Key::Account(acc.clone());
+            let newcol = |_: &Key| NetworthRow::new(col_count);
+            let row = match &result.settings.group_by {
+                GroupBy::None => {
+                    result.tree.try_get(&key, std::iter::empty(), newcol)
                 }
-            },
-        );
+                GroupBy::ParentAccount => result.tree.try_get(
+                    &key,
+                    repo.iter_parent_accounts(&acc).map(Key::Account),
+                    newcol,
+                ),
+                GroupBy::AccountKind => result.tree.try_get(
+                    &key,
+                    std::iter::once(Key::AccountKind(acc.get_kind())),
+                    newcol,
+                ),
+                GroupBy::Institution => result.tree.try_get(
+                    &key,
+                    std::iter::once(Key::Institution(acc.get_institution())),
+                    newcol,
+                ),
+            };
+
+            //  ??? Could we use fold() here, though we are applying in
+            //  place.
+            acc.for_each_split(|s| {
+                for (idx, intv) in result.intervals.iter().enumerate() {
+                    if intv.intv.contains(s.post_ts) {
+                        row.0[idx].value.apply(&s.operation);
+                    }
+                }
+            });
+
+            for (idx, v) in row.0.iter_mut().enumerate() {
+                v.compute_market(
+                    &mut market,
+                    // At end of interval (but this is open, so is not
+                    // full accurate).
+                    result.intervals[idx]
+                        .intv
+                        .upper()
+                        .expect("bounded interval"),
+                );
+                result.total.0[idx] += v;
+            }
+        });
 
         // Filter out rows.  This needs to be done after we have inserted them
         // all above, including the parents, since the values might not be known

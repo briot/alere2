@@ -1,13 +1,16 @@
-use crate::formatters::Formatter;
-use crate::commodities::CommodityId;
-use crate::multi_values::{MultiValue, Operation};
-use crate::repositories::Repository;
-use crate::times::Intv;
+use crate::{
+    accounts::AccountNameDepth,
+    commodities::Commodity,
+    formatters::Formatter,
+    multi_values::{MultiValue, Operation},
+    repositories::Repository,
+    times::Intv,
+};
 use anyhow::Result;
 use chrono::{DateTime, Local};
 
 pub struct Settings {
-    pub commodity: Option<CommodityId>,
+    pub commodity: Option<Commodity>,
 
     // What columns to display.  Each column aggregates all transaction within
     // a time interval.
@@ -56,15 +59,13 @@ impl Stats {
     ) -> Result<Self> {
         let ts_range = &settings.over.to_ranges(now)?[0].intv;
         let mut stats = Stats::default();
-        let mut prices = repo.market_prices(settings.commodity);
-        let mut start_prices = repo.market_prices(settings.commodity);
-        let mut end_prices = repo.market_prices(settings.commodity);
+        let mut prices = repo.market_prices(settings.commodity.clone());
+        let mut start_prices = repo.market_prices(settings.commodity.clone());
+        let mut end_prices = repo.market_prices(settings.commodity.clone());
 
         repo.iter_accounts()
-            .filter(|(_acc_id, acc)| acc.name == "ASML HOLDING"
-                || acc.name == "Actions AdaCore")
-            .for_each(|(acc_id, acc)| {
-                let kind = repo.account_kinds.get(acc.kind).unwrap();
+            .for_each(|acc| {
+                let kind = &acc.get_kind();
                 let mut per_account = PerAccount::default();
 
                 acc.iter_transactions().for_each(|tx| {
@@ -79,10 +80,10 @@ impl Stats {
 
                     // True if this transaction is about unrealized gain.  This
                     // is always true if our account itself is unrealized
-                    let mut tx_is_unrealized = kind.is_unrealized;
+                    let mut tx_is_unrealized = kind.is_unrealized();
 
                     for s in tx.iter_splits() {
-                        if s.account == acc_id {
+                        if s.account == acc {
                             // An operation before the start of the time range:
                             // this is used to compute the starting state
                             if ts_range.strictly_right_of(s.post_ts) {
@@ -95,10 +96,8 @@ impl Stats {
                                 per_account.end_value.apply(&s.operation);
                             }
                         } else {
-                            let s_acc = repo.get_account(s.account).unwrap();
-                            let k = repo.account_kinds.get(s_acc.kind).unwrap();
-
-                            tx_is_unrealized |= k.is_unrealized;
+                            let k = s.account.get_kind();
+                            tx_is_unrealized |= k.is_unrealized();
 
                             let val = match &s.operation {
                                 Operation::Credit(v) => {
@@ -114,7 +113,7 @@ impl Stats {
                                 | Operation::Dividend => MultiValue::zero(),
                             };
 
-                            if k.is_networth {
+                            if k.is_networth() {
                                 internal_flow += val;
                             } else {
                                 external_flow += val;
@@ -147,26 +146,26 @@ impl Stats {
                 if !per_account.mkt_unrealized.is_zero() {
                     println!(
                         "MANU {} pnl_no_dividends={} = cashflow={} + unrealized={}",
-                        acc.name,
-                        repo.display_multi_value(&per_account.pnl_no_dividends, format),
-                        repo.display_multi_value(&per_account.mkt_cashflow, format),
-                        repo.display_multi_value(&per_account.mkt_unrealized, format),
+                        acc.name(AccountNameDepth::basename()),
+                        per_account.pnl_no_dividends.display(format),
+                        per_account.mkt_cashflow.display(format),
+                        per_account.mkt_unrealized.display(format),
                     );
                 }
                 println!(
                    "MANU {} start={} end={}",
-                   acc.name,
-                   repo.display_multi_value(&per_account.mkt_start_value, format),
-                   repo.display_multi_value(&per_account.mkt_end_value, format));
+                   acc.name(AccountNameDepth::basename()),
+                    per_account.mkt_start_value.display(format),
+                    per_account.mkt_end_value.display(format));
 
-                if kind.is_unrealized {
+                if kind.is_unrealized() {
                     //  stats.mkt_unrealized += per_account.pnl;
                 } else if kind.is_expense() {
                     stats.mkt_expense += &per_account.pnl_no_dividends;
                 } else if kind.is_income() {
                     stats.mkt_income += &per_account.pnl_no_dividends;
 
-                    if kind.is_passive_income {
+                    if kind.is_passive_income() {
                         stats.mkt_passive_income += &per_account.pnl_no_dividends;
                     }
                 }
@@ -188,18 +187,18 @@ impl Stats {
                 per_account.mkt_unrealized =
                     &per_account.pnl_no_dividends - &per_account.mkt_cashflow;
 
-                if kind.is_unrealized {
+                if kind.is_unrealized() {
                     //  stats.mkt_unrealized += per_account.pnl;
                 } else if kind.is_expense() {
                     stats.mkt_expense += &per_account.pnl_no_dividends;
                 } else if kind.is_income() {
                     stats.mkt_income += &per_account.pnl_no_dividends;
 
-                    if kind.is_passive_income {
+                    if kind.is_passive_income() {
                         stats.mkt_passive_income += &per_account.pnl_no_dividends;
                     }
                 }
-                if kind.is_networth {
+                if kind.is_networth() {
                     stats.mkt_start_networth += per_account.mkt_start_value;
                     stats.mkt_end_networth += per_account.mkt_end_value;
                 }
@@ -236,16 +235,20 @@ impl Stats {
 
 #[cfg(test)]
 mod test {
-    use crate::accounts::AccountId;
-    use crate::commodities::CommodityId;
-    use crate::multi_values::{MultiValue, Operation, Value};
-    use crate::transactions::{ReconcileKind, TransactionRc};
+    use crate::{
+        account_categories::AccountCategory,
+        account_kinds::AccountKind,
+        accounts::Account,
+        commodities::Commodity,
+        multi_values::{MultiValue, Operation, Value},
+        transactions::{ReconcileKind, TransactionRc},
+    };
     use chrono::prelude::*;
     use rust_decimal_macros::dec;
 
     fn build_tx(
         ts: DateTime<Local>,
-        splits: Vec<(AccountId, Operation)>,
+        splits: Vec<(Account, Operation)>,
     ) -> TransactionRc {
         let mut tr = TransactionRc::new_with_default();
         for s in splits.into_iter() {
@@ -257,12 +260,13 @@ mod test {
 
     #[test]
     fn test_stats() {
-        let acc_cash = AccountId(1);
-        let acc_invest = AccountId(2);
-        let acc_fees = AccountId(3);
-
-        let comm_eur = CommodityId(1);
-        let comm_share = CommodityId(2);
+        let kind =
+            AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
+        let acc_cash = Account::new_dummy("cash", kind.clone());
+        let acc_invest = Account::new_dummy("invest", kind.clone());
+        let acc_fees = Account::new_dummy("fees", kind.clone());
+        let comm_eur = Commodity::new_dummy("eur", true);
+        let comm_share = Commodity::new_dummy("shares", false);
 
         let _tr = build_tx(
             Local.with_ymd_and_hms(2024, 5, 24, 12, 0, 0).unwrap(),
@@ -271,12 +275,12 @@ mod test {
                     acc_cash,
                     Operation::Credit(MultiValue::new(
                         dec!(-2544.66),
-                        comm_eur,
+                        &comm_eur,
                     )),
                 ),
                 (
                     acc_fees,
-                    Operation::Credit(MultiValue::new(dec!(12.66), comm_eur)),
+                    Operation::Credit(MultiValue::new(dec!(12.66), &comm_eur)),
                 ),
                 (
                     acc_invest,
@@ -287,7 +291,7 @@ mod test {
                         },
                         price: Value {
                             amount: dec!(844),
-                            commodity: comm_eur,
+                            commodity: comm_eur.clone(),
                         },
                     },
                 ),

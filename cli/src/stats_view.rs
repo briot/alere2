@@ -10,7 +10,7 @@ pub fn stats_view(
     let stats = Stats::new(
         repo,
         alere_lib::stats::Settings {
-            commodity: globals.commodity,
+            commodity: globals.commodity.clone(),
             over: Intv::LastNYears(1),
         },
         globals.reftime,
@@ -33,21 +33,16 @@ Savings Rate:           {:.1?}%
 Financial Independence: {:.1?}%
 Passive Income:         {:.1?}%
 ",
-        repo.display_multi_value(&stats.mkt_start_networth, &globals.format),
-        repo.display_multi_value(&stats.mkt_end_networth, &globals.format),
-        repo.display_multi_value(&abs_income, &globals.format),
-        repo.display_multi_value(&abs_passive_income, &globals.format),
-        repo.display_multi_value(&neg_expense, &globals.format),
-        repo.display_multi_value(&mkt_cashflow, &globals.format),
-        repo.display_multi_value(&stats.mkt_unrealized, &globals.format),
-        repo.display_multi_value(
-            &(&mkt_cashflow + &stats.mkt_unrealized),
-            &globals.format
-        ),
-        repo.display_multi_value(
-            &(&stats.mkt_end_networth - &stats.mkt_start_networth),
-            &globals.format,
-        ),
+        stats.mkt_start_networth.display(&globals.format),
+        stats.mkt_end_networth.display(&globals.format),
+        abs_income.display(&globals.format),
+        abs_passive_income.display(&globals.format),
+        neg_expense.display(&globals.format),
+        mkt_cashflow.display(&globals.format),
+        stats.mkt_unrealized.display(&globals.format),
+        (&mkt_cashflow + &stats.mkt_unrealized).display(&globals.format),
+        (&stats.mkt_end_networth - &stats.mkt_start_networth)
+            .display(&globals.format),
         (&mkt_cashflow / &abs_income).map(|p| p * Decimal::ONE_HUNDRED),
         (&(&abs_passive_income + &stats.mkt_unrealized) / &stats.mkt_expense)
             .map(|p| p * Decimal::ONE_HUNDRED),

@@ -1,58 +1,103 @@
 use crate::price_sources::PriceSourceId;
+use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+};
+
+#[derive(Clone, Debug)]
+pub struct Commodity(Rc<RefCell<CommodityDetails>>);
+
+impl Commodity {
+    pub fn new(
+        name: &str,
+        symbol: &str,
+        symbol_after: bool,
+        is_currency: bool,
+        quote_symbol: Option<&str>,
+        display_precision: u8,
+    ) -> Self {
+        Commodity(Rc::new(RefCell::new(CommodityDetails {
+            name: name.into(),
+            display_precision,
+            symbol: symbol.trim().to_string(),
+            symbol_after,
+            is_currency,
+            _quote_symbol: quote_symbol.map(str::to_string),
+            _quote_source: None,
+            _quote_currency: None,
+            isin: None,
+        })))
+    }
+
+    #[cfg(test)]
+    pub fn new_dummy(name: &str, is_currency: bool) -> Self {
+        Commodity::new(name, name, false, is_currency, None, 2)
+    }
+
+    pub fn is_currency(&self) -> bool {
+        self.0.borrow().is_currency
+    }
+
+    /// Returns the display precision for a given commodity.
+    pub fn get_display_precision(&self) -> u8 {
+        self.0.borrow().display_precision
+    }
+
+    pub fn get_symbol(&self) -> Ref<'_, String> {
+        Ref::map(self.0.borrow(), |d| &d.symbol)
+    }
+
+    pub fn symbol_after(&self) -> bool {
+        self.0.borrow().symbol_after
+    }
+
+    pub fn set_isin(&mut self, isin: &str) {
+        self.0.borrow_mut().isin = Some(isin.to_string());
+    }
+
+    pub fn matches(&self, name: &str) -> bool {
+        self.0.borrow().name == name
+    }
+}
+
+impl PartialEq for Commodity {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0.as_ptr(), other.0.as_ptr())
+    }
+}
+
+impl Eq for Commodity {}
+
+impl std::hash::Hash for Commodity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_ptr().hash(state);
+    }
+}
 
 #[derive(Default)]
 pub struct CommodityCollection {
     commodities: Vec<Commodity>,
-    currencies: Vec<CommodityId>, // duplicates some of those in commodities
+    currencies: Vec<Commodity>, // duplicates some of those in commodities
 }
 
 impl CommodityCollection {
-    pub fn add(&mut self, commodity: Commodity) -> CommodityId {
-        let is_currency = commodity.is_currency;
-        self.commodities.push(commodity);
-        let id = CommodityId(self.commodities.len() as u16);
-        if is_currency {
-            self.currencies.push(id);
+    pub fn add(&mut self, commodity: Commodity) {
+        if commodity.is_currency() {
+            self.currencies.push(commodity.clone());
         }
-        id
+        self.commodities.push(commodity);
     }
 
-    pub fn get_mut(&mut self, id: CommodityId) -> Option<&mut Commodity> {
-        self.commodities.get_mut(id.0 as usize - 1)
-    }
-
-    pub fn get(&self, id: CommodityId) -> Option<&Commodity> {
-        self.commodities.get(id.0 as usize - 1)
-    }
-
-    pub fn list_currencies(&self) -> &[CommodityId] {
+    pub fn list_currencies(&self) -> &[Commodity] {
         &self.currencies
     }
 
-    pub fn iter_commodities(
-        &self,
-    ) -> impl Iterator<Item = (CommodityId, &Commodity)> {
-        self.commodities
-            .iter()
-            .enumerate()
-            .map(|(idx, c)| (CommodityId(idx as u16 + 1), c))
+    pub fn iter_commodities(&self) -> impl Iterator<Item = &Commodity> {
+        self.commodities.iter()
     }
 
-    pub fn find(&self, name: &str) -> Option<CommodityId> {
-        self.commodities
-            .iter()
-            .enumerate()
-            .find(|(_, c)| c.name == name)
-            .map(|(id, _)| CommodityId(id as u16 + 1))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
-pub struct CommodityId(pub u16);
-
-impl CommodityId {
-    pub fn inc(&self) -> CommodityId {
-        CommodityId(self.0 + 1)
+    pub fn find(&self, name: &str) -> Option<Commodity> {
+        self.commodities.iter().find(|c| c.matches(name)).cloned()
     }
 }
 
@@ -66,21 +111,22 @@ impl CommodityId {
 /// COCA COLA for instance.  Each of them will have its own performance
 /// statistics, depending on when you bought, the fees applied by the
 /// institution, and so on.
-pub struct Commodity {
+#[derive(Debug)]
+struct CommodityDetails {
     /// Name as displayed in selection boxes in the GUI.  For instance, it
     /// could be "Euro", "Apple Inc.", ...
-    pub name: String,
+    name: String,
 
     // Symbol to display the commodity. For instance, it could be the
     // euro sign, or "AAPL", and whether to display before or after the value.
-    pub(crate) symbol: String,
-    pub(crate) symbol_after: bool,
+    symbol: String,
+    symbol_after: bool,
 
     /// What kind of commodity this is.
-    pub is_currency: bool,
+    is_currency: bool,
 
     /// ISIN number
-    pub isin: Option<String>,
+    isin: Option<String>,
 
     /// For online quotes.
     /// The source refers to one of the plugins available to download
@@ -93,58 +139,37 @@ pub struct Commodity {
     /// which is cached because fetching that information is slow in Yahoo.
     /// So if we start with the AAPL commodity,  quote_currency might be USD if
     /// the online source gives prices in USD.
-    pub quote_symbol: Option<String>,
-    pub quote_source: Option<PriceSourceId>,
-    pub quote_currency: Option<CommodityId>,
+    _quote_symbol: Option<String>,
+    _quote_source: Option<PriceSourceId>,
+    _quote_currency: Option<Commodity>,
 
     /// Number of digits in the fractional part
-    pub(crate) display_precision: u8,
-}
-
-impl Commodity {
-    pub fn new(
-        name: &str,
-        symbol: &str,
-        symbol_after: bool,
-        is_currency: bool,
-        quote_symbol: Option<&str>,
-        display_precision: u8,
-    ) -> Self {
-        Commodity {
-            name: name.into(),
-            display_precision,
-            symbol: symbol.trim().to_string(),
-            symbol_after,
-            is_currency,
-            quote_symbol: quote_symbol.map(str::to_string),
-            quote_source: None,
-            quote_currency: None,
-            isin: None,
-        }
-    }
+    display_precision: u8,
 }
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::{Commodity, CommodityCollection, CommodityId};
+    use crate::commodities::{Commodity, CommodityCollection};
 
     pub fn create_currency(
         coll: &mut CommodityCollection,
         name: &str,
         precision: u8,
         after: bool,
-    ) -> CommodityId {
+    ) -> Commodity {
         let commodity =
             Commodity::new(name, name, after, true, None, precision);
-        coll.add(commodity)
+        coll.add(commodity.clone());
+        commodity
     }
 
     pub fn create_security(
         coll: &mut CommodityCollection,
         name: &str,
-    ) -> CommodityId {
+    ) -> Commodity {
         let commodity = Commodity::new(name, name, true, false, None, 2);
-        coll.add(commodity)
+        coll.add(commodity.clone());
+        commodity
     }
 
     #[test]
@@ -152,7 +177,7 @@ mod test {
         let mut coll = CommodityCollection::default();
         let eur = create_currency(&mut coll, "EUR", 2, true);
         let aapl = create_security(&mut coll, "AAPL");
-        assert_eq!(coll.list_currencies(), &[eur]);
+        assert_eq!(coll.list_currencies(), &[eur.clone()]);
         assert_eq!(coll.find("EUR"), Some(eur));
         assert_eq!(coll.find("AAPL"), Some(aapl));
         assert_eq!(coll.find("FOO"), None);

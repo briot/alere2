@@ -46,20 +46,15 @@ impl Exporter for Hledger {
         let mut buf = BufWriter::new(file);
         let now = Local::now();
 
-        for (com_id, com) in repo.commodities.iter_commodities() {
+        for com in repo.commodities.iter_commodities() {
             buf.write_all(b"commodity ")?;
-            buf.write_all(format.display_symbol(&com.symbol).as_bytes())?;
+            buf.write_all(format.display_symbol(&com.get_symbol()).as_bytes())?;
             buf.write_all(b"\n   format ")?;
-            buf.write_all(
-                repo.display_value(
-                    &Value {
-                        commodity: com_id,
-                        amount: Decimal::ONE_THOUSAND,
-                    },
-                    format,
-                )
-                .as_bytes(),
-            )?;
+            let v = Value {
+                commodity: com.clone(),
+                amount: Decimal::ONE_THOUSAND,
+            };
+            buf.write_all(v.display(format).as_bytes())?;
             buf.write_all(b"\n")?;
         }
 
@@ -83,53 +78,36 @@ impl Exporter for Hledger {
             buf.write_all(b"\n")?;
 
             for split in tx.iter_splits() {
-                let acc = repo.get_account(split.account).unwrap();
-
                 buf.write_all(b"   ")?;
                 buf.write_all(
-                    repo.get_account_name(acc, AccountNameDepth::Unlimited)
+                    split
+                        .account
+                        .name(AccountNameDepth::unlimited())
                         .as_bytes(),
                 )?;
                 buf.write_all(b"  ")?;
 
                 match &split.operation {
                     Operation::Credit(mv) => {
-                        buf.write_all(
-                            repo.display_multi_value(mv, format).as_bytes(),
-                        )?;
+                        buf.write_all(mv.display(format).as_bytes())?;
                     }
                     Operation::BuyAmount { qty, amount } => {
-                        buf.write_all(
-                            repo.display_value(qty, format).as_bytes(),
-                        )?;
+                        buf.write_all(qty.display(format).as_bytes())?;
                         buf.write_all(b" @@ ")?;
-                        buf.write_all(
-                            repo.display_value(&amount.abs(), format)
-                                .as_bytes(),
-                        )?;
+                        buf.write_all(amount.abs().display(format).as_bytes())?;
                     }
                     Operation::BuyPrice { qty, price } => {
-                        buf.write_all(
-                            repo.display_value(qty, format).as_bytes(),
-                        )?;
+                        buf.write_all(qty.display(format).as_bytes())?;
                         buf.write_all(b" @ ")?;
-                        buf.write_all(
-                            repo.display_value(price, format).as_bytes(),
-                        )?;
+                        buf.write_all(price.display(format).as_bytes())?;
                     }
                     Operation::AddShares { qty } => {
-                        buf.write_all(
-                            repo.display_value(qty, format).as_bytes(),
-                        )?;
+                        buf.write_all(qty.display(format).as_bytes())?;
                     }
                     Operation::Reinvest { shares, amount } => {
-                        buf.write_all(
-                            repo.display_multi_value(shares, format).as_bytes(),
-                        )?;
+                        buf.write_all(shares.display(format).as_bytes())?;
                         buf.write_all(b" @@ ")?;
-                        buf.write_all(
-                            repo.display_multi_value(amount, format).as_bytes(),
-                        )?;
+                        buf.write_all(amount.display(format).as_bytes())?;
                         buf.write_all(b"  ; reinvest")?;
                     }
                     Operation::Dividend => {
@@ -145,28 +123,24 @@ impl Exporter for Hledger {
                         // not be fully ordered.
 
                         let mut total = MultiValue::zero();
-                        for s in acc.iter_splits(split.account) {
+                        split.account.for_each_split(|s| {
                             //  Do not apply split itself
-                            if s.post_ts >= split.post_ts {
-                                break;
+                            if s.post_ts < split.post_ts {
+                                total.apply(&s.operation);
                             }
-                            total.apply(&s.operation);
-                        }
+                        });
 
-                        buf.write_all(
-                            repo.display_multi_value(&-&total, format)
-                                .as_bytes(),
-                        )?;
+                        buf.write_all((-&total).display(format).as_bytes())?;
                         buf.write_all(b"  @ 0 ;  split\n   ")?;
                         buf.write_all(
-                            repo.get_account_name(acc, AccountNameDepth::Unlimited)
+                            split
+                                .account
+                                .name(AccountNameDepth::unlimited())
                                 .as_bytes(),
                         )?;
                         buf.write_all(b"  ")?;
                         total.apply(&split.operation);
-                        buf.write_all(
-                            repo.display_multi_value(&total, format).as_bytes(),
-                        )?;
+                        buf.write_all(total.display(format).as_bytes())?;
                         buf.write_all(b" @ 0 ")?;
                     }
                 }
@@ -183,26 +157,20 @@ impl Exporter for Hledger {
         // But hledger takes all those earlier transactions when it computes
         // the total, so it will find a different value.
         if self.export_reconciliation {
-            for (accid, acc) in repo.iter_accounts() {
-                if !repo.account_kinds.get(acc.kind).unwrap().is_networth {
+            for acc in repo.iter_accounts() {
+                if !acc.get_kind().is_networth() {
                     continue;
                 }
-                for rec in &acc.reconciliations {
+                for rec in acc.iter_reconciliations() {
                     buf.write_all(
                         rec.timestamp.date_naive().to_string().as_bytes(),
                     )?;
                     buf.write_all(b" reconciliation\n  ")?;
                     buf.write_all(
-                        repo.get_account_name(
-                            repo.get_account(accid).unwrap(),
-                            AccountNameDepth::Unlimited,
-                        )
-                        .as_bytes(),
+                        acc.name(AccountNameDepth::unlimited()).as_bytes(),
                     )?;
                     buf.write_all(b"  0 = ")?;
-                    buf.write_all(
-                        repo.display_multi_value(&rec.total, format).as_bytes(),
-                    )?;
+                    buf.write_all(rec.total.display(format).as_bytes())?;
                     buf.write_all(b"\n\n")?;
                 }
             }
@@ -228,16 +196,14 @@ impl Exporter for Hledger {
                             .collect::<Vec<_>>(),
                     },
                     now,
-                    |(_acc_id, acc)| {
-                        repo.account_kinds.get(acc.kind).unwrap().is_networth
-                    },
+                    |acc| acc.get_kind().is_networth(),
                 )?;
                 networth.tree.traverse(
                     |node| {
                         for (colidx, ts) in
                             networth.intervals.iter().enumerate()
                         {
-                            if let Key::Account(acc) = node.data.key {
+                            if let Key::Account(acc) = &node.data.key {
                                 buf.write_all(
                                     ts.intv
                                         .upper()
@@ -248,11 +214,8 @@ impl Exporter for Hledger {
                                 )?;
                                 buf.write_all(b" asserts\n  ")?;
                                 buf.write_all(
-                                    repo.get_account_name(
-                                        acc,
-                                        AccountNameDepth::Unlimited,
-                                    )
-                                    .as_bytes(),
+                                    acc.name(AccountNameDepth::unlimited())
+                                        .as_bytes(),
                                 )?;
                                 buf.write_all(b"  0 = ")?;
                                 buf.write_all(
@@ -281,20 +244,12 @@ impl Exporter for Hledger {
                 buf.write_all(p.timestamp.date_naive().to_string().as_bytes())?;
                 buf.write_all(b" ")?;
                 buf.write_all(
-                    format
-                        .display_symbol(
-                            &repo.commodities.get(*from).unwrap().symbol,
-                        )
-                        .as_bytes(),
+                    format.display_symbol(&from.get_symbol()).as_bytes(),
                 )?;
                 buf.write_all(b" ")?;
                 buf.write_all(p.price.to_string().as_bytes())?;
                 buf.write_all(
-                    format
-                        .display_symbol(
-                            &repo.commodities.get(*to).unwrap().symbol,
-                        )
-                        .as_bytes(),
+                    format.display_symbol(&to.get_symbol()).as_bytes(),
                 )?;
                 buf.write_all(b"\n")?;
             }

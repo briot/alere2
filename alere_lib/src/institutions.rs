@@ -1,24 +1,7 @@
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default)]
-pub struct InstitutionId(pub u8);
+use std::{cell::RefCell, rc::Rc};
 
-impl InstitutionId {
-    pub fn inc(&self) -> Self {
-        InstitutionId(self.0 + 1)
-    }
-}
-
-#[derive(Debug)]
-pub struct Institution {
-    pub name: String, // Display name
-    _manager: Option<String>,
-    _street: Option<String>,
-    _zip: Option<String>,
-    _city: Option<String>,
-    _phone: Option<String>,
-    icon: Option<String>, // URL to the icon
-    pub(crate) bic: Option<String>,
-    pub(crate) url: Option<String>,
-}
+#[derive(Clone, Debug)]
+pub struct Institution(Rc<RefCell<InstitutionDetails>>);
 
 impl Institution {
     pub fn new(
@@ -29,7 +12,7 @@ impl Institution {
         city: Option<&str>,
         phone: Option<&str>,
     ) -> Self {
-        Institution {
+        Institution(Rc::new(RefCell::new(InstitutionDetails {
             name: name.into(),
             _manager: manager.map(|s| s.into()),
             _street: street.map(|s| s.into()),
@@ -39,11 +22,48 @@ impl Institution {
             icon: None,
             bic: None,
             url: None,
-        }
+        })))
     }
 
-    pub fn set_icon(mut self, icon: String) -> Self {
-        self.icon = Some(icon);
+    pub fn set_icon(self, icon: String) -> Self {
+        self.0.borrow_mut().icon = Some(icon);
         self
     }
+
+    pub fn cmp_name(&self, right: &Institution) -> std::cmp::Ordering {
+        self.0.borrow().name.cmp(&right.0.borrow().name)
+    }
+
+    pub fn set_bic(&mut self, bic: &str) {
+        self.0.borrow_mut().bic = Some(bic.to_string());
+    }
+
+    pub fn set_url(&mut self, url: &str) {
+        self.0.borrow_mut().url = Some(url.to_string());
+    }
+
+    pub fn get_name(&self) -> String {
+        self.0.borrow().name.clone()
+    }
+}
+
+impl PartialEq for Institution {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0.as_ptr(), other.0.as_ptr())
+    }
+}
+
+impl Eq for Institution {}
+
+#[derive(Debug)]
+pub struct InstitutionDetails {
+    name: String, // Display name
+    _manager: Option<String>,
+    _street: Option<String>,
+    _zip: Option<String>,
+    _city: Option<String>,
+    _phone: Option<String>,
+    icon: Option<String>, // URL to the icon
+    bic: Option<String>,
+    url: Option<String>,
 }

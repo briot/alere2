@@ -1,4 +1,4 @@
-use crate::commodities::CommodityId;
+use crate::commodities::Commodity;
 use crate::multi_values::{MultiValue, Value};
 use crate::price_sources::PriceSourceId;
 use crate::prices::{Price, PriceCollection};
@@ -12,10 +12,10 @@ use std::collections::HashMap;
 /// It is optimized to cache values, and efficiently optimize queries if you
 /// do them in chronological order.
 pub struct MarketPrices<'a> {
-    cache: HashMap<(CommodityId, CommodityId), PairCacheLine>,
+    cache: HashMap<(Commodity, Commodity), PairCacheLine>,
     known_prices: &'a PriceCollection,
-    turnkey_currencies: &'a [CommodityId],
-    to_commodity: Option<CommodityId>,
+    turnkey_currencies: &'a [Commodity],
+    to_commodity: Option<Commodity>,
 }
 
 impl<'a> MarketPrices<'a> {
@@ -24,8 +24,8 @@ impl<'a> MarketPrices<'a> {
     /// If to_commodity is None, no conversion is made.
     pub fn new(
         known_prices: &'a PriceCollection,
-        turnkey_currencies: &'a [CommodityId],
-        to_commodity: Option<CommodityId>,
+        turnkey_currencies: &'a [Commodity],
+        to_commodity: Option<Commodity>,
     ) -> Self {
         MarketPrices {
             known_prices,
@@ -46,11 +46,12 @@ impl<'a> MarketPrices<'a> {
     ) -> MultiValue {
         let mut result = MultiValue::default();
         for pair in value.iter() {
-            result += match self.get_price(pair.commodity, as_of) {
-                None => MultiValue::new(pair.amount, pair.commodity),
-                Some(p) => {
-                    MultiValue::new(p * pair.amount, self.to_commodity.unwrap())
-                }
+            result += match self.get_price(&pair.commodity, as_of) {
+                None => MultiValue::new(pair.amount, &pair.commodity),
+                Some(p) => MultiValue::new(
+                    p * pair.amount,
+                    self.to_commodity.as_ref().unwrap(),
+                ),
             };
         }
         result
@@ -61,11 +62,12 @@ impl<'a> MarketPrices<'a> {
         value: &Value,
         as_of: &DateTime<Local>,
     ) -> MultiValue {
-        match self.get_price(value.commodity, as_of) {
-            None => MultiValue::new(value.amount, value.commodity),
-            Some(p) => {
-                MultiValue::new(p * value.amount, self.to_commodity.unwrap())
-            }
+        match self.get_price(&value.commodity, as_of) {
+            None => MultiValue::new(value.amount, &value.commodity),
+            Some(p) => MultiValue::new(
+                p * value.amount,
+                self.to_commodity.as_ref().unwrap(),
+            ),
         }
     }
 
@@ -75,23 +77,23 @@ impl<'a> MarketPrices<'a> {
     /// through a turnkey currency (like USD).
     pub fn get_price(
         &mut self,
-        commodity: CommodityId,
+        commodity: &Commodity,
         as_of: &DateTime<Local>,
     ) -> Option<Decimal> {
-        match self.to_commodity {
+        match self.to_commodity.clone() {
             None => None,
-            Some(c) if c == commodity => Some(Decimal::ONE),
+            Some(c) if c == *commodity => Some(Decimal::ONE),
             Some(c) => {
-                let mut result = self.get_price_no_turnkey(commodity, c, as_of);
+                let mut result =
+                    self.get_price_no_turnkey(commodity, &c, as_of);
 
                 for turnkey in
                     self.turnkey_currencies.iter().filter(|curr| **curr != c)
                 {
-                    match self.get_price_no_turnkey(commodity, *turnkey, as_of)
-                    {
+                    match self.get_price_no_turnkey(commodity, turnkey, as_of) {
                         None => {}
                         Some(p1) => match self
-                            .get_price_no_turnkey(*turnkey, c, as_of)
+                            .get_price_no_turnkey(turnkey, &c, as_of)
                         {
                             None => {}
                             Some(p2) => {
@@ -119,8 +121,8 @@ impl<'a> MarketPrices<'a> {
     /// but not going through turnkey currencies.
     fn get_price_no_turnkey(
         &mut self,
-        from: CommodityId,
-        to: CommodityId,
+        from: &Commodity,
+        to: &Commodity,
         as_of: &DateTime<Local>,
     ) -> Option<Price> {
         let mut result: Option<Price> = self.lookup_price(from, to, as_of);
@@ -133,18 +135,20 @@ impl<'a> MarketPrices<'a> {
     /// Lookup a direct exchange rate, possibly reusing an existing cache.
     fn lookup_price(
         &mut self,
-        from: CommodityId,
-        to: CommodityId,
+        from: &Commodity,
+        to: &Commodity,
         as_of: &DateTime<Local>,
     ) -> Option<Price> {
-        let line = self.cache.get(&(from, to));
+        let key = (from.clone(), to.clone());
+
+        let line = self.cache.get(&key);
         match line {
             // We have never looked up that pair before, so we basically
             // have to look everywhere
             None => {
                 let newline = self.bisect(from, to, as_of, None);
                 let found = newline.found.as_ref().map(|f| f.1.clone());
-                self.cache.insert((from, to), newline);
+                self.cache.insert(key, newline);
                 found
             }
             Some(line) => {
@@ -152,7 +156,7 @@ impl<'a> MarketPrices<'a> {
                 if line.request_ts != *as_of {
                     let newline = self.bisect(from, to, as_of, Some(line));
                     let found = newline.found.as_ref().map(|f| f.1.clone());
-                    self.cache.insert((from, to), newline);
+                    self.cache.insert(key, newline);
                     found
                 } else {
                     line.found.as_ref().map(|f| f.1.clone())
@@ -166,12 +170,12 @@ impl<'a> MarketPrices<'a> {
     /// It doesn't use the cache.
     fn bisect(
         &self,
-        from: CommodityId,
-        to: CommodityId,
+        from: &Commodity,
+        to: &Commodity,
         as_of: &DateTime<Local>,
         old: Option<&PairCacheLine>,
     ) -> PairCacheLine {
-        match self.known_prices.prices.get(&(from, to)) {
+        match self.known_prices.prices.get(&(from.clone(), to.clone())) {
             // If there are no known prices, nothing to return
             None => PairCacheLine {
                 request_ts: *as_of,
@@ -247,7 +251,7 @@ fn keep_most_recent(left: &mut Option<Price>, right: Price) {
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::CommodityId;
+    use crate::commodities::Commodity;
     use crate::market_prices::MarketPrices;
     use crate::price_sources::PriceSourceId;
     use crate::prices::{Price, PriceCollection};
@@ -257,41 +261,41 @@ mod test {
     #[test]
     fn test_price_as_of() {
         let mut prices = PriceCollection::default();
-        let origin = CommodityId(1);
-        let target = CommodityId(2);
-        let turnkey = CommodityId(3);
-        let turnkeys = [turnkey];
-        let target2 = CommodityId(4);
+        let origin = Commodity::new_dummy("origin", false);
+        let target = Commodity::new_dummy("target", true);
+        let turnkey = Commodity::new_dummy("turnkey", false);
+        let turnkeys = [turnkey.clone()];
+        let target2 = Commodity::new_dummy("target2", true);
         let t1 = Local.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
 
         {
             let mut to_target =
-                MarketPrices::new(&prices, &turnkeys, Some(target));
-            assert_eq!(to_target.get_price(origin, &t1), None,);
+                MarketPrices::new(&prices, &turnkeys, Some(target.clone()));
+            assert_eq!(to_target.get_price(&origin, &t1), None);
         }
 
         prices.add(
-            origin,
-            target,
+            &origin,
+            &target,
             Price::new(t1, dec!(0.2), PriceSourceId::Transaction),
         );
 
         {
             let mut to_target =
-                MarketPrices::new(&prices, &turnkeys, Some(target));
+                MarketPrices::new(&prices, &turnkeys, Some(target.clone()));
             assert_eq!(
                 //  before first price
-                to_target.get_price(origin, &(t1 - Days::new(1))),
+                to_target.get_price(&origin, &(t1 - Days::new(1))),
                 None,
             );
             assert_eq!(
                 //  exactly first price
-                to_target.get_price(origin, &t1),
+                to_target.get_price(&origin, &t1),
                 Some(dec!(0.2)),
             );
             assert_eq!(
                 //  after last price
-                to_target.get_price(origin, &(t1 + Days::new(3))),
+                to_target.get_price(&origin, &(t1 + Days::new(3))),
                 Some(dec!(0.2)),
             );
         }
@@ -299,45 +303,45 @@ mod test {
         //  invert xrate
         {
             let mut to_origin =
-                MarketPrices::new(&prices, &turnkeys, Some(origin));
-            assert_eq!(to_origin.get_price(target, &t1), Some(dec!(5)),);
+                MarketPrices::new(&prices, &turnkeys, Some(origin.clone()));
+            assert_eq!(to_origin.get_price(&target, &t1), Some(dec!(5)),);
         }
 
         // Second price is in reverse order
         prices.add(
-            target,
-            origin,
+            &target,
+            &origin,
             Price::new(t1 + Days::new(2), dec!(4), PriceSourceId::Transaction),
         );
         {
             let mut to_target =
-                MarketPrices::new(&prices, &turnkeys, Some(target));
+                MarketPrices::new(&prices, &turnkeys, Some(target.clone()));
             assert_eq!(
                 //  before first price
-                to_target.get_price(origin, &(t1 - Days::new(1))),
+                to_target.get_price(&origin, &(t1 - Days::new(1))),
                 None,
             );
             assert_eq!(
                 //  between two days, use earlier price
-                to_target.get_price(origin, &(t1 + Days::new(1))),
+                to_target.get_price(&origin, &(t1 + Days::new(1))),
                 Some(dec!(0.2)),
             );
             assert_eq!(
                 //  on second day
-                to_target.get_price(origin, &(t1 + Days::new(2))),
+                to_target.get_price(&origin, &(t1 + Days::new(2))),
                 Some(dec!(0.25)),
             );
             assert_eq!(
                 //  after last price
-                to_target.get_price(origin, &(t1 + Days::new(3))),
+                to_target.get_price(&origin, &(t1 + Days::new(3))),
                 Some(dec!(0.25)),
             );
         }
 
         // Third price not in chronological order
         prices.add(
-            origin,
-            target,
+            &origin,
+            &target,
             Price::new(
                 t1 - Days::new(1),
                 dec!(0.6),
@@ -348,32 +352,32 @@ mod test {
 
         {
             let mut to_target =
-                MarketPrices::new(&prices, &turnkeys, Some(target));
-            assert_eq!(to_target.get_price(origin, &t1), Some(dec!(0.2)),);
+                MarketPrices::new(&prices, &turnkeys, Some(target.clone()));
+            assert_eq!(to_target.get_price(&origin, &t1), Some(dec!(0.2)),);
         }
 
         // Test turnkeys
         prices.add(
-            origin,
-            turnkey,
+            &origin,
+            &turnkey,
             Price::new(t1, dec!(0.7), PriceSourceId::Transaction),
         );
         prices.add(
-            target2,
-            turnkey,
+            &target2,
+            &turnkey,
             Price::new(t1, dec!(0.8), PriceSourceId::Transaction),
         );
         {
             let mut to_target2 =
-                MarketPrices::new(&prices, &turnkeys, Some(target2));
+                MarketPrices::new(&prices, &turnkeys, Some(target2.clone()));
             let mut to_origin =
-                MarketPrices::new(&prices, &turnkeys, Some(origin));
+                MarketPrices::new(&prices, &turnkeys, Some(origin.clone()));
             assert_eq!(
-                to_target2.get_price(origin, &t1),
+                to_target2.get_price(&origin, &t1),
                 Some(dec!(0.7) / dec!(0.8)),
             );
             assert_eq!(
-                to_origin.get_price(target2, &t1),
+                to_origin.get_price(&target2, &t1),
                 Some(dec!(0.8) / dec!(0.7)),
             );
         }

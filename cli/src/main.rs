@@ -14,6 +14,7 @@ use alere_lib::{
     hledger::Hledger,
     importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
+    qif::QIF,
     repositories::Repository,
     times::Instant,
 };
@@ -45,6 +46,18 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
         output.display()
     );
 
+    Ok(())
+}
+
+/// Export all transaction to QIF format
+fn export_qif(repo: &mut Repository, output: &Path) -> Result<()> {
+    let format = Formatter {
+        quote_symbol: SymbolQuote::NeverQuote,
+        zero: "0",
+        ..Formatter::default()
+    };
+    let mut q = QIF {};
+    q.export_file(repo, output, &format)?;
     Ok(())
 }
 
@@ -125,6 +138,14 @@ fn main() -> Result<()> {
         Some(("export", sub)) => match sub.subcommand() {
             Some(("hledger", sub)) => {
                 export_hledger(
+                    &mut repo,
+                    Path::new(
+                        sub.get_one::<String>("output").expect("required"),
+                    ),
+                )?;
+            }
+            Some(("qif", sub)) => {
+                export_qif(
                     &mut repo,
                     Path::new(
                         sub.get_one::<String>("output").expect("required"),

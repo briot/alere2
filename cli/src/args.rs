@@ -35,6 +35,11 @@ pub(crate) fn build_cli() -> Command {
                         arg!(-o --output [FILE] "Name of output file")
                             .default_value("hledger.journal"),
                     ),
+                )
+                .subcommand(
+                    Command::new("qif").arg(
+                        arg!(-o --output [FILE] "Name of output file"),
+                    ),
                 ),
         )
         .subcommand(

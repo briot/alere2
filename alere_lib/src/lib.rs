@@ -13,6 +13,7 @@ pub mod networth;
 pub mod payees;
 pub mod price_sources;
 pub mod prices;
+pub mod qif;
 pub mod repositories;
 pub mod stats;
 pub mod times;

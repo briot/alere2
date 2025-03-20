@@ -87,7 +87,7 @@ impl Exporter for Hledger {
 
                 buf.write_all(b"   ")?;
                 buf.write_all(
-                    repo.get_account_name(acc, AccountNameDepth(1000))
+                    repo.get_account_name(acc, AccountNameDepth::Unlimited)
                         .as_bytes(),
                 )?;
                 buf.write_all(b"  ")?;
@@ -159,7 +159,7 @@ impl Exporter for Hledger {
                         )?;
                         buf.write_all(b"  @ 0 ;  split\n   ")?;
                         buf.write_all(
-                            repo.get_account_name(acc, AccountNameDepth(1000))
+                            repo.get_account_name(acc, AccountNameDepth::Unlimited)
                                 .as_bytes(),
                         )?;
                         buf.write_all(b"  ")?;
@@ -195,7 +195,7 @@ impl Exporter for Hledger {
                     buf.write_all(
                         repo.get_account_name(
                             repo.get_account(accid).unwrap(),
-                            AccountNameDepth(1000),
+                            AccountNameDepth::Unlimited,
                         )
                         .as_bytes(),
                     )?;
@@ -250,7 +250,7 @@ impl Exporter for Hledger {
                                 buf.write_all(
                                     repo.get_account_name(
                                         acc,
-                                        AccountNameDepth(1000),
+                                        AccountNameDepth::Unlimited,
                                     )
                                     .as_bytes(),
                                 )?;

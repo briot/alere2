@@ -1,5 +1,5 @@
-use clap::{arg, Arg, Command};
 use crate::global_settings::GlobalSettings;
+use clap::{arg, Arg, Command};
 
 pub(crate) fn build_cli() -> Command {
     Command::new("alere")

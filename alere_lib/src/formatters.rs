@@ -139,9 +139,9 @@ impl Formatter {
         self.push(
             into,
             value,
-            &commodity.symbol,
-            commodity.symbol_after,
-            commodity.display_precision,
+            &commodity.get_symbol(),
+            commodity.symbol_after(),
+            commodity.get_display_precision(),
         );
     }
 

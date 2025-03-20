@@ -3,7 +3,7 @@ use crate::{
     tables::{Align, Column, ColumnFooter, Table, Truncate, Width},
 };
 use alere_lib::{
-    accounts::{Account, AccountId, AccountNameDepth},
+    accounts::{Account, AccountNameDepth},
     networth::{GroupBy, Networth, NetworthRow},
     repositories::Repository,
     times::{Instant, Intv},
@@ -48,14 +48,14 @@ pub fn networth_view<F>(
     account_filter: F,
 ) -> Result<String>
 where
-    F: FnMut(&(AccountId, &Account)) -> bool,
+    F: FnMut(&Account) -> bool,
 {
     let nw_settings = alere_lib::networth::Settings {
         hide_zero: !args.get_flag("empty"),
         hide_all_same: false,
         group_by: GroupBy::ParentAccount,
         subtotals: true,
-        commodity: globals.commodity,
+        commodity: globals.commodity.clone(),
         elide_boring_accounts: true,
         intervals: vec![
             Intv::UpTo(Instant::EndYearsAgo(2)),
@@ -72,12 +72,12 @@ where
         column_market_delta: false,
         column_market_delta_to_last: false,
         column_percent: false,
-        account_names: AccountNameDepth::Basename,
+        account_names: AccountNameDepth::basename(),
     };
     let mut networth =
         Networth::new(repo, nw_settings, globals.reftime, account_filter)?;
 
-    type Data<'a> = NodeData<Key<'a>, NetworthRow>;
+    type Data<'a> = NodeData<Key, NetworthRow>;
 
     let mv_image = |row: &Data, idx: &usize| {
         row.data.display_value(repo, *idx, &globals.format)
@@ -99,21 +99,13 @@ where
             .display_market_delta_to_last(repo, *idx, &globals.format)
     };
     let node_image = |row: &Data, _idx: &usize| {
-        match row.key {
-            Key::Account(a) => repo.get_account_name(
-                a,
-                match view_settings.account_names {
-                    AccountNameDepth::Basename =>
-                        AccountNameDepth::Limit(1 + row.collapse_depth),
-                    AccountNameDepth::Unlimited => AccountNameDepth::Unlimited,
-                    AccountNameDepth::Limit(lim) =>
-                        AccountNameDepth::Limit(lim + row.collapse_depth),
-                },
-            ),
-            Key::Institution(Some(inst)) => inst.name.clone(),
+        match &row.key {
+            Key::Account(a) => {
+                a.name(view_settings.account_names.inc(row.collapse_depth))
+            }
+            Key::Institution(Some(inst)) => inst.get_name(),
             Key::Institution(None) => "Unknown".to_string(),
-            Key::AccountKind(Some(kind)) => kind.name.clone(),
-            Key::AccountKind(None) => "Unknown".to_string(),
+            Key::AccountKind(kind) => kind.get_name(),
         }
         //repo.get_account_name(row.key, view_settings.account_names)
     };

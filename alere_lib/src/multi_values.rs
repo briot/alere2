@@ -1,4 +1,4 @@
-use crate::commodities::{CommodityCollection, CommodityId};
+use crate::commodities::Commodity;
 use crate::formatters::Formatter;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ pub enum Operation {
     // and their value divided by the same ratio.
     Split {
         ratio: Decimal,
-        commodity: CommodityId,
+        commodity: Commodity,
     },
 }
 
@@ -75,18 +75,22 @@ pub struct MultiValue(InnerValue);
 
 /// A value is for a single commodity
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Value {
     pub amount: Decimal,
-    pub commodity: CommodityId,
+    pub commodity: Commodity,
 }
 
 impl Value {
     pub fn abs(&self) -> Value {
         Value {
             amount: self.amount.abs(),
-            commodity: self.commodity,
+            commodity: self.commodity.clone(),
         }
+    }
+
+    pub fn display(&self, format: &Formatter) -> String {
+        format.display_from_commodity(self.amount, &self.commodity)
     }
 }
 
@@ -105,7 +109,9 @@ enum InnerValue {
     // By construction, the amount is never zero (or we would have removed the
     // entry altogether).  Also the hashmap always contains at least two
     // elements.
-    Multi(HashMap<CommodityId, Decimal>),
+    // We do not use a Commodity as key, since it is mutable.  So we use the
+    // symbol instead.
+    Multi(HashMap<String, Value>),
 }
 
 impl MultiValue {
@@ -115,11 +121,14 @@ impl MultiValue {
     }
 
     /// A value in one commodity
-    pub fn new(amount: Decimal, commodity: CommodityId) -> Self {
+    pub fn new(amount: Decimal, commodity: &Commodity) -> Self {
         if amount.is_zero() {
             MultiValue::zero()
         } else {
-            MultiValue(InnerValue::One(Value { amount, commodity }))
+            MultiValue(InnerValue::One(Value {
+                amount,
+                commodity: commodity.clone(),
+            }))
         }
     }
 
@@ -133,14 +142,9 @@ impl MultiValue {
     pub fn iter(&self) -> Box<dyn Iterator<Item = Value> + '_> {
         match &self.0 {
             InnerValue::Zero => Box::new(std::iter::empty()),
-            InnerValue::One(pair) => Box::new(std::iter::once(*pair)),
+            InnerValue::One(pair) => Box::new(std::iter::once(pair.clone())),
             InnerValue::Multi(map) => {
-                Box::new(map.iter().filter(|(_, v)| !v.is_zero()).map(
-                    |(c, v)| Value {
-                        amount: *v,
-                        commodity: *c,
-                    },
-                ))
+                Box::new(map.values().filter(|v| !v.amount.is_zero()).cloned())
             }
         }
     }
@@ -157,17 +161,14 @@ impl MultiValue {
                 }
             }
             InnerValue::Multi(map) => {
-                map.retain(|_, v| !v.is_zero());
+                map.retain(|_, v| !v.amount.is_zero());
                 match map.len() {
                     0 => {
                         *self = MultiValue(InnerValue::Zero);
                     }
                     1 => {
-                        let p = map.iter().next().unwrap();
-                        *self = MultiValue(InnerValue::One(Value {
-                            commodity: *p.0,
-                            amount: *p.1,
-                        }));
+                        let p = map.values().next().unwrap();
+                        *self = MultiValue(InnerValue::One(p.clone()));
                     }
                     _ => {}
                 }
@@ -181,7 +182,7 @@ impl MultiValue {
             InnerValue::Zero => true,
             InnerValue::One(pair) => !pair.amount.is_zero(),
             InnerValue::Multi(map) => {
-                map.len() >= 2 && map.values().all(|v| !v.is_zero())
+                map.len() >= 2 && map.values().all(|v| !v.amount.is_zero())
             }
         }
     }
@@ -208,8 +209,11 @@ impl MultiValue {
                     }
                 }
                 InnerValue::Multi(map) => {
-                    if let Some(v) = map.get_mut(commodity) {
-                        *v *= ratio;
+                    //  ??? Clone should not be necessary
+                    if let Some(v) =
+                        map.get_mut(&commodity.get_symbol().clone())
+                    {
+                        v.amount *= ratio;
                     }
                 }
             },
@@ -218,29 +222,24 @@ impl MultiValue {
         self.normalize();
     }
 
-    pub fn display(
-        &self,
-        into: &mut String,
-        format: &Formatter,
-        commodities: &CommodityCollection,
-    ) {
+    pub fn display(&self, format: &Formatter) -> String {
+        let mut into = String::new();
+        self.display_into(&mut into, format);
+        into
+    }
+
+    pub fn display_into(&self, into: &mut String, format: &Formatter) {
         match &self.0 {
             InnerValue::Zero => format.push(into, Decimal::ZERO, "", false, 0),
-            InnerValue::One(pair) => format.push_from_commodity(
-                into,
-                pair.amount,
-                commodities.get(pair.commodity).unwrap(),
-            ),
+            InnerValue::One(pair) => {
+                format.push_from_commodity(into, pair.amount, &pair.commodity)
+            }
             InnerValue::Multi(map) => {
-                for (idx, (c, v)) in map.iter().enumerate() {
+                for (idx, v) in map.values().enumerate() {
                     if idx > 0 {
                         into.push_str(" + ");
                     }
-                    format.push_from_commodity(
-                        into,
-                        *v,
-                        commodities.get(*c).unwrap(),
-                    );
+                    format.push_from_commodity(into, v.amount, &v.commodity);
                 }
             }
         }
@@ -282,21 +281,21 @@ impl core::ops::Add<&MultiValue> for &MultiValue {
                     } else {
                         MultiValue(InnerValue::One(Value {
                             amount,
-                            commodity: p1.commodity,
+                            commodity: p1.commodity.clone(),
                         }))
                     }
                 } else {
                     let mut map = HashMap::new();
-                    map.insert(p1.commodity, p1.amount);
-                    map.insert(p2.commodity, p2.amount);
+                    map.insert(p1.commodity.get_symbol().clone(), p1.clone());
+                    map.insert(p2.commodity.get_symbol().clone(), p2.clone());
                     MultiValue(InnerValue::Multi(map))
                 }
             }
             (InnerValue::One(p1), InnerValue::Multi(m2)) => {
                 let mut map = m2.clone();
-                map.entry(p1.commodity)
-                    .and_modify(|v| *v += p1.amount)
-                    .or_insert(p1.amount);
+                map.entry(p1.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount += p1.amount)
+                    .or_insert(p1.clone());
                 let mut result = MultiValue(InnerValue::Multi(map));
 
                 // ??? We might have cloned m2 for nothing, could be
@@ -306,9 +305,9 @@ impl core::ops::Add<&MultiValue> for &MultiValue {
             }
             (InnerValue::Multi(m1), InnerValue::One(p2)) => {
                 let mut map = m1.clone();
-                map.entry(p2.commodity)
-                    .and_modify(|v| *v += p2.amount)
-                    .or_insert(p2.amount);
+                map.entry(p2.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount += p2.amount)
+                    .or_insert(p2.clone());
                 let mut result = MultiValue(InnerValue::Multi(map));
                 result.normalize();
                 result
@@ -316,7 +315,9 @@ impl core::ops::Add<&MultiValue> for &MultiValue {
             (InnerValue::Multi(m1), InnerValue::Multi(m2)) => {
                 let mut map = m1.clone();
                 for (c2, a2) in m2 {
-                    map.entry(*c2).and_modify(|v| *v += *a2).or_insert(*a2);
+                    map.entry(c2.clone())
+                        .and_modify(|v| v.amount += a2.amount)
+                        .or_insert(a2.clone());
                 }
                 let mut result = MultiValue(InnerValue::Multi(map));
                 result.normalize();
@@ -358,7 +359,7 @@ impl core::ops::AddAssign<MultiValue> for MultiValue {
 
 impl core::ops::AddAssign<&Value> for MultiValue {
     fn add_assign(&mut self, rhs: &Value) {
-        *self += MultiValue(InnerValue::One(*rhs));
+        *self += MultiValue(InnerValue::One(rhs.clone()));
     }
 }
 
@@ -387,28 +388,30 @@ impl core::ops::AddAssign<&MultiValue> for MultiValue {
                     }
                 } else {
                     let mut map = HashMap::new();
-                    map.insert(p1.commodity, p1.amount);
-                    map.insert(p2.commodity, p2.amount);
+                    map.insert(p1.commodity.get_symbol().clone(), p1.clone());
+                    map.insert(p2.commodity.get_symbol().clone(), p2.clone());
                     *self = MultiValue(InnerValue::Multi(map));
                 }
             }
             (InnerValue::One(p1), InnerValue::Multi(m2)) => {
                 let mut map = m2.clone();
-                map.entry(p1.commodity)
-                    .and_modify(|v| *v += p1.amount)
-                    .or_insert(p1.amount);
+                map.entry(p1.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount += p1.amount)
+                    .or_insert(p1.clone());
                 *self = MultiValue(InnerValue::Multi(map));
                 self.normalize();
             }
             (InnerValue::Multi(m1), InnerValue::One(p2)) => {
-                m1.entry(p2.commodity)
-                    .and_modify(|v| *v += p2.amount)
-                    .or_insert(p2.amount);
+                m1.entry(p2.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount += p2.amount)
+                    .or_insert(p2.clone());
                 self.normalize();
             }
             (InnerValue::Multi(m1), InnerValue::Multi(m2)) => {
                 for (c2, a2) in m2 {
-                    m1.entry(*c2).and_modify(|v| *v += *a2).or_insert(*a2);
+                    m1.entry(c2.clone())
+                        .and_modify(|v| v.amount += a2.amount)
+                        .or_insert(a2.clone());
                 }
                 self.normalize();
             }
@@ -421,7 +424,7 @@ impl core::ops::Neg for &Value {
 
     fn neg(self) -> Self::Output {
         Value {
-            commodity: self.commodity,
+            commodity: self.commodity.clone(),
             amount: -self.amount,
         }
     }
@@ -435,11 +438,11 @@ impl core::ops::Neg for &MultiValue {
             InnerValue::Zero => MultiValue::zero(),
             InnerValue::One(pair) => MultiValue(InnerValue::One(Value {
                 amount: -pair.amount,
-                commodity: pair.commodity,
+                commodity: pair.commodity.clone(),
             })),
             InnerValue::Multi(map) => {
                 let mut m = map.clone();
-                m.values_mut().for_each(|v| *v = -*v);
+                m.values_mut().for_each(|v| v.amount = -v.amount);
                 MultiValue(InnerValue::Multi(m))
             }
         }
@@ -493,21 +496,26 @@ impl core::ops::Sub<&MultiValue> for &MultiValue {
                     } else {
                         MultiValue(InnerValue::One(Value {
                             amount,
-                            commodity: p1.commodity,
+                            commodity: p1.commodity.clone(),
                         }))
                     }
                 } else {
                     let mut map = HashMap::new();
-                    map.insert(p1.commodity, p1.amount);
-                    map.insert(p2.commodity, -p2.amount);
+                    map.insert(p1.commodity.get_symbol().clone(), p1.clone());
+                    map.insert(
+                        p2.commodity.get_symbol().clone(),
+                        (-p2).clone(),
+                    );
                     MultiValue(InnerValue::Multi(map))
                 }
             }
             (InnerValue::One(p1), InnerValue::Multi(m2)) => {
                 let mut map = HashMap::new();
-                map.insert(p1.commodity, p1.amount);
+                map.insert(p1.commodity.get_symbol().clone(), p1.clone());
                 for (c2, a2) in m2 {
-                    map.entry(*c2).and_modify(|v| *v -= a2).or_insert(-a2);
+                    map.entry(c2.clone())
+                        .and_modify(|v| v.amount -= a2.amount)
+                        .or_insert((-a2).clone());
                 }
                 let mut result = MultiValue(InnerValue::Multi(map));
                 result.normalize();
@@ -515,9 +523,9 @@ impl core::ops::Sub<&MultiValue> for &MultiValue {
             }
             (InnerValue::Multi(m1), InnerValue::One(p2)) => {
                 let mut map = m1.clone();
-                map.entry(p2.commodity)
-                    .and_modify(|v| *v -= p2.amount)
-                    .or_insert(p2.amount);
+                map.entry(p2.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount -= p2.amount)
+                    .or_insert(p2.clone());
                 let mut result = MultiValue(InnerValue::Multi(map));
                 result.normalize();
                 result
@@ -525,7 +533,9 @@ impl core::ops::Sub<&MultiValue> for &MultiValue {
             (InnerValue::Multi(m1), InnerValue::Multi(m2)) => {
                 let mut map = m1.clone();
                 for (c2, a2) in m2 {
-                    map.entry(*c2).and_modify(|v| *v -= *a2).or_insert(*a2);
+                    map.entry(c2.clone())
+                        .and_modify(|v| v.amount -= a2.amount)
+                        .or_insert(a2.clone());
                 }
                 let mut result = MultiValue(InnerValue::Multi(map));
                 result.normalize();
@@ -564,29 +574,36 @@ impl core::ops::SubAssign<&MultiValue> for MultiValue {
                     }
                 } else {
                     let mut map = HashMap::new();
-                    map.insert(p1.commodity, p1.amount);
-                    map.insert(p2.commodity, -p2.amount);
+                    map.insert(p1.commodity.get_symbol().clone(), p1.clone());
+                    map.insert(
+                        p2.commodity.get_symbol().clone(),
+                        (-p2).clone(),
+                    );
                     *self = MultiValue(InnerValue::Multi(map));
                 }
             }
             (InnerValue::One(p1), InnerValue::Multi(m2)) => {
                 let mut map = HashMap::new();
-                map.insert(p1.commodity, p1.amount);
+                map.insert(p1.commodity.get_symbol().clone(), p1.clone());
                 for (c2, a2) in m2 {
-                    map.entry(*c2).and_modify(|v| *v -= a2).or_insert(-a2);
+                    map.entry(c2.clone())
+                        .and_modify(|v| v.amount -= a2.amount)
+                        .or_insert((-a2).clone());
                 }
                 *self = MultiValue(InnerValue::Multi(map));
                 self.normalize();
             }
             (InnerValue::Multi(m1), InnerValue::One(p2)) => {
-                m1.entry(p2.commodity)
-                    .and_modify(|v| *v -= p2.amount)
-                    .or_insert(p2.amount);
+                m1.entry(p2.commodity.get_symbol().clone())
+                    .and_modify(|v| v.amount -= p2.amount)
+                    .or_insert(p2.clone());
                 self.normalize();
             }
             (InnerValue::Multi(m1), InnerValue::Multi(m2)) => {
                 for (c2, a2) in m2 {
-                    m1.entry(*c2).and_modify(|v| *v -= *a2).or_insert(*a2);
+                    m1.entry(c2.clone())
+                        .and_modify(|v| v.amount -= a2.amount)
+                        .or_insert(a2.clone());
                 }
                 self.normalize();
             }
@@ -596,22 +613,22 @@ impl core::ops::SubAssign<&MultiValue> for MultiValue {
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::CommodityId;
+    use crate::commodities::Commodity;
     use crate::multi_values::MultiValue;
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
 
     #[test]
     fn test_add() {
-        let c1 = CommodityId(1);
-        let c2 = CommodityId(2);
-        let one_c1 = MultiValue::new(Decimal::ONE, c1);
-        let two_c1 = MultiValue::new(dec!(2.0), c1);
-        let minus_one_c1 = MultiValue::new(-Decimal::ONE, c1);
-        let one_c2 = MultiValue::new(Decimal::ONE, c2);
+        let c1 = Commodity::new_dummy("c1", false);
+        let c2 = Commodity::new_dummy("c2", false);
+        let one_c1 = MultiValue::new(Decimal::ONE, &c1);
+        let two_c1 = MultiValue::new(dec!(2.0), &c1);
+        let minus_one_c1 = MultiValue::new(-Decimal::ONE, &c1);
+        let one_c2 = MultiValue::new(Decimal::ONE, &c2);
 
         assert_eq!(MultiValue::zero(), MultiValue::zero(),);
-        assert_eq!(MultiValue::zero(), MultiValue::new(Decimal::ZERO, c1),);
+        assert_eq!(MultiValue::zero(), MultiValue::new(Decimal::ZERO, &c1));
         assert_eq!(one_c1, one_c1);
         assert_ne!(one_c1, minus_one_c1);
         assert_eq!(-&one_c1, minus_one_c1);

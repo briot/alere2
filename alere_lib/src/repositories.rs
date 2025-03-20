@@ -1,24 +1,21 @@
-use crate::account_kinds::AccountKindCollection;
-use crate::accounts::{
-    Account, AccountCollection, AccountId, AccountNameDepth,
-};
-use crate::commodities::{CommodityCollection, CommodityId};
-use crate::formatters::Formatter;
-use crate::institutions::{Institution, InstitutionId};
+use crate::account_kinds::AccountKind;
+use crate::accounts::{Account, AccountId};
+use crate::commodities::{Commodity, CommodityCollection};
+use crate::institutions::Institution;
 use crate::market_prices::MarketPrices;
-use crate::multi_values::{MultiValue, Operation, Value};
+use crate::multi_values::Operation;
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
 use crate::transactions::TransactionRc;
+use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use itertools::min;
 use std::collections::HashMap;
 
-#[derive(Default)]
 pub struct Repository {
-    institutions: HashMap<InstitutionId, Institution>,
-    accounts: AccountCollection,
-    pub account_kinds: AccountKindCollection,
+    institutions: Vec<Institution>,
+    accounts: Vec<Account>,
+    account_kinds: CaseInsensitiveHashMap<AccountKind>,
     pub commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
@@ -26,12 +23,32 @@ pub struct Repository {
     pub(crate) transactions: Vec<TransactionRc>,
 }
 
+impl Default for Repository {
+    fn default() -> Self {
+        let mut s = Self {
+            institutions: Default::default(),
+            accounts: Default::default(),
+            account_kinds: CaseInsensitiveHashMap::new(),
+            commodities: Default::default(),
+            payees: Default::default(),
+            price_sources: Default::default(),
+            prices: Default::default(),
+            transactions: Default::default(),
+        };
+
+        for k in AccountKind::all_default() {
+            s.account_kinds.insert(k.get_name(), k);
+        }
+
+        s
+    }
+}
+
 impl Repository {
     /// Re-arrange internal data structure for faster queries.  For instance
     /// ensures that things are sorted by dates when appropriate.
     pub fn postprocess(&mut self) {
         self.prices.postprocess();
-        self.accounts.postprocess();
 
         self.transactions.sort_by_cached_key(|tx| {
             min(tx.iter_splits().map(|s| s.post_ts)).unwrap()
@@ -44,75 +61,53 @@ impl Repository {
         }
     }
 
-    pub fn add_institution(&mut self, id: InstitutionId, inst: Institution) {
-        self.institutions.insert(id, inst);
-    }
-    pub fn get_institution_mut(
-        &mut self,
-        id: &InstitutionId,
-    ) -> Option<&mut Institution> {
-        self.institutions.get_mut(id)
-    }
-
-    /// Return the institution to which an account belongs.  If the account
-    /// itself doesn't specify this information, look in the parent account.
-    pub fn get_account_institution(
-        &self,
-        acc: &Account,
-    ) -> Option<&Institution> {
-        let mut inst_id = acc.get_institution_id();
-        let mut current = acc;
-        while inst_id.is_none() {
-            match current.get_parent_id() {
-                None => {
-                    break;
-                }
-                Some(p) => {
-                    current = self.accounts.get(p).unwrap();
-                    inst_id = current.get_institution_id();
-                }
-            }
-        }
-        inst_id.and_then(|inst| self.institutions.get(&inst))
+    /// Lookup an account that matches "Equity"
+    pub fn get_equity_kind(&self) -> AccountKind {
+        self.account_kinds
+            .values()
+            .find(|k| k.is_equity())
+            .expect("No account kind found for Equity")
+            .clone()
     }
 
-    pub fn add_account(&mut self, account: Account) -> AccountId {
-        self.accounts.add(account)
+    /// Lookup account kind by name.
+    /// This is case-insensitive.
+    pub fn lookup_kind(&self, name: &str) -> Option<&AccountKind> {
+        self.account_kinds.get(name)
     }
-    pub fn get_account_mut(&mut self, id: AccountId) -> Option<&mut Account> {
-        self.accounts.get_mut(id)
+
+    pub fn add_institution(&mut self, inst: Institution) {
+        self.institutions.push(inst);
     }
-    pub fn get_account(&self, id: AccountId) -> Option<&Account> {
-        self.accounts.get(id)
+
+    /// Register a new account.  This automatically sets the id
+    pub fn add_account(&mut self, mut account: Account) -> Account {
+        account.set_id(
+            self.accounts
+                .iter()
+                .map(Account::get_id)
+                .max()
+                .unwrap_or(AccountId::default())
+                .inc(),
+        );
+        self.accounts.push(account.clone());
+        account
     }
-    pub fn iter_accounts(&self) -> impl Iterator<Item = (AccountId, &Account)> {
-        self.accounts.iter_accounts()
+    pub fn iter_accounts(&self) -> impl Iterator<Item = Account> + '_ {
+        self.accounts.iter().cloned()
     }
 
     /// Return the parent accounts of acc (not including acc itself).  The last
     /// element returned is the toplevel account, like Asset.
-    pub fn iter_parent_accounts<'a>(
-        &'a self,
-        acc: &'a Account,
-    ) -> impl Iterator<Item = &'a Account> {
-        ParentAccountIter::new(self, acc).skip(1)
-    }
-
-    pub fn get_account_name(
+    pub fn iter_parent_accounts(
         &self,
         acc: &Account,
-        kind: AccountNameDepth,
-    ) -> String {
-        self.accounts.name(acc, kind)
+    ) -> impl Iterator<Item = Account> + '_ {
+        ParentAccountIter::new(acc.clone())
     }
 
     pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {
         self.price_sources.insert(id, source);
-    }
-
-    /// Returns the display precision for a given commodity.
-    pub fn get_display_precision(&self, id: &CommodityId) -> u8 {
-        self.commodities.get(*id).unwrap().display_precision
     }
 
     pub fn add_payee(&mut self, id: PayeeId, payee: Payee) {
@@ -121,8 +116,8 @@ impl Repository {
 
     pub fn add_price(
         &mut self,
-        origin: CommodityId,
-        target: CommodityId,
+        origin: &Commodity,
+        target: &Commodity,
         price: Price,
     ) {
         self.prices.add(origin, target, price);
@@ -133,17 +128,14 @@ impl Repository {
 
         for s in tx.iter_splits() {
             // Add the transaction to each account it applies to
-            self.accounts
-                .get_mut(s.account)
-                .unwrap()
-                .add_transaction(tx);
+            s.account.add_transaction(tx);
 
             // Register prices from transactions
             match &s.operation {
                 Operation::BuyAmount { qty, amount } => {
                     self.add_price(
-                        amount.commodity,
-                        qty.commodity,
+                        &amount.commodity,
+                        &qty.commodity,
                         Price::new(
                             s.post_ts,
                             qty.amount / amount.amount,
@@ -153,8 +145,8 @@ impl Repository {
                 }
                 Operation::BuyPrice { qty, price } => {
                     self.add_price(
-                        price.commodity,
-                        qty.commodity,
+                        &price.commodity,
+                        &qty.commodity,
                         Price::new(
                             s.post_ts,
                             price.amount,
@@ -167,25 +159,9 @@ impl Repository {
         }
     }
 
-    pub fn display_multi_value(
-        &self,
-        value: &MultiValue,
-        format: &Formatter,
-    ) -> String {
-        let mut into = String::new();
-        value.display(&mut into, format, &self.commodities);
-        into
-    }
-    pub fn display_value(&self, value: &Value, format: &Formatter) -> String {
-        format.display_from_commodity(
-            value.amount,
-            self.commodities.get(value.commodity).unwrap(),
-        )
-    }
-
     pub fn market_prices(
         &self,
-        to_commodity: Option<CommodityId>,
+        to_commodity: Option<Commodity>,
     ) -> MarketPrices {
         MarketPrices::new(
             &self.prices,
@@ -195,27 +171,25 @@ impl Repository {
     }
 }
 
-pub struct ParentAccountIter<'a> {
-    current: Option<&'a Account>,
-    repo: &'a Repository,
+pub struct ParentAccountIter {
+    current: Option<Account>,
 }
-impl<'a> ParentAccountIter<'a> {
+impl ParentAccountIter {
     /// An iterator that return current and all its parent accounts
-    pub fn new(repo: &'a Repository, current: &'a Account) -> Self {
+    pub fn new(current: Account) -> Self {
         Self {
-            repo,
             current: Some(current),
         }
     }
 }
-impl<'a> Iterator for ParentAccountIter<'a> {
-    type Item = &'a Account;
+impl Iterator for ParentAccountIter {
+    type Item = Account;
     fn next(&mut self) -> Option<Self::Item> {
-        let p = self.current;
-        if let Some(c) = self.current {
-            self.current =
-                c.get_parent_id().and_then(|pid| self.repo.get_account(pid));
-        }
-        p
+        let p = match &self.current {
+            None => None,
+            Some(c) => c.get_parent().clone(),
+        };
+        self.current = p;
+        self.current.clone()
     }
 }

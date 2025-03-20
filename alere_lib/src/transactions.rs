@@ -1,6 +1,8 @@
-use crate::accounts::AccountId;
-use crate::multi_values::{MultiValue, Operation, Value};
-use crate::payees::PayeeId;
+use crate::{
+    accounts::Account,
+    multi_values::{MultiValue, Operation, Value},
+    payees::PayeeId,
+};
 use chrono::{DateTime, Local};
 use std::rc::Rc;
 
@@ -85,7 +87,7 @@ impl Transaction {
                 Operation::BuyPrice { qty, price } => {
                     total += &Value {
                         amount: qty.amount * price.amount,
-                        commodity: price.commodity,
+                        commodity: price.commodity.clone(),
                     };
                 }
                 Operation::Reinvest { amount, .. } => {
@@ -131,7 +133,7 @@ impl TransactionRc {
     /// Create a new split for this transaction
     pub fn add_split(
         &mut self,
-        account: AccountId,
+        account: Account,
         reconciled: ReconcileKind,
         post_ts: DateTime<Local>,
         operation: Operation,
@@ -219,6 +221,13 @@ impl TransactionRc {
         self.0.splits.iter()
     }
 
+    pub fn iter_splits_for_account(
+        &self,
+        account: Account,
+    ) -> impl std::iter::Iterator<Item = &Split> {
+        self.0.splits.iter().filter(move |s| s.account == account)
+    }
+
     /// Find a memo or description for the transaction, possibly looking into
     /// splits themselves.
     pub fn memo(&self) -> Option<&str> {
@@ -228,26 +237,16 @@ impl TransactionRc {
         None
     }
 
-    fn timestamp_for_account(
+    pub fn timestamp_for_account(
         &self,
-        account: AccountId,
+        account: &Account,
     ) -> Option<DateTime<Local>> {
         for s in &self.0.splits {
-            if s.account == account {
+            if s.account == *account {
                 return Some(s.post_ts);
             }
         }
         None
-    }
-
-    pub fn earlier_than_for_account(
-        &self,
-        right: &TransactionRc,
-        account: AccountId,
-    ) -> std::cmp::Ordering {
-        let t1 = self.timestamp_for_account(account);
-        let t2 = right.timestamp_for_account(account);
-        t1.cmp(&t2)
     }
 }
 
@@ -256,7 +255,7 @@ impl TransactionRc {
 #[derive(Debug)]
 pub struct Split {
     // Which account is impacted bu this split.
-    pub account: AccountId,
+    pub account: Account,
 
     // When was this split reconciled
     pub reconciled: ReconcileKind,
@@ -288,30 +287,37 @@ pub struct Split {
 
 #[cfg(test)]
 mod test {
-    use crate::accounts::AccountId;
-    use crate::commodities::CommodityId;
-    use crate::errors::AlrError;
-    use crate::multi_values::{MultiValue, Operation};
-    use crate::transactions::{ReconcileKind, TransactionRc};
+    use crate::{
+        account_categories::AccountCategory,
+        account_kinds::AccountKind,
+        accounts::Account,
+        commodities::Commodity,
+        errors::AlrError,
+        multi_values::{MultiValue, Operation},
+        transactions::{ReconcileKind, TransactionRc},
+    };
     use chrono::Local;
     use rust_decimal_macros::dec;
 
     #[test]
     fn test_proper() -> Result<(), AlrError> {
         let mut tr = TransactionRc::new_with_default();
+        let comm = Commodity::new_dummy("euro", false);
+        let kind =
+            AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
         tr.add_split(
-            AccountId(1),
+            Account::new_dummy("aaa", kind.clone()),
             ReconcileKind::New,
             Local::now(),
-            Operation::Credit(MultiValue::new(dec!(1.1), CommodityId(1))),
+            Operation::Credit(MultiValue::new(dec!(1.1), &comm)),
         );
         assert!(!tr.is_balanced());
 
         tr.add_split(
-            AccountId(2),
+            Account::new_dummy("bbb", kind.clone()),
             ReconcileKind::New,
             Local::now(),
-            Operation::Credit(MultiValue::new(dec!(-1.1), CommodityId(1))),
+            Operation::Credit(MultiValue::new(dec!(-1.1), &comm)),
         );
         assert!(tr.is_balanced());
 

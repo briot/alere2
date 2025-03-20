@@ -42,6 +42,7 @@ dependencies = [
  "anyhow",
  "bisection",
  "bitmask",
+ "case_insensitive_hashmap",
  "chrono",
  "chrono-tz",
  "futures",
@@ -437,6 +438,15 @@ name = "bytes"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "325918d6fe32f23b19878fe4b34794ae41fc19ddbe53b10571a4874d44ffd39b"
+
+[[package]]
+name = "case_insensitive_hashmap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59ca1ed8675a76594ea5a5ad5cc318d72238cd4975d88f73768508fa577986b8"
+dependencies = [
+ "unicase",
+]
 
 [[package]]
 name = "cc"
@@ -2437,6 +2447,12 @@ checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "unicase"
+version = "2.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
 
 [[package]]
 name = "unicode-bidi"

@@ -1,9 +1,9 @@
-use crate::account_kinds::AccountKindId;
-use crate::accounts::{Account, AccountId, Reconciliation};
-use crate::commodities::{Commodity, CommodityId};
+use crate::account_kinds::AccountKind;
+use crate::accounts::{Account, Reconciliation};
+use crate::commodities::Commodity;
 use crate::errors::AlrError;
 use crate::importers::Importer;
-use crate::institutions::{Institution, InstitutionId};
+use crate::institutions::Institution;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
@@ -58,16 +58,16 @@ use ::{
 #[cfg(feature = "kmymoney")]
 #[derive(Default)]
 pub struct KmyMoneyImporter {
-    institutions: HashMap<String, InstitutionId>,
-    accounts: HashMap<String, AccountId>, // kmymoney Id -> alere Id
-    account_kinds: HashMap<String, AccountKindId>,
-    commodities: HashMap<String, CommodityId>,
+    institutions: HashMap<String, Institution>,
+    accounts: HashMap<String, Account>, // kmymoney Id -> alere Id
+    account_kinds: HashMap<String, AccountKind>,
+    commodities: HashMap<String, Commodity>,
     payees: HashMap<String, PayeeId>,
 
-    price_precisions: HashMap<CommodityId, u8>,
-    smallest_account_fraction: HashMap<CommodityId, u8>,
+    price_precisions: HashMap<Commodity, u8>,
+    smallest_account_fraction: HashMap<Commodity, u8>,
 
-    account_currency: HashMap<String, CommodityId>,
+    account_currency: HashMap<String, Commodity>,
     price_sources: HashMap<String, PriceSourceId>,
 }
 
@@ -79,32 +79,20 @@ impl KmyMoneyImporter {
         conn: &mut SqliteConnection,
     ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmInstitutions").fetch(conn);
-        let mut id = InstitutionId::default();
         while let Some(row) = stream.try_next().await? {
-            id = id.inc();
-            self.institutions.insert(row.get("id"), id);
-            repo.add_institution(
-                id,
-                Institution::new(
-                    row.get("name"),
-                    row.get("manager"),
-                    row.get("addressStreet"),
-                    row.get("addressZipcode"),
-                    row.get("addressCity"),
-                    row.get("telephone"),
-                    // ??? Not imported: routingCode
-                ),
+            let inst = Institution::new(
+                row.get("name"),
+                row.get("manager"),
+                row.get("addressStreet"),
+                row.get("addressZipcode"),
+                row.get("addressCity"),
+                row.get("telephone"),
+                // ??? Not imported: routingCode
             );
+            self.institutions.insert(row.get("id"), inst.clone());
+            repo.add_institution(inst);
         }
         Ok(())
-    }
-
-    fn import_account_kinds(&mut self, repo: &mut Repository) {
-        self.account_kinds = HashMap::new();
-        for (id, k) in repo.account_kinds.0.iter().enumerate() {
-            self.account_kinds
-                .insert(k.name.to_lowercase(), AccountKindId(id as u32 + 1));
-        }
     }
 
     async fn import_price_sources(
@@ -145,17 +133,19 @@ impl KmyMoneyImporter {
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
 
-            let id = repo.commodities.add(Commodity::new(
+            let comm = Commodity::new(
                 row.get("name"),
                 row.get("symbolString"), // symbol (could be symbol2)
                 true,                    // symbol displayed after value
                 true,                    // is_currency
                 row.get("ISOcode"),
                 display_precision,
-            ));
-            self.commodities.insert(row.get("ISOcode"), id);
-            self.price_precisions.insert(id, precision);
-            self.smallest_account_fraction.insert(id, display_precision);
+            );
+            repo.commodities.add(comm.clone());
+            self.commodities.insert(row.get("ISOcode"), comm.clone());
+            self.price_precisions.insert(comm.clone(), precision);
+            self.smallest_account_fraction
+                .insert(comm, display_precision);
 
             // ??? Not imported
             //    symbol1
@@ -177,18 +167,20 @@ impl KmyMoneyImporter {
             let display_precision = row
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
-            let id = repo.commodities.add(Commodity::new(
+            let comm = Commodity::new(
                 row.get("name"),
                 row.get("symbol"), // symbol
                 true,              // symbol displayed after value
                 false,             // is_currency
                 row.get("symbol"),
                 display_precision,
-            ));
-            self.price_precisions.insert(id, precision);
-            self.smallest_account_fraction.insert(id, display_precision);
+            );
+            repo.commodities.add(comm.clone());
+            self.price_precisions.insert(comm.clone(), precision);
+            self.smallest_account_fraction
+                .insert(comm.clone(), display_precision);
             let kmm_id: String = row.get("id");
-            self.commodities.insert(kmm_id, id);
+            self.commodities.insert(kmm_id, comm);
 
             // ??? Not imported
             //    type + typeString
@@ -228,16 +220,33 @@ impl KmyMoneyImporter {
         Ok(())
     }
 
+    fn lookup_kind(
+        &self,
+        repo: &Repository,
+        name: &str,
+    ) -> Result<AccountKind> {
+        if let Some(k) = self.account_kinds.get(name) {
+            Ok(k.clone())
+        } else if let Some(k) = repo.lookup_kind(name) {
+            Ok(k.clone())
+        } else {
+            Err(AlrError::Str(format!(
+                "Could not get account_kind '{}'",
+                name
+            )))?
+        }
+    }
+
     // To ease importing, we consider every line in the description
     // starting with "alere:" as containing hints for the importer.
     // Currently:
     //     alere: account_kind_name
     fn guess_account_kind(
         &self,
-        name: &str,
+        repo: &Repository,
         description: Option<&str>,
         account_type: &str,
-    ) -> Result<AccountKindId> {
+    ) -> Result<AccountKind> {
         let config: Vec<&str> = description
             .unwrap_or_default()
             .split('\n')
@@ -251,14 +260,7 @@ impl KmyMoneyImporter {
         .trim()
         .to_lowercase();
 
-        // ??? This assumes our account kind names are the same as kmymoney
-        match self.account_kinds.get(&akind_name) {
-            None => Err(AlrError::Str(format!(
-                "Could not get account_kind '{}' for account '{}'",
-                akind_name, name
-            )))?,
-            Some(k) => Ok(*k),
-        }
+        self.lookup_kind(repo, &akind_name)
     }
 
     /// Import all accounts.
@@ -270,24 +272,24 @@ impl KmyMoneyImporter {
         let mut stream = query("SELECT * FROM kmmAccounts").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             let kmm_id: &str = row.get("id");
-            let institution: Option<&str> = row.get("institutionId");
+            let institution_id: Option<&str> = row.get("institutionId");
             let description: Option<&str> = row.get("description");
             let kmm_currency: &str = row.get::<&str, _>("currencyId");
-            let currency = *self.commodities.get(kmm_currency).unwrap();
+            let currency = self.commodities.get(kmm_currency).unwrap();
             let name: &str = row.get("accountName");
-            let id = repo.add_account(Account::new(
+            let acc = repo.add_account(Account::new(
                 name,
                 self.guess_account_kind(
-                    name,
+                    repo,
                     description,
                     row.get("accountTypeString"),
                 )?,
                 None,
-                institution.and_then(|i| {
+                institution_id.and_then(|i| {
                     if i.is_empty() {
                         None
                     } else {
-                        self.institutions.get(i).copied()
+                        self.institutions.get(i).cloned()
                     }
                 }),
                 description,
@@ -310,12 +312,13 @@ impl KmyMoneyImporter {
                 // (not needed) transactionCount
             ));
 
-            self.accounts.insert(kmm_id.into(), id);
-            self.account_currency.insert(kmm_id.into(), currency);
+            self.accounts.insert(kmm_id.into(), acc);
+            self.account_currency
+                .insert(kmm_id.into(), currency.clone());
 
             // Store the account's currency.  We do not have the same notion
             // in alere, where an account can contain multiple commodities.
-            self.commodities.insert(kmm_id.into(), currency);
+            self.commodities.insert(kmm_id.into(), currency.clone());
         }
 
         Ok(())
@@ -325,7 +328,6 @@ impl KmyMoneyImporter {
     /// create the parent->child relationships
     async fn import_account_parents(
         &mut self,
-        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<()> {
         let mut stream =
@@ -334,13 +336,14 @@ impl KmyMoneyImporter {
             let parent_kmm_id: Option<&str> = row.get("parentId");
             if let Some(pid) = parent_kmm_id {
                 if !pid.is_empty() {
-                    let parent_id = self
+                    let parent = self
                         .accounts
                         .get(pid)
-                        .with_context(|| format!("No such account {pid:?}"))?;
+                        .with_context(|| format!("No such account {pid:?}"))?
+                        .clone();
                     let kmm_id: &str = row.get("id");
-                    let id = self.accounts.get(kmm_id).unwrap();
-                    repo.get_account_mut(*id).unwrap().set_parent(*parent_id);
+                    let acc = self.accounts.get_mut(kmm_id).unwrap();
+                    acc.set_parent(parent);
                 }
             }
         }
@@ -350,7 +353,6 @@ impl KmyMoneyImporter {
     /// Import all reconciliations
     async fn import_key_values(
         &mut self,
-        repo: &mut Repository,
         conn: &mut SqliteConnection,
     ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmKeyValuePairs").fetch(conn);
@@ -362,18 +364,17 @@ impl KmyMoneyImporter {
 
             match (kvp_type, kvp_key) {
                 ("ACCOUNT", "reconciliationHistory") => {
-                    let account_id = *self.accounts.get(kvp_id).unwrap();
-                    let account = repo.get_account_mut(account_id).unwrap();
+                    let account = self.accounts.get_mut(kvp_id).unwrap();
                     let account_precision = *self
                         .price_precisions
                         .get(self.account_currency.get(kvp_id).unwrap())
                         .unwrap();
-                    let currency_id = self.commodities.get(kvp_id).unwrap();
+                    let currency = self.commodities.get(kvp_id).unwrap();
                     for r in kvp_data.unwrap().split(';') {
                         let mut iter = r.split(':');
                         let date = iter.next().unwrap();
                         let val = iter.next().unwrap();
-                        account.reconciliations.push(Reconciliation {
+                        account.add_reconciliation(Reconciliation {
                             timestamp: date
                                 .parse::<NaiveDate>()
                                 .unwrap()
@@ -383,20 +384,20 @@ impl KmyMoneyImporter {
                                 .unwrap(),
                             total: MultiValue::new(
                                 parse_price(val, account_precision)?.unwrap(),
-                                *currency_id,
+                                currency,
                             ),
                         });
                     }
                 }
                 ("ACCOUNT", "iban") => {
-                    let account_id = *self.accounts.get(kvp_id).unwrap();
-                    let account = repo.get_account_mut(account_id).unwrap();
-                    account.iban = Some(kvp_data.unwrap().to_string());
+                    let account = self.accounts.get_mut(kvp_id).unwrap();
+                    account.set_iban(kvp_data.unwrap());
                 }
                 ("ACCOUNT", "mm-closed") => {
-                    let account_id = *self.accounts.get(kvp_id).unwrap();
-                    let account = repo.get_account_mut(account_id).unwrap();
-                    account.closed = kvp_data.unwrap().to_lowercase() == "yes";
+                    let account = self.accounts.get_mut(kvp_id).unwrap();
+                    if kvp_data.unwrap().to_lowercase() == "yes" {
+                        account.close();
+                    }
                 }
                 ("ACCOUNT", "OpeningBalanceAccount") => {
                     // kvpData is "yes", and "kvpId" is the account used to
@@ -417,22 +418,18 @@ impl KmyMoneyImporter {
                     // total amount. Not needed.
                 }
                 ("INSTITUTION", "bic") => {
-                    let institution_id = self.institutions.get(kvp_id).unwrap();
-                    let institution =
-                        repo.get_institution_mut(institution_id).unwrap();
-                    institution.bic = Some(kvp_data.unwrap().to_string());
+                    if let Some(inst) = self.institutions.get_mut(kvp_id) {
+                        inst.set_bic(kvp_data.unwrap());
+                    }
                 }
                 ("INSTITUTION", "url") => {
-                    let institution_id = self.institutions.get(kvp_id).unwrap();
-                    let institution =
-                        repo.get_institution_mut(institution_id).unwrap();
-                    institution.url = Some(kvp_data.unwrap().to_string());
+                    if let Some(inst) = self.institutions.get_mut(kvp_id) {
+                        inst.set_url(kvp_data.unwrap());
+                    }
                 }
                 ("SECURITY", "kmm-security-id") => {
-                    let commodity_id = self.commodities.get(kvp_id).unwrap();
-                    let commodity =
-                        repo.commodities.get_mut(*commodity_id).unwrap();
-                    commodity.isin = Some(kvp_data.unwrap().to_string());
+                    let commodity = self.commodities.get_mut(kvp_id).unwrap();
+                    commodity.set_isin(kvp_data.unwrap());
                 }
                 (
                     "SECURITY",
@@ -512,8 +509,8 @@ impl KmyMoneyImporter {
                     .get(row.get::<&str, _>("priceSource"))
                     .unwrap();
                 repo.add_price(
-                    *origin,
-                    *dest,
+                    origin,
+                    dest,
                     Price::new(timestamp, price, *source),
                 );
             }
@@ -537,7 +534,7 @@ impl KmyMoneyImporter {
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,
-    ) -> Result<HashMap<String, (CommodityId, TransactionRc)>> {
+    ) -> Result<HashMap<String, (Commodity, TransactionRc)>> {
         let mut tx = HashMap::new();
 
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
@@ -547,10 +544,10 @@ impl KmyMoneyImporter {
                     tx.insert(
                         row.get::<String, _>("id"),
                         (
-                            *self
-                                .commodities
+                            self.commodities
                                 .get(row.get::<&str, _>("currencyId"))
-                                .unwrap(),
+                                .unwrap()
+                                .clone(),
                             TransactionRc::new_with_details(
                                 TransactionDetails {
                                     memo: row.get("memo"),
@@ -601,9 +598,9 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-        mut tx: HashMap<String, (CommodityId, TransactionRc)>,
+        mut tx: HashMap<String, (Commodity, TransactionRc)>,
     ) -> Result<()> {
-        let mut equity_account: Option<AccountId> = None;
+        let mut equity_account: Option<Account> = None;
 
         let mut stream =
             query("SELECT * FROM kmmSplits ORDER BY transactionId").fetch(conn);
@@ -611,9 +608,9 @@ impl KmyMoneyImporter {
             let sid = row.get::<i32, _>("splitId");
             let tid = row.get::<&str, _>("transactionId");
             let k_account: &str = row.get("accountId");
-            let account = *self.accounts.get(k_account).unwrap();
+            let account = self.accounts.get(k_account).unwrap();
             let (tx_currency, tx) = tx.get_mut(tid).unwrap();
-            let account_currency_id = self.commodities.get(k_account).unwrap();
+            let account_currency = self.commodities.get(k_account).unwrap();
             let account_precision = *self
                 .price_precisions
                 .get(self.account_currency.get(k_account).unwrap())
@@ -652,13 +649,13 @@ impl KmyMoneyImporter {
 
             let price = parse_price(
                 row.get("price"),
-                self.price_precisions[account_currency_id],
+                self.price_precisions[account_currency],
             )?;
             let value =
                 parse_price(row.get("value"), account_precision)?.unwrap();
             let shares = parse_price(
                 row.get("shares"),
-                self.smallest_account_fraction[account_currency_id],
+                self.smallest_account_fraction[account_currency],
             )?
             .unwrap();
 
@@ -683,7 +680,7 @@ impl KmyMoneyImporter {
                     if equity_account.is_none() {
                         let eacc = Account::new(
                             "kmymoney_import",
-                            repo.account_kinds.lookup("Equity").unwrap(),
+                            repo.get_equity_kind(),
                             None,
                             None,
                             None,
@@ -696,12 +693,12 @@ impl KmyMoneyImporter {
                     }
 
                     tx.add_split(
-                        equity_account.unwrap(),
+                        equity_account.clone().unwrap(),
                         ReconcileKind::New,
                         post_ts,
                         Operation::Credit(MultiValue::new(
                             -shares,
-                            *account_currency_id,
+                            account_currency,
                         )),
                     );
 
@@ -709,7 +706,7 @@ impl KmyMoneyImporter {
                     Operation::AddShares {
                         qty: Value {
                             amount: shares,
-                            commodity: *account_currency_id,
+                            commodity: account_currency.clone(),
                         },
                     }
                 }
@@ -725,20 +722,20 @@ impl KmyMoneyImporter {
                             value,
                             p * shares,
                             diff,
-                            self.smallest_account_fraction[account_currency_id],
+                            self.smallest_account_fraction[account_currency],
                             self.smallest_account_fraction[tx_currency],
-                            self.price_precisions[account_currency_id],
+                            self.price_precisions[account_currency],
                             self.price_precisions[tx_currency]);
                     }
 
                     Operation::BuyAmount {
                         qty: Value {
                             amount: shares,
-                            commodity: *account_currency_id,
+                            commodity: account_currency.clone(),
                         },
                         amount: Value {
                             amount: value,
-                            commodity: *tx_currency,
+                            commodity: tx_currency.clone(),
                         },
                     }
                 }
@@ -761,12 +758,12 @@ impl KmyMoneyImporter {
                             .unwrap();
                     Operation::Split {
                         ratio,
-                        commodity: *account_currency_id,
+                        commodity: account_currency.clone(),
                     }
                 }
                 (Some("Reinvest"), Some(_)) => Operation::Reinvest {
-                    shares: MultiValue::new(shares, *account_currency_id),
-                    amount: MultiValue::new(value, *tx_currency),
+                    shares: MultiValue::new(shares, account_currency),
+                    amount: MultiValue::new(value, tx_currency),
                 },
                 (None | Some(""), _) => {
                     // An operation in USD for an account in EUR is represented
@@ -775,21 +772,21 @@ impl KmyMoneyImporter {
                     //    * account currency = EUR
                     //    * split:  value in USD,  shares=EUR (beware that
                     //       sharesFormatted is wrong).
-                    if tx_currency != account_currency_id {
+                    if tx_currency != account_currency {
                         Operation::BuyAmount {
                             qty: Value {
                                 amount: shares,
-                                commodity: *account_currency_id,
+                                commodity: account_currency.clone(),
                             },
                             amount: Value {
                                 amount: value,
-                                commodity: *tx_currency,
+                                commodity: tx_currency.clone(),
                             },
                         }
                     } else {
                         Operation::Credit(MultiValue::new(
                             shares,
-                            *account_currency_id,
+                            account_currency,
                         ))
                     }
                 }
@@ -799,7 +796,7 @@ impl KmyMoneyImporter {
             };
 
             tx.add_split(
-                account,
+                account.clone(),
                 match row.get_unchecked::<i8, _>("reconcileFlag") {
                     0 => ReconcileKind::New,
                     1 => ReconcileKind::Cleared,
@@ -830,7 +827,7 @@ impl Importer for KmyMoneyImporter {
         path: &Path,
         report_progress: impl Fn(u64, u64),
     ) -> Result<Repository> {
-        const MAX_PROGRESS: u64 = 14;
+        const MAX_PROGRESS: u64 = 13;
 
         let mut repo = Repository::default();
         report_progress(1, MAX_PROGRESS);
@@ -844,38 +841,35 @@ impl Importer for KmyMoneyImporter {
         self.import_institutions(&mut repo, &mut conn).await?;
         report_progress(3, MAX_PROGRESS);
 
-        self.import_account_kinds(&mut repo);
+        self.import_price_sources(&mut repo, &mut conn).await?;
         report_progress(4, MAX_PROGRESS);
 
-        self.import_price_sources(&mut repo, &mut conn).await?;
+        self.import_currencies(&mut repo, &mut conn).await?;
         report_progress(5, MAX_PROGRESS);
 
-        self.import_currencies(&mut repo, &mut conn).await?;
+        self.import_securities(&mut repo, &mut conn).await?;
         report_progress(6, MAX_PROGRESS);
 
-        self.import_securities(&mut repo, &mut conn).await?;
+        self.import_payees(&mut repo, &mut conn).await?;
         report_progress(7, MAX_PROGRESS);
 
-        self.import_payees(&mut repo, &mut conn).await?;
+        self.import_accounts(&mut repo, &mut conn).await?;
         report_progress(8, MAX_PROGRESS);
 
-        self.import_accounts(&mut repo, &mut conn).await?;
+        self.import_account_parents(&mut conn).await?;
         report_progress(9, MAX_PROGRESS);
 
-        self.import_account_parents(&mut repo, &mut conn).await?;
+        self.import_prices(&mut repo, &mut conn).await?;
         report_progress(10, MAX_PROGRESS);
 
-        self.import_prices(&mut repo, &mut conn).await?;
+        let tx = self.import_transactions(&mut conn).await?;
         report_progress(11, MAX_PROGRESS);
 
-        let tx = self.import_transactions(&mut conn).await?;
+        self.import_splits(&mut repo, &mut conn, tx).await?;
         report_progress(12, MAX_PROGRESS);
 
-        self.import_splits(&mut repo, &mut conn, tx).await?;
+        self.import_key_values(&mut conn).await?;
         report_progress(13, MAX_PROGRESS);
-
-        self.import_key_values(&mut repo, &mut conn).await?;
-        report_progress(14, MAX_PROGRESS);
 
         repo.postprocess();
 

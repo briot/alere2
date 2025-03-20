@@ -1,4 +1,4 @@
-use crate::commodities::CommodityId;
+use crate::commodities::Commodity;
 use crate::price_sources::PriceSourceId;
 use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
@@ -6,19 +6,19 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct PriceCollection {
-    pub(crate) prices: HashMap<(CommodityId, CommodityId), Vec<Price>>,
+    pub(crate) prices: HashMap<(Commodity, Commodity), Vec<Price>>,
 }
 
 impl PriceCollection {
     /// Register a new historical price
     pub fn add(
         &mut self,
-        origin: CommodityId,
-        target: CommodityId,
+        origin: &Commodity,
+        target: &Commodity,
         price: Price,
     ) {
         self.prices
-            .entry((origin, target))
+            .entry((origin.clone(), target.clone()))
             .or_default()
             // ??? Should we use bisection::insort_left_by
             .push(price);

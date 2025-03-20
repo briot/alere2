@@ -1,10 +1,10 @@
-use alere_lib::{commodities::CommodityId, repositories::Repository};
-use clap::{arg, Arg, ArgMatches};
+use alere_lib::{commodities::Commodity, repositories::Repository};
 use chrono::{DateTime, Local};
+use clap::{arg, Arg, ArgMatches};
 
 pub struct GlobalSettings {
     pub commodity_str: Option<String>,
-    pub commodity: Option<CommodityId>,
+    pub commodity: Option<Commodity>,
     pub table: crate::tables::Settings,
 
     // How to display numbers

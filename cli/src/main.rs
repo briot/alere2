@@ -9,7 +9,6 @@ use crate::{
     networth_view::networth_view, stats_view::stats_view,
 };
 use alere_lib::{
-    account_categories::AccountCategory,
     formatters::{Formatter, SymbolQuote},
     hledger::Hledger,
     importers::{Exporter, Importer},
@@ -50,10 +49,7 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
 
 /// Display stats
 fn stats(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
-    let output = stats_view(
-        repo,
-        globals,
-    )?;
+    let output = stats_view(repo, globals)?;
     println!("{}", output);
     Ok(())
 }
@@ -64,9 +60,8 @@ fn networth(
     globals: &GlobalSettings,
     args: &ArgMatches,
 ) -> Result<()> {
-    let output = networth_view(repo, args, globals, |(_acc_id, acc)| {
-        repo.account_kinds.get(acc.kind).unwrap().is_networth
-    })?;
+    let output =
+        networth_view(repo, args, globals, |acc| acc.get_kind().is_networth())?;
     println!("{}", output);
     Ok(())
 }
@@ -77,13 +72,9 @@ fn cashflow(
     globals: &GlobalSettings,
     args: &ArgMatches,
 ) -> Result<()> {
-    let income_expenses =
-        networth_view(repo, args, globals, |(_acc_id, acc)| {
-            matches!(
-                repo.account_kinds.get(acc.kind).unwrap().category,
-                AccountCategory::EXPENSE | AccountCategory::INCOME
-            )
-        });
+    let income_expenses = networth_view(repo, args, globals, |acc| {
+        acc.get_kind().is_expense() || acc.get_kind().is_income()
+    });
     println!("{}", income_expenses.unwrap());
     Ok(())
 }

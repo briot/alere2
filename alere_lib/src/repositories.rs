@@ -1,4 +1,4 @@
-use crate::account_kinds::AccountKind;
+use crate::account_kinds::AccountKindCollection;
 use crate::accounts::{Account, AccountId};
 use crate::commodities::{Commodity, CommodityCollection};
 use crate::institutions::Institution;
@@ -8,40 +8,19 @@ use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
 use crate::transactions::TransactionRc;
-use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use itertools::min;
 use std::collections::HashMap;
 
+#[derive(Default)]
 pub struct Repository {
     institutions: Vec<Institution>,
     accounts: Vec<Account>,
-    account_kinds: CaseInsensitiveHashMap<AccountKind>,
+    pub account_kinds: AccountKindCollection,
     pub commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
     pub(crate) prices: PriceCollection,
     pub(crate) transactions: Vec<TransactionRc>,
-}
-
-impl Default for Repository {
-    fn default() -> Self {
-        let mut s = Self {
-            institutions: Default::default(),
-            accounts: Default::default(),
-            account_kinds: CaseInsensitiveHashMap::new(),
-            commodities: Default::default(),
-            payees: Default::default(),
-            price_sources: Default::default(),
-            prices: Default::default(),
-            transactions: Default::default(),
-        };
-
-        for k in AccountKind::all_default() {
-            s.account_kinds.insert(k.get_name(), k);
-        }
-
-        s
-    }
 }
 
 impl Repository {
@@ -59,21 +38,6 @@ impl Repository {
                 println!("Transaction not balanced: {:?}", tr);
             }
         }
-    }
-
-    /// Lookup an account that matches "Equity"
-    pub fn get_equity_kind(&self) -> AccountKind {
-        self.account_kinds
-            .values()
-            .find(|k| k.is_equity())
-            .expect("No account kind found for Equity")
-            .clone()
-    }
-
-    /// Lookup account kind by name.
-    /// This is case-insensitive.
-    pub fn lookup_kind(&self, name: &str) -> Option<&AccountKind> {
-        self.account_kinds.get(name)
     }
 
     pub fn add_institution(&mut self, inst: Institution) {

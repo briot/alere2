@@ -1,7 +1,146 @@
 /// Fine-grained properties for accounts. Thanks to these flags, we can make
 /// various computations.
 use crate::account_categories::AccountCategory;
+use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use std::{cell::RefCell, rc::Rc};
+
+pub struct AccountKindCollection {
+    kinds: CaseInsensitiveHashMap<AccountKind>,
+}
+
+impl Default for AccountKindCollection {
+    fn default() -> Self {
+        let mut d = Self {
+            kinds: CaseInsensitiveHashMap::new(),
+        };
+
+        let all_default = vec![
+            AccountKind::new(
+                "Passive Income",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_passive_income(true),
+            AccountKind::new(
+                "Work Income",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_work_income(true),
+            AccountKind::new(
+                "Income",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            ),
+            AccountKind::new(
+                "Unrealized gain",
+                "Expense",
+                "Income",
+                AccountCategory::INCOME,
+            )
+            .set_is_unrealized(true),
+            AccountKind::new(
+                "Expense",
+                "Increase",
+                "Decrease",
+                AccountCategory::EXPENSE,
+            ),
+            AccountKind::new(
+                "Income tax",
+                "Increase",
+                "Decrease",
+                AccountCategory::EXPENSE,
+            )
+            .set_is_income_tax(true),
+            AccountKind::new(
+                "Other tax",
+                "Increase",
+                "Decrease",
+                AccountCategory::EXPENSE,
+            )
+            .set_is_misc_tax(true),
+            AccountKind::new(
+                "Liability",
+                "Deposit",
+                "Paiement",
+                AccountCategory::LIABILITY,
+            )
+            .set_is_networth(true),
+            AccountKind::new(
+                "Equity",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            ),
+            AccountKind::new(
+                "Checking",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true),
+            AccountKind::new(
+                "Savings",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true),
+            AccountKind::new("Stock", "Add", "Remove", AccountCategory::EQUITY)
+                .set_is_networth(true)
+                .set_is_trading(true)
+                .set_is_stock(true),
+            AccountKind::new(
+                "Investment",
+                "Deposit",
+                "Paiement",
+                AccountCategory::EQUITY,
+            )
+            .set_is_networth(true)
+            .set_is_trading(true),
+            AccountKind::new(
+                "Asset",
+                "Increase",
+                "Decrease",
+                AccountCategory::ASSET,
+            )
+            .set_is_networth(true),
+            AccountKind::new(
+                "Non-liquid Investment",
+                "Deposit",
+                "Paiement",
+                AccountCategory::ASSET,
+            )
+            .set_is_networth(true)
+            .set_is_trading(true),
+        ];
+
+        for k in all_default {
+            d.kinds.insert(k.get_name(), k);
+        }
+        d
+    }
+}
+
+impl AccountKindCollection {
+    /// Lookup an account that matches "Equity"
+    pub fn get_equity(&self) -> AccountKind {
+        self.kinds
+            .values()
+            .find(|k| k.is_equity())
+            .expect("No account kind found for Equity")
+            .clone()
+    }
+
+    /// Lookup account kind by name.
+    /// This is case-insensitive.
+    pub fn lookup(&self, name: &str) -> Option<&AccountKind> {
+        self.kinds.get(name)
+    }
+}
 
 #[derive(Debug)]
 struct AccountKindDetails {
@@ -104,114 +243,6 @@ impl AccountKind {
             category,
         ))))
     }
-
-    /// Return all the default account kinds
-    pub fn all_default() -> Vec<Self> {
-        vec![
-            AccountKind::new(
-                "Passive Income",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_passive_income(true),
-            AccountKind::new(
-                "Work Income",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_work_income(true),
-            AccountKind::new(
-                "Income",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            ),
-            AccountKind::new(
-                "Unrealized gain",
-                "Expense",
-                "Income",
-                AccountCategory::INCOME,
-            )
-            .set_is_unrealized(true),
-            AccountKind::new(
-                "Expense",
-                "Increase",
-                "Decrease",
-                AccountCategory::EXPENSE,
-            ),
-            AccountKind::new(
-                "Income tax",
-                "Increase",
-                "Decrease",
-                AccountCategory::EXPENSE,
-            )
-            .set_is_income_tax(true),
-            AccountKind::new(
-                "Other tax",
-                "Increase",
-                "Decrease",
-                AccountCategory::EXPENSE,
-            )
-            .set_is_misc_tax(true),
-            AccountKind::new(
-                "Liability",
-                "Deposit",
-                "Paiement",
-                AccountCategory::LIABILITY,
-            )
-            .set_is_networth(true),
-            AccountKind::new(
-                "Equity",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            ),
-            AccountKind::new(
-                "Checking",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true),
-            AccountKind::new(
-                "Savings",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true),
-            AccountKind::new("Stock", "Add", "Remove", AccountCategory::EQUITY)
-                .set_is_networth(true)
-                .set_is_trading(true)
-                .set_is_stock(true),
-            AccountKind::new(
-                "Investment",
-                "Deposit",
-                "Paiement",
-                AccountCategory::EQUITY,
-            )
-            .set_is_networth(true)
-            .set_is_trading(true),
-            AccountKind::new(
-                "Asset",
-                "Increase",
-                "Decrease",
-                AccountCategory::ASSET,
-            )
-            .set_is_networth(true),
-            AccountKind::new(
-                "Non-liquid Investment",
-                "Deposit",
-                "Paiement",
-                AccountCategory::ASSET,
-            )
-            .set_is_networth(true)
-            .set_is_trading(true),
-        ]
-    }
-
     pub fn set_is_work_income(self, is_work_income: bool) -> Self {
         self.0.borrow_mut().is_work_income = is_work_income;
         self

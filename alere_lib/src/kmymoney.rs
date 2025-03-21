@@ -225,7 +225,7 @@ impl KmyMoneyImporter {
     ) -> Result<AccountKind> {
         if let Some(k) = self.account_kinds.get(name) {
             Ok(k.clone())
-        } else if let Some(k) = repo.lookup_kind(name) {
+        } else if let Some(k) = repo.account_kinds.lookup(name) {
             Ok(k.clone())
         } else {
             Err(AlrError::Str(format!(
@@ -678,7 +678,7 @@ impl KmyMoneyImporter {
                     if equity_account.is_none() {
                         let eacc = Account::new(
                             "kmymoney_import",
-                            repo.get_equity_kind(),
+                            repo.account_kinds.get_equity(),
                             None,
                             None,
                             None,

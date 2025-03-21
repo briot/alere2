@@ -1,7 +1,7 @@
 use crate::account_kinds::AccountKindCollection;
 use crate::accounts::AccountCollection;
 use crate::commodities::{Commodity, CommodityCollection};
-use crate::institutions::Institution;
+use crate::institutions::InstitutionCollection;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::Operation;
 use crate::payees::{Payee, PayeeId};
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Repository {
-    institutions: Vec<Institution>,
+    pub institutions: InstitutionCollection,
     pub accounts: AccountCollection,
     pub account_kinds: AccountKindCollection,
     pub commodities: CommodityCollection,
@@ -38,10 +38,6 @@ impl Repository {
                 println!("Transaction not balanced: {:?}", tr);
             }
         }
-    }
-
-    pub fn add_institution(&mut self, inst: Institution) {
-        self.institutions.push(inst);
     }
 
     pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {

@@ -80,7 +80,7 @@ impl KmyMoneyImporter {
     ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmInstitutions").fetch(conn);
         while let Some(row) = stream.try_next().await? {
-            let inst = Institution::new(
+            let inst = repo.institutions.add(
                 row.get("name"),
                 row.get("manager"),
                 row.get("addressStreet"),
@@ -90,7 +90,6 @@ impl KmyMoneyImporter {
                 // ??? Not imported: routingCode
             );
             self.institutions.insert(row.get("id"), inst.clone());
-            repo.add_institution(inst);
         }
         Ok(())
     }

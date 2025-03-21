@@ -353,7 +353,7 @@ impl Account {
 
 impl PartialEq for Account {
     fn eq(&self, other: &Self) -> bool {
-        self.0.borrow().id == other.0.borrow().id
+        self.get_id() == other.get_id()
     }
 }
 

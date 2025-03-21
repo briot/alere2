@@ -50,18 +50,19 @@ impl PartialOrd for Key {
 mod test {
     use crate::account_categories::AccountCategory;
     use crate::account_kinds::AccountKind;
-    use crate::accounts::Account;
+    use crate::accounts::AccountCollection;
     use crate::institutions::Institution;
     use crate::tree_keys::Key;
 
     #[test]
     fn test_sort() {
+        let mut accounts = AccountCollection::default();
         let kind_eee =
             AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
         let kind_fff =
             AccountKind::new("fff", "Inc", "Dec", AccountCategory::INCOME);
-        let acc_aaa = Account::new_dummy("aaa", kind_eee.clone());
-        let acc_bbb = Account::new_dummy("bbb", kind_eee.clone());
+        let acc_aaa = accounts.add_dummy("aaa", kind_eee.clone());
+        let acc_bbb = accounts.add_dummy("bbb", kind_eee.clone());
         let inst_ccc = Institution::new("ccc", None, None, None, None, None);
         let inst_ddd = Institution::new("ddd", None, None, None, None, None);
 

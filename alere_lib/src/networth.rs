@@ -274,7 +274,7 @@ impl Networth {
             total: NetworthRow::new(col_count),
         };
 
-        repo.iter_accounts().filter(account_filter).for_each(|acc| {
+        repo.accounts.iter().filter(account_filter).for_each(|acc| {
             let key = Key::Account(acc.clone());
             let newcol = |_: &Key| NetworthRow::new(col_count);
             let row = match &result.settings.group_by {
@@ -283,7 +283,7 @@ impl Networth {
                 }
                 GroupBy::ParentAccount => result.tree.try_get(
                     &key,
-                    repo.iter_parent_accounts(&acc).map(Key::Account),
+                    repo.accounts.iter_parents(&acc).map(Key::Account),
                     newcol,
                 ),
                 GroupBy::AccountKind => result.tree.try_get(

@@ -157,7 +157,7 @@ impl Exporter for Hledger {
         // But hledger takes all those earlier transactions when it computes
         // the total, so it will find a different value.
         if self.export_reconciliation {
-            for acc in repo.iter_accounts() {
+            for acc in repo.accounts.iter() {
                 if !acc.get_kind().is_networth() {
                     continue;
                 }

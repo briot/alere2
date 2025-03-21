@@ -5,7 +5,7 @@ use crate::errors::AlrError;
 use crate::importers::Importer;
 use crate::institutions::Institution;
 use crate::multi_values::{MultiValue, Operation, Value};
-use crate::payees::{Payee, PayeeId};
+use crate::payees::Payee;
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
 use crate::repositories::Repository;
@@ -62,7 +62,7 @@ pub struct KmyMoneyImporter {
     accounts: HashMap<String, Account>, // kmymoney Id -> alere Id
     account_kinds: HashMap<String, AccountKind>,
     commodities: HashMap<String, Commodity>,
-    payees: HashMap<String, PayeeId>,
+    payees: HashMap<String, Payee>,
 
     price_precisions: HashMap<Commodity, u8>,
     smallest_account_fraction: HashMap<Commodity, u8>,
@@ -194,11 +194,9 @@ impl KmyMoneyImporter {
         conn: &mut SqliteConnection,
     ) -> Result<()> {
         let mut stream = query("SELECT * FROM kmmPayees").fetch(conn);
-        let mut id = PayeeId::default();
         while let Some(row) = stream.try_next().await? {
-            id = id.inc();
-            repo.add_payee(id, Payee::new(row.get("name")));
-            self.payees.insert(row.get("id"), id);
+            let p = repo.payees.add(row.get("name"));
+            self.payees.insert(row.get("id"), p);
 
             // ??? Not imported
             //    reference

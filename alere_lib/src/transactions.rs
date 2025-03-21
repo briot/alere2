@@ -2,7 +2,7 @@ use crate::{
     accounts::Account,
     errors::AlrError,
     multi_values::{MultiValue, Operation, Value},
-    payees::PayeeId,
+    payees::Payee,
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
@@ -47,7 +47,7 @@ pub struct TransactionArgs<'a> {
     // The payee.  Though a transaction is made of multiple splits, users
     // typically think of it as applying to a single payee, even though extra
     // splits might involve taxes for instance.
-    pub payee: Option<PayeeId>,
+    pub payee: Option<Payee>,
 
     // When was the transaction entered in the database.  This might be totally
     // different from the split's timestamp (which are when the split impacted
@@ -63,7 +63,7 @@ pub struct TransactionArgs<'a> {
 struct TransactionDetails {
     memo: Option<String>,
     check_number: Option<String>,
-    payee: Option<PayeeId>,
+    payee: Option<Payee>,
     _entry_date: DateTime<Local>,
 
     // The splits that make up the transaction.  The sum of these splits must
@@ -194,7 +194,7 @@ impl Transaction {
         }
     }
 
-    pub fn set_payee(&mut self, payee: Option<&PayeeId>) {
+    pub fn set_payee(&mut self, payee: Option<&Payee>) {
         match payee {
             None => {}
             Some(payee) => {
@@ -202,7 +202,7 @@ impl Transaction {
                 // split.  We only keep the first one.
                 let should_set = self.0.borrow().payee.is_none();
                 if should_set {
-                    self.0.borrow_mut().payee = Some(*payee);
+                    self.0.borrow_mut().payee = Some(payee.clone());
                 }
             }
         }

@@ -25,21 +25,12 @@ pub struct Repository {
 }
 
 impl Repository {
-    pub fn add_price(
-        &mut self,
-        origin: &Commodity,
-        target: &Commodity,
-        price: Price,
-    ) {
-        self.prices.add(origin, target, price);
-    }
-
     pub fn add_transaction(&mut self, tx: Transaction) -> Result<()> {
         for s in tx.splits().iter() {
             // Register prices from transactions
             match &s.operation {
                 Operation::BuyAmount { qty, amount } => {
-                    self.add_price(
+                    self.prices.add(
                         &amount.commodity,
                         &qty.commodity,
                         Price::new(
@@ -50,7 +41,7 @@ impl Repository {
                     );
                 }
                 Operation::BuyPrice { qty, price } => {
-                    self.add_price(
+                    self.prices.add(
                         &price.commodity,
                         &qty.commodity,
                         Price::new(

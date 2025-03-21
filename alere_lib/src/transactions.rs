@@ -1,5 +1,5 @@
 use crate::{
-    accounts::Account,
+    accounts::{Account, AccountNameDepth},
     errors::AlrError,
     multi_values::{MultiValue, Operation, Value},
     payees::Payee,
@@ -279,7 +279,6 @@ impl TransactionCollection {
 
 /// GnuCash and Kmymoney call these splits.
 /// Beancount and Ledger call these postings.
-#[derive(Debug)]
 pub struct Split {
     // Which account is impacted bu this split.
     pub account: Account,
@@ -310,6 +309,17 @@ pub struct Split {
     pub post_ts: DateTime<Local>,
 
     pub operation: Operation,
+}
+
+impl core::fmt::Debug for Split {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Split")
+            .field("operation", &self.operation)
+            .field("account", &self.account.name(AccountNameDepth::basename()))
+            .field("reconciled", &self.reconciled)
+            .field("post_ts", &self.post_ts)
+            .finish()
+    }
 }
 
 #[cfg(test)]

@@ -291,7 +291,7 @@ mod test {
         account_categories::AccountCategory,
         account_kinds::AccountKind,
         accounts::Account,
-        commodities::Commodity,
+        commodities::CommodityCollection,
         errors::AlrError,
         multi_values::{MultiValue, Operation},
         transactions::{ReconcileKind, TransactionRc},
@@ -302,7 +302,8 @@ mod test {
     #[test]
     fn test_proper() -> Result<(), AlrError> {
         let mut tr = TransactionRc::new_with_default();
-        let comm = Commodity::new_dummy("euro", false);
+        let mut coms = CommodityCollection::default();
+        let comm = coms.add_dummy("euro", false);
         let kind =
             AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
         tr.add_split(

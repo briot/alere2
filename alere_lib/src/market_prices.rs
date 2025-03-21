@@ -251,7 +251,7 @@ fn keep_most_recent(left: &mut Option<Price>, right: Price) {
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::Commodity;
+    use crate::commodities::CommodityCollection;
     use crate::market_prices::MarketPrices;
     use crate::price_sources::PriceSourceId;
     use crate::prices::{Price, PriceCollection};
@@ -261,11 +261,12 @@ mod test {
     #[test]
     fn test_price_as_of() {
         let mut prices = PriceCollection::default();
-        let origin = Commodity::new_dummy("origin", false);
-        let target = Commodity::new_dummy("target", true);
-        let turnkey = Commodity::new_dummy("turnkey", false);
+        let mut coms = CommodityCollection::default();
+        let origin = coms.add_dummy("origin", false);
+        let target = coms.add_dummy("target", true);
+        let turnkey = coms.add_dummy("turnkey", false);
         let turnkeys = [turnkey.clone()];
-        let target2 = Commodity::new_dummy("target2", true);
+        let target2 = coms.add_dummy("target2", true);
         let t1 = Local.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap();
 
         {

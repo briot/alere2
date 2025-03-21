@@ -239,7 +239,7 @@ mod test {
         account_categories::AccountCategory,
         account_kinds::AccountKind,
         accounts::Account,
-        commodities::Commodity,
+        commodities::CommodityCollection,
         multi_values::{MultiValue, Operation, Value},
         transactions::{ReconcileKind, TransactionRc},
     };
@@ -260,13 +260,14 @@ mod test {
 
     #[test]
     fn test_stats() {
+        let mut coms = CommodityCollection::default();
         let kind =
             AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
         let acc_cash = Account::new_dummy("cash", kind.clone());
         let acc_invest = Account::new_dummy("invest", kind.clone());
         let acc_fees = Account::new_dummy("fees", kind.clone());
-        let comm_eur = Commodity::new_dummy("eur", true);
-        let comm_share = Commodity::new_dummy("shares", false);
+        let comm_eur = coms.add_dummy("eur", true);
+        let comm_share = coms.add_dummy("shares", false);
 
         let _tr = build_tx(
             Local.with_ymd_and_hms(2024, 5, 24, 12, 0, 0).unwrap(),

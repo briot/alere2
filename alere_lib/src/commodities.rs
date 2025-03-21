@@ -4,34 +4,16 @@ use std::{
     rc::Rc,
 };
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct CommodityId(u32);
+
 #[derive(Clone, Debug)]
 pub struct Commodity(Rc<RefCell<CommodityDetails>>);
 
 impl Commodity {
-    pub fn new(
-        name: &str,
-        symbol: &str,
-        symbol_after: bool,
-        is_currency: bool,
-        quote_symbol: Option<&str>,
-        display_precision: u8,
-    ) -> Self {
-        Commodity(Rc::new(RefCell::new(CommodityDetails {
-            name: name.into(),
-            display_precision,
-            symbol: symbol.trim().to_string(),
-            symbol_after,
-            is_currency,
-            _quote_symbol: quote_symbol.map(str::to_string),
-            _quote_source: None,
-            _quote_currency: None,
-            isin: None,
-        })))
-    }
-
-    #[cfg(test)]
-    pub fn new_dummy(name: &str, is_currency: bool) -> Self {
-        Commodity::new(name, name, false, is_currency, None, 2)
+    /// Return a persistent, unique id
+    pub fn get_id(&self) -> CommodityId {
+        self.0.borrow().id
     }
 
     pub fn is_currency(&self) -> bool {
@@ -70,7 +52,7 @@ impl Eq for Commodity {}
 
 impl std::hash::Hash for Commodity {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.as_ptr().hash(state);
+        self.get_id().hash(state);
     }
 }
 
@@ -81,11 +63,45 @@ pub struct CommodityCollection {
 }
 
 impl CommodityCollection {
-    pub fn add(&mut self, commodity: Commodity) {
-        if commodity.is_currency() {
-            self.currencies.push(commodity.clone());
+    pub fn add(
+        &mut self,
+        name: &str,
+        symbol: &str,
+        symbol_after: bool,
+        is_currency: bool,
+        quote_symbol: Option<&str>,
+        display_precision: u8,
+    ) -> Commodity {
+        let c = Commodity(Rc::new(RefCell::new(CommodityDetails {
+            id: CommodityId(
+                self.commodities
+                    .iter()
+                    .map(|c| c.0.borrow().id.0)
+                    .max()
+                    .unwrap_or(0)
+                    + 1,
+            ),
+            name: name.into(),
+            display_precision,
+            symbol: symbol.trim().to_string(),
+            symbol_after,
+            is_currency,
+            _quote_symbol: quote_symbol.map(str::to_string),
+            _quote_source: None,
+            _quote_currency: None,
+            isin: None,
+        })));
+
+        if is_currency {
+            self.currencies.push(c.clone());
         }
-        self.commodities.push(commodity);
+        self.commodities.push(c.clone());
+        c
+    }
+
+    #[cfg(test)]
+    pub fn add_dummy(&mut self, name: &str, is_currency: bool) -> Commodity {
+        self.add(name, name, false, is_currency, None, 2)
     }
 
     pub fn list_currencies(&self) -> &[Commodity] {
@@ -113,6 +129,9 @@ impl CommodityCollection {
 /// institution, and so on.
 #[derive(Debug)]
 struct CommodityDetails {
+    /// Unique, persistent id.  Used for hashing
+    id: CommodityId,
+
     /// Name as displayed in selection boxes in the GUI.  For instance, it
     /// could be "Euro", "Apple Inc.", ...
     name: String,
@@ -157,19 +176,14 @@ mod test {
         precision: u8,
         after: bool,
     ) -> Commodity {
-        let commodity =
-            Commodity::new(name, name, after, true, None, precision);
-        coll.add(commodity.clone());
-        commodity
+        coll.add(name, name, after, true, None, precision)
     }
 
     pub fn create_security(
         coll: &mut CommodityCollection,
         name: &str,
     ) -> Commodity {
-        let commodity = Commodity::new(name, name, true, false, None, 2);
-        coll.add(commodity.clone());
-        commodity
+        coll.add(name, name, true, false, None, 2)
     }
 
     #[test]

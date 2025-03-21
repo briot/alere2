@@ -82,7 +82,7 @@ impl Stats {
                     // is always true if our account itself is unrealized
                     let mut tx_is_unrealized = kind.is_unrealized();
 
-                    for s in tx.iter_splits() {
+                    for s in tx.splits().iter() {
                         if s.account == acc {
                             // An operation before the start of the time range:
                             // this is used to compute the starting state
@@ -241,7 +241,7 @@ mod test {
         accounts::{Account, AccountCollection},
         commodities::CommodityCollection,
         multi_values::{MultiValue, Operation, Value},
-        transactions::{ReconcileKind, TransactionRc},
+        transactions::{ReconcileKind, Transaction},
     };
     use chrono::prelude::*;
     use rust_decimal_macros::dec;
@@ -249,8 +249,8 @@ mod test {
     fn build_tx(
         ts: DateTime<Local>,
         splits: Vec<(Account, Operation)>,
-    ) -> TransactionRc {
-        let mut tr = TransactionRc::new_with_default();
+    ) -> Transaction {
+        let mut tr = Transaction::new_with_default();
         for s in splits.into_iter() {
             tr.add_split(s.0, ReconcileKind::New, ts, s.1);
         }

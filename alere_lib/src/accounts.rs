@@ -2,7 +2,7 @@ use crate::{
     account_kinds::AccountKind,
     institutions::Institution,
     multi_values::MultiValue,
-    transactions::{Split, TransactionRc},
+    transactions::{Split, Transaction},
 };
 use chrono::{DateTime, Local};
 use std::{cell::RefCell, rc::Rc};
@@ -170,7 +170,7 @@ struct AccountDetails {
 
     // The chronologically sorted list of transactions for which at least one
     // split applies to the account.
-    transactions: Vec<TransactionRc>,
+    transactions: Vec<Transaction>,
 
     reconciliations: Vec<Reconciliation>,
 }
@@ -218,7 +218,7 @@ impl Account {
 
     /// Register a transaction for which one of the splits applies to self.
     /// It keeps the list of transactions sorted.
-    pub fn add_transaction(&self, transaction: &TransactionRc) {
+    pub fn add_transaction(&self, transaction: &Transaction) {
         //  ??? Fails because when we look at all the splits, we try to borrow
         //  the AccountRc that contains self, and self is already borrowed as
         //  mutable.
@@ -245,15 +245,13 @@ impl Account {
         }
     }
 
-    pub fn iter_transactions(
-        &self,
-    ) -> impl Iterator<Item = TransactionRc> + '_ {
+    pub fn iter_transactions(&self) -> impl Iterator<Item = Transaction> + '_ {
         struct Iter<'b> {
             account: &'b Account,
             index: usize,
         }
         impl Iterator for Iter<'_> {
-            type Item = TransactionRc;
+            type Item = Transaction;
 
             fn next(&mut self) -> Option<Self::Item> {
                 let pos = self.index;
@@ -279,7 +277,10 @@ impl Account {
         F: FnMut(&Split),
     {
         self.iter_transactions().for_each(|tx| {
-            tx.iter_splits_for_account(self.clone()).for_each(&mut cb)
+            tx.splits()
+                .iter()
+                .filter(|s| s.account == *self)
+                .for_each(&mut cb)
         });
     }
 

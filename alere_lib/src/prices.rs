@@ -10,26 +10,22 @@ pub struct PriceCollection {
 }
 
 impl PriceCollection {
-    /// Register a new historical price
+    /// Register a new historical price.
+    /// Prices are kept sorted so we can quickly look them up later.
     pub fn add(
         &mut self,
         origin: &Commodity,
         target: &Commodity,
         price: Price,
     ) {
-        self.prices
+        let p = self
+            .prices
             .entry((origin.clone(), target.clone()))
-            .or_default()
-            // ??? Should we use bisection::insort_left_by
-            .push(price);
-    }
-
-    /// Pre-process all prices to ensure that prices are sorted in a way that
-    /// we can quickly look them up later on.
-    pub fn postprocess(&mut self) {
-        for (_, v) in self.prices.iter_mut() {
-            v.sort_by(Price::older_than);
-        }
+            .or_default();
+        let pos = match p.binary_search_by(|pr| pr.older_than(&price)) {
+            Ok(pos) | Err(pos) => pos,
+        };
+        p.insert(pos, price);
     }
 }
 

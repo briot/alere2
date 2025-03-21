@@ -9,7 +9,7 @@ use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::Price;
 use crate::repositories::Repository;
-use crate::transactions::{ReconcileKind, TransactionDetails, TransactionRc};
+use crate::transactions::{ReconcileKind, Transaction, TransactionArgs};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDate};
 use rust_decimal::Decimal;
@@ -531,7 +531,7 @@ impl KmyMoneyImporter {
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,
-    ) -> Result<HashMap<String, (Commodity, TransactionRc)>> {
+    ) -> Result<HashMap<String, (Commodity, Transaction)>> {
         let mut tx = HashMap::new();
 
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
@@ -545,24 +545,20 @@ impl KmyMoneyImporter {
                                 .get(row.get::<&str, _>("currencyId"))
                                 .unwrap()
                                 .clone(),
-                            TransactionRc::new_with_details(
-                                TransactionDetails {
-                                    memo: row.get("memo"),
-                                    entry_date: row
-                                        .get::<Option<NaiveDate>, _>(
-                                            "entryDate",
-                                        )
-                                        .map(|d| {
-                                            d.and_hms_opt(0, 0, 0)
-                                                .unwrap()
-                                                .and_local_timezone(Local)
-                                                .unwrap()
-                                        })
-                                        // Unset for a scheduled transaction
-                                        .unwrap_or(Local::now()),
-                                    ..Default::default()
-                                },
-                            ),
+                            Transaction::new_with_details(TransactionArgs {
+                                memo: row.get("memo"),
+                                entry_date: row
+                                    .get::<Option<NaiveDate>, _>("entryDate")
+                                    .map(|d| {
+                                        d.and_hms_opt(0, 0, 0)
+                                            .unwrap()
+                                            .and_local_timezone(Local)
+                                            .unwrap()
+                                    })
+                                    // Unset for a scheduled transaction
+                                    .unwrap_or(Local::now()),
+                                ..Default::default()
+                            }),
                         ),
                     );
                     // ??? Not imported from kmmTransactions
@@ -595,7 +591,7 @@ impl KmyMoneyImporter {
         &mut self,
         repo: &mut Repository,
         conn: &mut SqliteConnection,
-        mut tx: HashMap<String, (Commodity, TransactionRc)>,
+        mut tx: HashMap<String, (Commodity, Transaction)>,
     ) -> Result<()> {
         let mut equity_account: Option<Account> = None;
 
@@ -810,7 +806,7 @@ impl KmyMoneyImporter {
         }
 
         for t in tx.into_iter() {
-            repo.add_transaction(&t.1 .1);
+            repo.add_transaction(t.1 .1)?;
         }
         Ok(())
     }
@@ -866,8 +862,6 @@ impl Importer for KmyMoneyImporter {
 
         self.import_key_values(&mut conn).await?;
         report_progress(13, MAX_PROGRESS);
-
-        repo.postprocess();
 
         Ok(repo)
     }

@@ -133,7 +133,7 @@ impl KmyMoneyImporter {
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
 
-            let comm = Commodity::new(
+            let comm = repo.commodities.add(
                 row.get("name"),
                 row.get("symbolString"), // symbol (could be symbol2)
                 true,                    // symbol displayed after value
@@ -141,7 +141,6 @@ impl KmyMoneyImporter {
                 row.get("ISOcode"),
                 display_precision,
             );
-            repo.commodities.add(comm.clone());
             self.commodities.insert(row.get("ISOcode"), comm.clone());
             self.price_precisions.insert(comm.clone(), precision);
             self.smallest_account_fraction
@@ -167,7 +166,7 @@ impl KmyMoneyImporter {
             let display_precision = row
                 .get_unchecked::<u32, _>("smallestAccountFraction")
                 .ilog10() as u8;
-            let comm = Commodity::new(
+            let comm = repo.commodities.add(
                 row.get("name"),
                 row.get("symbol"), // symbol
                 true,              // symbol displayed after value
@@ -175,7 +174,6 @@ impl KmyMoneyImporter {
                 row.get("symbol"),
                 display_precision,
             );
-            repo.commodities.add(comm.clone());
             self.price_precisions.insert(comm.clone(), precision);
             self.smallest_account_fraction
                 .insert(comm.clone(), display_precision);

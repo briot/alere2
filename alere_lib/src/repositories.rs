@@ -7,8 +7,8 @@ use crate::multi_values::Operation;
 use crate::payees::{Payee, PayeeId};
 use crate::price_sources::{PriceSource, PriceSourceId};
 use crate::prices::{Price, PriceCollection};
-use crate::transactions::TransactionRc;
-use itertools::min;
+use crate::transactions::{Transaction, TransactionCollection};
+use anyhow::Result;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -20,26 +20,10 @@ pub struct Repository {
     payees: HashMap<PayeeId, Payee>,
     price_sources: HashMap<PriceSourceId, PriceSource>,
     pub(crate) prices: PriceCollection,
-    pub(crate) transactions: Vec<TransactionRc>,
+    pub(crate) transactions: TransactionCollection,
 }
 
 impl Repository {
-    /// Re-arrange internal data structure for faster queries.  For instance
-    /// ensures that things are sorted by dates when appropriate.
-    pub fn postprocess(&mut self) {
-        self.prices.postprocess();
-
-        self.transactions.sort_by_cached_key(|tx| {
-            min(tx.iter_splits().map(|s| s.post_ts)).unwrap()
-        });
-
-        for tr in &self.transactions {
-            if !tr.is_balanced() {
-                println!("Transaction not balanced: {:?}", tr);
-            }
-        }
-    }
-
     pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {
         self.price_sources.insert(id, source);
     }
@@ -57,13 +41,8 @@ impl Repository {
         self.prices.add(origin, target, price);
     }
 
-    pub fn add_transaction(&mut self, tx: &TransactionRc) {
-        self.transactions.push(tx.clone());
-
-        for s in tx.iter_splits() {
-            // Add the transaction to each account it applies to
-            s.account.add_transaction(tx);
-
+    pub fn add_transaction(&mut self, tx: Transaction) -> Result<()> {
+        for s in tx.splits().iter() {
             // Register prices from transactions
             match &s.operation {
                 Operation::BuyAmount { qty, amount } => {
@@ -91,6 +70,8 @@ impl Repository {
                 _ => {}
             }
         }
+        self.transactions.add(tx)?;
+        Ok(())
     }
 
     pub fn market_prices(

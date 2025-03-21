@@ -1,10 +1,15 @@
 use crate::{
     accounts::Account,
+    errors::AlrError,
     multi_values::{MultiValue, Operation, Value},
     payees::PayeeId,
 };
+use anyhow::Result;
 use chrono::{DateTime, Local};
-use std::rc::Rc;
+use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+};
 
 #[derive(Debug)]
 pub enum ReconcileKind {
@@ -35,7 +40,7 @@ pub enum ReconcileKind {
 /// that date.
 
 #[derive(Default)]
-pub struct TransactionDetails<'a> {
+pub struct TransactionArgs<'a> {
     pub memo: Option<&'a str>,
     pub check_number: Option<&'a str>,
 
@@ -55,7 +60,7 @@ pub struct TransactionDetails<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct Transaction {
+struct TransactionDetails {
     memo: Option<String>,
     check_number: Option<String>,
     payee: Option<PayeeId>,
@@ -68,12 +73,57 @@ pub struct Transaction {
     splits: Vec<Split>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Transaction(Rc<RefCell<TransactionDetails>>);
+
 impl Transaction {
+    // Create a new transaction with default fields
+
+    pub fn new_with_details(details: TransactionArgs) -> Self {
+        Transaction(Rc::new(RefCell::new(TransactionDetails {
+            memo: details.memo.and_then(|m| {
+                if m.is_empty() {
+                    None
+                } else {
+                    Some(m.into())
+                }
+            }),
+            check_number: details.check_number.map(str::to_string),
+            payee: details.payee,
+            _entry_date: details.entry_date,
+            splits: Vec::default(),
+        })))
+    }
+
+    pub fn new_with_default() -> Self {
+        Transaction(Rc::new(RefCell::new(TransactionDetails::default())))
+    }
+
+    /// Create a new split for this transaction
+    pub fn add_split(
+        &mut self,
+        account: Account,
+        reconciled: ReconcileKind,
+        post_ts: DateTime<Local>,
+        operation: Operation,
+    ) {
+        let split = Split {
+            account,
+            reconciled,
+            post_ts,
+            operation,
+        };
+        let mut tr = Rc::get_mut(&mut self.0)
+            .expect("Couldn'get get mut ref to transation")
+            .borrow_mut();
+        tr.splits.push(split);
+    }
+
     /// Check that the transaction obeys the accounting equations, i.e.
     ///    Equity = Assets + Income − Expenses
     pub fn is_balanced(&self) -> bool {
         let mut total = MultiValue::zero();
-        for s in &self.splits {
+        for s in &self.0.borrow().splits {
             match &s.operation {
                 Operation::Credit(value) => {
                     total += value;
@@ -100,59 +150,6 @@ impl Transaction {
         }
         total.is_zero()
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct TransactionRc(Rc<Transaction>);
-
-impl TransactionRc {
-    // Create a new transaction with default fields
-
-    pub fn new_with_details(details: TransactionDetails) -> Self {
-        TransactionRc(Rc::new(Transaction {
-            memo: details.memo.and_then(|m| {
-                if m.is_empty() {
-                    None
-                } else {
-                    Some(m.into())
-                }
-            }),
-            check_number: details.check_number.map(str::to_string),
-            payee: details.payee,
-            _entry_date: details.entry_date,
-            splits: Vec::default(),
-        }))
-    }
-
-    pub fn new_with_default() -> Self {
-        TransactionRc(Rc::new(Transaction {
-            ..Default::default()
-        }))
-    }
-
-    /// Create a new split for this transaction
-    pub fn add_split(
-        &mut self,
-        account: Account,
-        reconciled: ReconcileKind,
-        post_ts: DateTime<Local>,
-        operation: Operation,
-    ) -> &mut Split {
-        let split = Split {
-            account,
-            reconciled,
-            post_ts,
-            operation,
-        };
-        let tr = Rc::get_mut(&mut self.0)
-            .expect("Couldn'get get mut ref to transation");
-        tr.splits.push(split);
-        tr.splits.last_mut().unwrap()
-    }
-
-    pub fn is_balanced(&self) -> bool {
-        self.0.is_balanced()
-    }
 
     pub fn set_check_number(
         &mut self,
@@ -160,18 +157,18 @@ impl TransactionRc {
     ) -> Result<(), String> {
         match check_number {
             None | Some("") => {}
-            Some(num) => match &self.0.check_number {
-                None => {
-                    Rc::get_mut(&mut self.0).unwrap().check_number =
-                        Some(num.into())
+            Some(num) => {
+                let is_none = self.0.borrow().check_number.is_none();
+                if is_none {
+                    self.0.borrow_mut().check_number = Some(num.into());
+                } else if let Some(old) = &self.0.borrow().check_number {
+                    if old != num {
+                        Err(format!(
+                            "Non-matching check number, had {old:?}, now {num}"
+                        ))?;
+                    }
                 }
-                Some(old) if old == num => {}
-                Some(old) => {
-                    Err(format!(
-                        "Non-matching check number, had {old:?}, now {num}"
-                    ))?;
-                }
-            },
+            }
         }
         Ok(())
     }
@@ -179,20 +176,21 @@ impl TransactionRc {
     pub fn set_memo(&mut self, memo: Option<&str>) {
         match memo {
             None | Some("") => {}
-            Some(memo) => match &self.0.memo {
-                None => {
-                    Rc::get_mut(&mut self.0).unwrap().memo = Some(memo.into())
+            Some(memo) => {
+                let is_same = match &self.0.borrow().memo {
+                    None => false,
+                    Some(old) => old == memo,
+                };
+
+                // ??? kmymoney has memo for the transaction (which
+                // seems to be the initial payee as downloaded), then
+                // one memory per split.  The transaction's memo doesn't
+                // to be editable, so we keep the memo from the split
+                // instead.
+                if !is_same {
+                    self.0.borrow_mut().memo = Some(memo.into());
                 }
-                Some(old) if old == memo => {}
-                Some(_) => {
-                    // ??? kmymoney has memo for the transaction (which
-                    // seems to be the initial payee as downloaded), then
-                    // one memory per split.  The transaction's memo doesn't
-                    // to be editable, so we keep the memo from the split
-                    // instead.
-                    Rc::get_mut(&mut self.0).unwrap().memo = Some(memo.into());
-                }
-            },
+            }
         }
     }
 
@@ -200,53 +198,82 @@ impl TransactionRc {
         match payee {
             None => {}
             Some(payee) => {
-                match &self.0.payee {
-                    None => {
-                        Rc::get_mut(&mut self.0).unwrap().payee = Some(*payee)
-                    }
-                    Some(old) if old == payee => {}
-                    Some(_) => {
-                        // ??? kmymoney allows different payees for each
-                        // split.  We only keep the first one.
-                        // println!(
-                        //     "{tid}/{sid}: Non-matching payee, had {old:?}, now {p:?}"
-                        // );
-                    }
+                // ??? kmymoney allows different payees for each
+                // split.  We only keep the first one.
+                let should_set = self.0.borrow().payee.is_none();
+                if should_set {
+                    self.0.borrow_mut().payee = Some(*payee);
                 }
             }
         }
     }
 
-    pub fn iter_splits(&self) -> impl std::iter::Iterator<Item = &Split> {
-        self.0.splits.iter()
-    }
-
-    pub fn iter_splits_for_account(
-        &self,
-        account: Account,
-    ) -> impl std::iter::Iterator<Item = &Split> {
-        self.0.splits.iter().filter(move |s| s.account == account)
+    pub fn splits(&self) -> Ref<'_, Vec<Split>> {
+        Ref::map(self.0.borrow(), |tx| &tx.splits)
     }
 
     /// Find a memo or description for the transaction, possibly looking into
     /// splits themselves.
-    pub fn memo(&self) -> Option<&str> {
-        if self.0.memo.is_some() {
-            return self.0.memo.as_deref();
-        }
-        None
+    pub fn memo(&self) -> Ref<'_, Option<String>> {
+        Ref::map(self.0.borrow(), |tx| &tx.memo)
     }
 
     pub fn timestamp_for_account(
         &self,
         account: &Account,
     ) -> Option<DateTime<Local>> {
-        for s in &self.0.splits {
+        for s in &self.0.borrow().splits {
             if s.account == *account {
                 return Some(s.post_ts);
             }
         }
         None
+    }
+
+    /// Return the timestamp to use for the transaction.  This is computed
+    /// as the oldest timestamp among all the splits
+    pub fn timestamp(&self) -> DateTime<Local> {
+        self.splits()
+            .iter()
+            .map(|s| s.post_ts)
+            .min()
+            .unwrap_or(Local::now())
+    }
+}
+
+#[derive(Default)]
+pub struct TransactionCollection {
+    /// List of transactions, kept sorted
+    tx: Vec<Transaction>,
+}
+
+impl TransactionCollection {
+    /// Registers a transaction, which must be sorted.
+    /// It is also added to all relevant accounts.
+    pub fn add(&mut self, tr: Transaction) -> Result<()> {
+        if !tr.is_balanced() {
+            Err(AlrError::Str(format!("Transaction not balanced: {:?}", tr)))?;
+        }
+
+        for s in tr.splits().iter() {
+            // Add the transaction to each account it applies to
+            s.account.add_transaction(&tr);
+        }
+
+        let tx_stamp = tr.timestamp();
+
+        // Add sorted
+        let pos =
+            match self.tx.binary_search_by(|t| t.timestamp().cmp(&tx_stamp)) {
+                Ok(pos) | Err(pos) => pos,
+            };
+        self.tx.insert(pos, tr);
+        Ok(())
+    }
+
+    /// Return all transactions, sorted by timestamp
+    pub fn iter(&self) -> impl Iterator<Item = &Transaction> {
+        self.tx.iter()
     }
 }
 
@@ -294,14 +321,14 @@ mod test {
         commodities::CommodityCollection,
         errors::AlrError,
         multi_values::{MultiValue, Operation},
-        transactions::{ReconcileKind, TransactionRc},
+        transactions::{ReconcileKind, Transaction},
     };
     use chrono::Local;
     use rust_decimal_macros::dec;
 
     #[test]
     fn test_proper() -> Result<(), AlrError> {
-        let mut tr = TransactionRc::new_with_default();
+        let mut tr = Transaction::new_with_default();
         let mut coms = CommodityCollection::default();
         let mut accounts = AccountCollection::default();
         let comm = coms.add_dummy("euro", false);

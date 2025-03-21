@@ -58,8 +58,8 @@ impl Exporter for Hledger {
             buf.write_all(b"\n")?;
         }
 
-        for tx in &repo.transactions {
-            let ts = min(tx.iter_splits().map(|s| s.post_ts)).unwrap();
+        for tx in repo.transactions.iter() {
+            let ts = min(tx.splits().iter().map(|s| s.post_ts)).unwrap();
 
             //  Do not output future/scheduled transactions.  This breaks
             //  assertions in ledger (though hledger is happy with them)
@@ -77,7 +77,7 @@ impl Exporter for Hledger {
             //   }
             buf.write_all(b"\n")?;
 
-            for split in tx.iter_splits() {
+            for split in tx.splits().iter() {
                 buf.write_all(b"   ")?;
                 buf.write_all(
                     split

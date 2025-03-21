@@ -349,7 +349,6 @@ mod test {
                 PriceSourceId::Transaction,
             ),
         );
-        prices.postprocess(); // need sorting
 
         {
             let mut to_target =

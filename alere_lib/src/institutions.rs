@@ -1,18 +1,21 @@
 use std::{cell::RefCell, rc::Rc};
 
-#[derive(Clone, Debug)]
-pub struct Institution(Rc<RefCell<InstitutionDetails>>);
+#[derive(Default)]
+pub struct InstitutionCollection {
+    insts: Vec<Institution>,
+}
 
-impl Institution {
-    pub fn new(
+impl InstitutionCollection {
+    pub fn add(
+        &mut self,
         name: &str,
         manager: Option<&str>,
         street: Option<&str>,
         zip: Option<&str>,
         city: Option<&str>,
         phone: Option<&str>,
-    ) -> Self {
-        Institution(Rc::new(RefCell::new(InstitutionDetails {
+    ) -> Institution {
+        let inst = Institution(Rc::new(RefCell::new(InstitutionDetails {
             name: name.into(),
             _manager: manager.map(|s| s.into()),
             _street: street.map(|s| s.into()),
@@ -22,9 +25,16 @@ impl Institution {
             icon: None,
             bic: None,
             url: None,
-        })))
+        })));
+        self.insts.push(inst.clone());
+        inst
     }
+}
 
+#[derive(Clone, Debug)]
+pub struct Institution(Rc<RefCell<InstitutionDetails>>);
+
+impl Institution {
     pub fn set_icon(self, icon: String) -> Self {
         self.0.borrow_mut().icon = Some(icon);
         self

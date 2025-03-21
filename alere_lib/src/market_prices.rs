@@ -1,6 +1,6 @@
 use crate::commodities::Commodity;
 use crate::multi_values::{MultiValue, Value};
-use crate::price_sources::PriceSourceId;
+use crate::price_sources::PriceSourceFrom;
 use crate::prices::{Price, PriceCollection};
 use bisection::bisect_right_by;
 use chrono::{DateTime, Local};
@@ -105,7 +105,7 @@ impl<'a> MarketPrices<'a> {
                                             p2.timestamp,
                                         ),
                                         p1.price * p2.price,
-                                        PriceSourceId::Turnkey,
+                                        PriceSourceFrom::Turnkey,
                                     ),
                                 );
                             }
@@ -253,7 +253,7 @@ fn keep_most_recent(left: &mut Option<Price>, right: Price) {
 mod test {
     use crate::commodities::CommodityCollection;
     use crate::market_prices::MarketPrices;
-    use crate::price_sources::PriceSourceId;
+    use crate::price_sources::PriceSourceFrom;
     use crate::prices::{Price, PriceCollection};
     use chrono::{Days, Local, TimeZone};
     use rust_decimal_macros::dec;
@@ -278,7 +278,7 @@ mod test {
         prices.add(
             &origin,
             &target,
-            Price::new(t1, dec!(0.2), PriceSourceId::Transaction),
+            Price::new(t1, dec!(0.2), PriceSourceFrom::Transaction),
         );
 
         {
@@ -312,7 +312,7 @@ mod test {
         prices.add(
             &target,
             &origin,
-            Price::new(t1 + Days::new(2), dec!(4), PriceSourceId::Transaction),
+            Price::new(t1 + Days::new(2), dec!(4), PriceSourceFrom::Transaction),
         );
         {
             let mut to_target =
@@ -346,7 +346,7 @@ mod test {
             Price::new(
                 t1 - Days::new(1),
                 dec!(0.6),
-                PriceSourceId::Transaction,
+                PriceSourceFrom::Transaction,
             ),
         );
 
@@ -360,12 +360,12 @@ mod test {
         prices.add(
             &origin,
             &turnkey,
-            Price::new(t1, dec!(0.7), PriceSourceId::Transaction),
+            Price::new(t1, dec!(0.7), PriceSourceFrom::Transaction),
         );
         prices.add(
             &target2,
             &turnkey,
-            Price::new(t1, dec!(0.8), PriceSourceId::Transaction),
+            Price::new(t1, dec!(0.8), PriceSourceFrom::Transaction),
         );
         {
             let mut to_target2 =

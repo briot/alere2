@@ -1,4 +1,4 @@
-use crate::price_sources::PriceSourceId;
+use crate::price_sources::PriceSourceFrom;
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
@@ -159,7 +159,7 @@ struct CommodityDetails {
     /// So if we start with the AAPL commodity,  quote_currency might be USD if
     /// the online source gives prices in USD.
     _quote_symbol: Option<String>,
-    _quote_source: Option<PriceSourceId>,
+    _quote_source: Option<PriceSourceFrom>,
     _quote_currency: Option<Commodity>,
 
     /// Number of digits in the fractional part

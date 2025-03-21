@@ -6,7 +6,7 @@ use crate::importers::Importer;
 use crate::institutions::Institution;
 use crate::multi_values::{MultiValue, Operation, Value};
 use crate::payees::Payee;
-use crate::price_sources::{PriceSource, PriceSourceId};
+use crate::price_sources::{PriceSource, PriceSourceFrom};
 use crate::prices::Price;
 use crate::repositories::Repository;
 use crate::transactions::{ReconcileKind, Transaction, TransactionArgs};
@@ -68,7 +68,7 @@ pub struct KmyMoneyImporter {
     smallest_account_fraction: HashMap<Commodity, u8>,
 
     account_currency: HashMap<String, Commodity>,
-    price_sources: HashMap<String, PriceSourceId>,
+    price_sources: HashMap<String, PriceSource>,
 }
 
 #[cfg(feature = "kmymoney")]
@@ -101,12 +101,10 @@ impl KmyMoneyImporter {
     ) -> Result<()> {
         let mut stream =
             query("SELECT DISTINCT priceSource FROM kmmPrices").fetch(conn);
-        let mut id = PriceSourceId::External(0);
         while let Some(row) = stream.try_next().await? {
-            id = id.inc();
             let name: String = row.get("priceSource");
-            repo.add_price_source(id, PriceSource::new(&name));
-            self.price_sources.insert(name, id);
+            let s = repo.price_sources.add(&name);
+            self.price_sources.insert(name, s);
         }
         Ok(())
     }
@@ -506,7 +504,11 @@ impl KmyMoneyImporter {
                 repo.add_price(
                     origin,
                     dest,
-                    Price::new(timestamp, price, *source),
+                    Price::new(
+                        timestamp,
+                        price,
+                        PriceSourceFrom::External(source.get_id()),
+                    ),
                 );
             }
         }

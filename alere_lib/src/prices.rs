@@ -1,5 +1,5 @@
 use crate::commodities::Commodity;
-use crate::price_sources::PriceSourceId;
+use crate::price_sources::PriceSourceFrom;
 use chrono::{DateTime, Local};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ impl PriceCollection {
 pub struct Price {
     pub timestamp: DateTime<Local>,
     pub price: Decimal,
-    _source: PriceSourceId,
+    _source: PriceSourceFrom,
 }
 
 impl Price {
@@ -41,7 +41,7 @@ impl Price {
     pub fn new(
         timestamp: DateTime<Local>,
         price: Decimal,
-        source: PriceSourceId,
+        source: PriceSourceFrom,
     ) -> Self {
         Price {
             timestamp,

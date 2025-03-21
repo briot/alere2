@@ -6,12 +6,11 @@ use crate::{
     market_prices::MarketPrices,
     multi_values::Operation,
     payees::PayeeCollection,
-    price_sources::{PriceSource, PriceSourceId},
+    price_sources::{PriceSourceCollection, PriceSourceFrom},
     prices::{Price, PriceCollection},
     transactions::{Transaction, TransactionCollection},
 };
 use anyhow::Result;
-use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Repository {
@@ -20,16 +19,12 @@ pub struct Repository {
     pub(crate) account_kinds: AccountKindCollection,
     pub commodities: CommodityCollection,
     pub(crate) payees: PayeeCollection,
-    price_sources: HashMap<PriceSourceId, PriceSource>,
+    pub(crate) price_sources: PriceSourceCollection,
     pub(crate) prices: PriceCollection,
     pub(crate) transactions: TransactionCollection,
 }
 
 impl Repository {
-    pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {
-        self.price_sources.insert(id, source);
-    }
-
     pub fn add_price(
         &mut self,
         origin: &Commodity,
@@ -50,7 +45,7 @@ impl Repository {
                         Price::new(
                             s.post_ts,
                             qty.amount / amount.amount,
-                            PriceSourceId::Transaction,
+                            PriceSourceFrom::Transaction,
                         ),
                     );
                 }
@@ -61,7 +56,7 @@ impl Repository {
                         Price::new(
                             s.post_ts,
                             price.amount,
-                            PriceSourceId::Transaction,
+                            PriceSourceFrom::Transaction,
                         ),
                     );
                 }

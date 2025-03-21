@@ -290,7 +290,7 @@ mod test {
     use crate::{
         account_categories::AccountCategory,
         account_kinds::AccountKind,
-        accounts::Account,
+        accounts::AccountCollection,
         commodities::CommodityCollection,
         errors::AlrError,
         multi_values::{MultiValue, Operation},
@@ -303,11 +303,12 @@ mod test {
     fn test_proper() -> Result<(), AlrError> {
         let mut tr = TransactionRc::new_with_default();
         let mut coms = CommodityCollection::default();
+        let mut accounts = AccountCollection::default();
         let comm = coms.add_dummy("euro", false);
         let kind =
             AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
         tr.add_split(
-            Account::new_dummy("aaa", kind.clone()),
+            accounts.add_dummy("aaa", kind.clone()),
             ReconcileKind::New,
             Local::now(),
             Operation::Credit(MultiValue::new(dec!(1.1), &comm)),
@@ -315,7 +316,7 @@ mod test {
         assert!(!tr.is_balanced());
 
         tr.add_split(
-            Account::new_dummy("bbb", kind.clone()),
+            accounts.add_dummy("bbb", kind.clone()),
             ReconcileKind::New,
             Local::now(),
             Operation::Credit(MultiValue::new(dec!(-1.1), &comm)),

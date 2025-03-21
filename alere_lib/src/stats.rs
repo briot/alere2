@@ -63,7 +63,7 @@ impl Stats {
         let mut start_prices = repo.market_prices(settings.commodity.clone());
         let mut end_prices = repo.market_prices(settings.commodity.clone());
 
-        repo.iter_accounts()
+        repo.accounts.iter()
             .for_each(|acc| {
                 let kind = &acc.get_kind();
                 let mut per_account = PerAccount::default();
@@ -238,7 +238,7 @@ mod test {
     use crate::{
         account_categories::AccountCategory,
         account_kinds::AccountKind,
-        accounts::Account,
+        accounts::{Account, AccountCollection},
         commodities::CommodityCollection,
         multi_values::{MultiValue, Operation, Value},
         transactions::{ReconcileKind, TransactionRc},
@@ -261,11 +261,12 @@ mod test {
     #[test]
     fn test_stats() {
         let mut coms = CommodityCollection::default();
+        let mut accounts = AccountCollection::default();
         let kind =
             AccountKind::new("eee", "Inc", "Dec", AccountCategory::EXPENSE);
-        let acc_cash = Account::new_dummy("cash", kind.clone());
-        let acc_invest = Account::new_dummy("invest", kind.clone());
-        let acc_fees = Account::new_dummy("fees", kind.clone());
+        let acc_cash = accounts.add_dummy("cash", kind.clone());
+        let acc_invest = accounts.add_dummy("invest", kind.clone());
+        let acc_fees = accounts.add_dummy("fees", kind.clone());
         let comm_eur = coms.add_dummy("eur", true);
         let comm_share = coms.add_dummy("shares", false);
 

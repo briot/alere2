@@ -1,5 +1,5 @@
 use crate::account_kinds::AccountKindCollection;
-use crate::accounts::{Account, AccountId};
+use crate::accounts::AccountCollection;
 use crate::commodities::{Commodity, CommodityCollection};
 use crate::institutions::Institution;
 use crate::market_prices::MarketPrices;
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct Repository {
     institutions: Vec<Institution>,
-    accounts: Vec<Account>,
+    pub accounts: AccountCollection,
     pub account_kinds: AccountKindCollection,
     pub commodities: CommodityCollection,
     payees: HashMap<PayeeId, Payee>,
@@ -42,32 +42,6 @@ impl Repository {
 
     pub fn add_institution(&mut self, inst: Institution) {
         self.institutions.push(inst);
-    }
-
-    /// Register a new account.  This automatically sets the id
-    pub fn add_account(&mut self, mut account: Account) -> Account {
-        account.set_id(
-            self.accounts
-                .iter()
-                .map(Account::get_id)
-                .max()
-                .unwrap_or(AccountId::default())
-                .inc(),
-        );
-        self.accounts.push(account.clone());
-        account
-    }
-    pub fn iter_accounts(&self) -> impl Iterator<Item = Account> + '_ {
-        self.accounts.iter().cloned()
-    }
-
-    /// Return the parent accounts of acc (not including acc itself).  The last
-    /// element returned is the toplevel account, like Asset.
-    pub fn iter_parent_accounts(
-        &self,
-        acc: &Account,
-    ) -> impl Iterator<Item = Account> + '_ {
-        ParentAccountIter::new(acc.clone())
     }
 
     pub fn add_price_source(&mut self, id: PriceSourceId, source: PriceSource) {
@@ -132,28 +106,5 @@ impl Repository {
             self.commodities.list_currencies(),
             to_commodity,
         )
-    }
-}
-
-pub struct ParentAccountIter {
-    current: Option<Account>,
-}
-impl ParentAccountIter {
-    /// An iterator that return current and all its parent accounts
-    pub fn new(current: Account) -> Self {
-        Self {
-            current: Some(current),
-        }
-    }
-}
-impl Iterator for ParentAccountIter {
-    type Item = Account;
-    fn next(&mut self) -> Option<Self::Item> {
-        let p = match &self.current {
-            None => None,
-            Some(c) => c.get_parent().clone(),
-        };
-        self.current = p;
-        self.current.clone()
     }
 }

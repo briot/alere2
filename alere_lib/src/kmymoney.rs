@@ -275,7 +275,7 @@ impl KmyMoneyImporter {
             let kmm_currency: &str = row.get::<&str, _>("currencyId");
             let currency = self.commodities.get(kmm_currency).unwrap();
             let name: &str = row.get("accountName");
-            let acc = repo.add_account(Account::new(
+            let acc = repo.accounts.add(
                 name,
                 self.guess_account_kind(
                     repo,
@@ -308,7 +308,7 @@ impl KmyMoneyImporter {
                 // (not needed) balance
                 // (not needed) balanceFormatted
                 // (not needed) transactionCount
-            ));
+            );
 
             self.accounts.insert(kmm_id.into(), acc);
             self.account_currency
@@ -676,7 +676,7 @@ impl KmyMoneyImporter {
                     // kmymoney doesn't balance those add shares transactions.
                     // So we create an extra split to make them balanced.
                     if equity_account.is_none() {
-                        let eacc = Account::new(
+                        equity_account = Some(repo.accounts.add(
                             "kmymoney_import",
                             repo.account_kinds.get_equity(),
                             None,
@@ -686,8 +686,7 @@ impl KmyMoneyImporter {
                             None,
                             false,
                             None,
-                        );
-                        equity_account = Some(repo.add_account(eacc));
+                        ));
                     }
 
                     tx.add_split(

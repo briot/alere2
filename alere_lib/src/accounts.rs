@@ -38,14 +38,89 @@ impl AccountNameDepth {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default, PartialOrd, Ord)]
-pub struct AccountId(pub u16);
+#[derive(Default)]
+pub struct AccountCollection {
+    accounts: Vec<Account>,
+}
 
-impl AccountId {
-    pub fn inc(&self) -> AccountId {
-        AccountId(self.0 + 1)
+impl AccountCollection {
+    /// Register a new account.  This automatically sets the id
+    #[allow(clippy::too_many_arguments)]
+    pub fn add(
+        &mut self,
+        name: &str,
+        kind: AccountKind,
+        parent: Option<Account>,
+        institution: Option<Institution>,
+        description: Option<&str>,
+        iban: Option<&str>,
+        number: Option<&str>,
+        closed: bool,
+        opened_on: Option<DateTime<Local>>,
+    ) -> Account {
+        let a = Account(Rc::new(RefCell::new(AccountDetails {
+            id: AccountId(
+                self.accounts
+                    .iter()
+                    .map(|a| a.0.borrow().id.0)
+                    .max()
+                    .unwrap_or(0)
+                    + 1,
+            ),
+            name: name.into(),
+            kind,
+            parent,
+            institution,
+            _description: description.map(str::to_string),
+            iban: iban.map(str::to_string),
+            _number: number.map(str::to_string),
+            closed,
+            _opened_on: opened_on,
+            transactions: Vec::new(),
+            reconciliations: Vec::new(),
+        })));
+        self.accounts.push(a.clone());
+        a
+    }
+
+    #[cfg(test)]
+    pub fn add_dummy(&mut self, name: &str, kind: AccountKind) -> Account {
+        self.add(name, kind, None, None, None, None, None, false, None)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Account> + '_ {
+        self.accounts.iter().cloned()
+    }
+
+    /// Return the parent accounts of acc (not including acc itself).  The last
+    /// element returned is the toplevel account, like Asset.
+    pub fn iter_parents(
+        &self,
+        acc: &Account,
+    ) -> impl Iterator<Item = Account> + '_ {
+        pub struct ParentAccountIter {
+            current: Option<Account>,
+        }
+        impl Iterator for ParentAccountIter {
+            type Item = Account;
+            fn next(&mut self) -> Option<Self::Item> {
+                let p = match &self.current {
+                    None => None,
+                    Some(c) => c.get_parent().clone(),
+                };
+                self.current = p;
+                self.current.clone()
+            }
+        }
+
+        ParentAccountIter {
+            current: Some(acc.clone()),
+        }
     }
 }
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Default, PartialOrd, Ord)]
+pub struct AccountId(u16);
 
 #[derive(Clone, Debug)]
 pub struct Reconciliation {
@@ -104,39 +179,6 @@ struct AccountDetails {
 pub struct Account(Rc<RefCell<AccountDetails>>);
 
 impl Account {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        name: &str,
-        kind: AccountKind,
-        parent: Option<Account>,
-        institution: Option<Institution>,
-        description: Option<&str>,
-        iban: Option<&str>,
-        number: Option<&str>,
-        closed: bool,
-        opened_on: Option<DateTime<Local>>,
-    ) -> Self {
-        Account(Rc::new(RefCell::new(AccountDetails {
-            id: AccountId::default(), // set when registered in repository
-            name: name.into(),
-            kind,
-            parent,
-            institution,
-            _description: description.map(str::to_string),
-            iban: iban.map(str::to_string),
-            _number: number.map(str::to_string),
-            closed,
-            _opened_on: opened_on,
-            transactions: Vec::new(),
-            reconciliations: Vec::new(),
-        })))
-    }
-
-    #[cfg(test)]
-    pub fn new_dummy(name: &str, kind: AccountKind) -> Self {
-        Account::new(name, kind, None, None, None, None, None, false, None)
-    }
-
     fn name_internal(&self, kind: AccountNameDepth, into: &mut String) {
         if kind.0 > 1 {
             if let Some(p) = &self.0.borrow().parent {
@@ -310,7 +352,7 @@ impl Account {
 
 impl PartialEq for Account {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0.as_ptr(), other.0.as_ptr())
+        self.0.borrow().id == other.0.borrow().id
     }
 }
 

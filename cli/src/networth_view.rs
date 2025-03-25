@@ -4,9 +4,8 @@ use crate::{
 };
 use alere_lib::{
     accounts::{Account, AccountNameDepth},
-    networth::{GroupBy, Networth, NetworthRow},
+    networth::{Networth, NetworthRow},
     repositories::Repository,
-    times::{Instant, Intv},
     tree_keys::Key,
     trees::NodeData,
 };
@@ -16,22 +15,15 @@ use console::Term;
 use itertools::Itertools;
 
 pub struct Settings {
-    // Which columns to show
-    column_value: bool,
-    column_market: bool,
-    column_delta: bool,
-    column_market_delta: bool,
-    column_delta_to_last: bool,
-    column_market_delta_to_last: bool,
-    column_price: bool,
-
-    // ???
-    // pub column_gain: bool,   // unrealized gains
-
-    // Whether to show percent of total
-    column_percent: bool,
-
-    account_names: AccountNameDepth,
+    pub column_value: bool,
+    pub column_market: bool,
+    pub column_delta: bool,
+    pub column_market_delta: bool,
+    pub column_delta_to_last: bool,
+    pub column_market_delta_to_last: bool,
+    pub column_price: bool,
+    pub column_percent: bool, //  percent of total
+    pub account_names: AccountNameDepth,
 }
 
 impl Settings {
@@ -43,38 +35,20 @@ impl Settings {
 pub fn networth_view<F>(
     repo: &Repository,
     _args: &ArgMatches,
-    globals: &GlobalSettings,
     account_filter: F,
+    globals: &GlobalSettings,
+    networth_settings: alere_lib::networth::Settings,
+    view_settings: &crate::networth_view::Settings,
 ) -> Result<String>
 where
     F: FnMut(&Account) -> bool,
 {
-    let nw_settings = alere_lib::networth::Settings {
-        hide_zero: globals.hide_zero,
-        hide_all_same: false,
-        group_by: GroupBy::ParentAccount,
-        subtotals: true,
-        commodity: globals.commodity.clone(),
-        elide_boring_accounts: true,
-        intervals: vec![
-            Intv::UpTo(Instant::YearsAgo(1)),
-            Intv::UpTo(Instant::MonthsAgo(1)),
-            Intv::UpTo(Instant::Now),
-        ],
-    };
-    let view_settings = &crate::networth_view::Settings {
-        column_market: true,
-        column_value: false,
-        column_delta: false,
-        column_delta_to_last: false,
-        column_price: false,
-        column_market_delta: false,
-        column_market_delta_to_last: false,
-        column_percent: false,
-        account_names: AccountNameDepth::basename(),
-    };
-    let mut networth =
-        Networth::new(repo, nw_settings, globals.reftime, account_filter)?;
+    let mut networth = Networth::new(
+        repo,
+        networth_settings,
+        globals.reftime,
+        account_filter,
+    )?;
 
     type Data<'a> = NodeData<Key, NetworthRow>;
 
@@ -179,7 +153,11 @@ where
             if view_settings.column_delta_to_last {
                 columns.push(
                     Column::new(idx, &delta_to_last_image)
-                        .with_title("To lastDelta")
+                        .with_title(&format!(
+                            "{} to {}",
+                            ts.descr,
+                            networth.intervals.last().unwrap().descr,
+                        ))
                         .with_align(Align::Right)
                         .with_truncate(Truncate::Left),
                 );

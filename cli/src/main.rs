@@ -9,12 +9,14 @@ use crate::{
     networth_view::networth_view, stats_view::stats_view,
 };
 use alere_lib::{
+    accounts::AccountNameDepth,
     formatters::{Formatter, SymbolQuote},
     hledger::Hledger,
     importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
+    networth::GroupBy,
     repositories::Repository,
-    times::Instant,
+    times::{Instant, Intv},
 };
 use anyhow::Result;
 use clap::ArgMatches;
@@ -60,8 +62,36 @@ fn networth(
     globals: &GlobalSettings,
     args: &ArgMatches,
 ) -> Result<()> {
-    let output =
-        networth_view(repo, args, globals, |acc| acc.get_kind().is_networth())?;
+    let output = networth_view(
+        repo,
+        args,
+        |acc| acc.get_kind().is_networth(),
+        globals,
+        alere_lib::networth::Settings {
+            hide_zero: globals.hide_zero,
+            hide_all_same: false,
+            group_by: GroupBy::ParentAccount,
+            subtotals: true,
+            commodity: globals.commodity.clone(),
+            elide_boring_accounts: true,
+            intervals: vec![
+                Intv::UpTo(Instant::YearsAgo(1)),
+                Intv::UpTo(Instant::MonthsAgo(1)),
+                Intv::UpTo(Instant::Now),
+            ],
+        },
+        &crate::networth_view::Settings {
+            column_market: true,
+            column_value: false,
+            column_delta: false,
+            column_delta_to_last: false,
+            column_price: false,
+            column_market_delta: false,
+            column_market_delta_to_last: false,
+            column_percent: false,
+            account_names: AccountNameDepth::basename(),
+        },
+    )?;
     println!("{}", output);
     Ok(())
 }
@@ -72,9 +102,36 @@ fn cashflow(
     globals: &GlobalSettings,
     args: &ArgMatches,
 ) -> Result<()> {
-    let income_expenses = networth_view(repo, args, globals, |acc| {
-        acc.get_kind().is_expense() || acc.get_kind().is_income()
-    });
+    let income_expenses = networth_view(
+        repo,
+        args,
+        |acc| acc.get_kind().is_expense() || acc.get_kind().is_income(),
+        globals,
+        alere_lib::networth::Settings {
+            hide_zero: globals.hide_zero,
+            hide_all_same: false,
+            group_by: GroupBy::ParentAccount,
+            subtotals: true,
+            commodity: globals.commodity.clone(),
+            elide_boring_accounts: true,
+            intervals: vec![
+                Intv::UpTo(Instant::YearsAgo(1)),
+                Intv::UpTo(Instant::MonthsAgo(1)),
+                Intv::UpTo(Instant::Now),
+            ],
+        },
+        &crate::networth_view::Settings {
+            column_market: false,
+            column_value: false,
+            column_delta: false,
+            column_delta_to_last: true,
+            column_price: false,
+            column_market_delta: false,
+            column_market_delta_to_last: false,
+            column_percent: false,
+            account_names: AccountNameDepth::basename(),
+        },
+    );
     println!("{}", income_expenses.unwrap());
     Ok(())
 }

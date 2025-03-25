@@ -1,6 +1,6 @@
 use alere_lib::{commodities::Commodity, repositories::Repository};
 use chrono::{DateTime, Local};
-use clap::{arg, Arg, ArgMatches};
+use clap::{arg, Arg, ArgAction, ArgMatches};
 
 pub struct GlobalSettings {
     pub commodity_str: Option<String>,
@@ -12,6 +12,9 @@ pub struct GlobalSettings {
 
     // Reference time for all relative dates ("a year ago").
     pub reftime: DateTime<Local>,
+
+    // If true, a zero value is displayed as an empty cell instead
+    pub hide_zero: bool,
 }
 
 impl GlobalSettings {
@@ -20,6 +23,8 @@ impl GlobalSettings {
         [
             arg!(--currency [CURRENCY] "Show market values with this currency")
                 .global(true),
+            arg!(--empty "Show rows with only zero values")
+                .action(ArgAction::SetTrue),
         ]
     }
 
@@ -30,6 +35,7 @@ impl GlobalSettings {
         GlobalSettings {
             commodity_str: args.get_one::<String>("currency").cloned(),
             commodity: None,
+            hide_zero: !args.get_flag("empty"),
             reftime: Local::now(),
             format: alere_lib::formatters::Formatter::default(),
             table: crate::tables::Settings {

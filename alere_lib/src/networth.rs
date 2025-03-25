@@ -300,6 +300,8 @@ impl Networth {
 
             //  ??? Could we use fold() here, though we are applying in
             //  place.
+            //  ??? We could just iterate over all transactions and apply
+            //  splits to corresponding accounts.
             acc.for_each_split(|s| {
                 for (idx, intv) in result.intervals.iter().enumerate() {
                     if intv.intv.contains(s.post_ts) {

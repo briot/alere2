@@ -11,7 +11,7 @@ use alere_lib::{
     trees::NodeData,
 };
 use anyhow::Result;
-use clap::{arg, Arg, ArgAction, ArgMatches};
+use clap::{Arg, ArgMatches};
 use console::Term;
 use itertools::Itertools;
 
@@ -36,14 +36,13 @@ pub struct Settings {
 
 impl Settings {
     pub fn cli() -> impl IntoIterator<Item = Arg> {
-        [arg!(--empty "Show rows with only zero values")
-            .action(ArgAction::SetTrue)]
+        []
     }
 }
 
 pub fn networth_view<F>(
     repo: &Repository,
-    args: &ArgMatches,
+    _args: &ArgMatches,
     globals: &GlobalSettings,
     account_filter: F,
 ) -> Result<String>
@@ -51,14 +50,14 @@ where
     F: FnMut(&Account) -> bool,
 {
     let nw_settings = alere_lib::networth::Settings {
-        hide_zero: !args.get_flag("empty"),
+        hide_zero: globals.hide_zero,
         hide_all_same: false,
         group_by: GroupBy::ParentAccount,
         subtotals: true,
         commodity: globals.commodity.clone(),
         elide_boring_accounts: true,
         intervals: vec![
-            Intv::UpTo(Instant::EndYearsAgo(2)),
+            Intv::UpTo(Instant::YearsAgo(1)),
             Intv::UpTo(Instant::MonthsAgo(1)),
             Intv::UpTo(Instant::Now),
         ],

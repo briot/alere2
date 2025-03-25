@@ -10,7 +10,7 @@ use std::{cell::RefCell, rc::Rc};
 /// How to display account name.
 /// This includes the basename for the account (level 1), its parent (level 2),
 /// and so on till a maximum level.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct AccountNameDepth(usize);
 impl AccountNameDepth {
     /// Only show the basename of the account

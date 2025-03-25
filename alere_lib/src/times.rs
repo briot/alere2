@@ -304,9 +304,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Over 1 day".to_string()
+                        "Last day".to_string()
                     } else {
-                        format!("Over {} days", *count)
+                        format!("Last {} days", *count)
                     },
                 }]
             }
@@ -316,9 +316,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Over 1 month".to_string()
+                        "Last month".to_string()
                     } else {
-                        format!("Over {} months", *count)
+                        format!("Last {} months", *count)
                     },
                 }]
             }
@@ -328,9 +328,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Over 1 year".to_string()
+                        "Last year".to_string()
                     } else {
-                        format!("Over {} years", *count)
+                        format!("Last {} years", *count)
                     },
                 }]
             }

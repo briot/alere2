@@ -14,6 +14,7 @@ use clap::{Arg, ArgMatches};
 use console::Term;
 use itertools::Itertools;
 
+#[derive(Default)]
 pub struct Settings {
     pub column_value: bool,
     pub column_market: bool,
@@ -103,7 +104,7 @@ where
         if view_settings.column_value {
             columns.push(
                 Column::new(idx, &mv_image)
-                    .with_title(&format!("Value {}", ts.descr))
+                    .with_title(&format!("{}", ts.descr))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left)
                     .with_footer(ColumnFooter::Hide),
@@ -112,7 +113,7 @@ where
         if view_settings.column_market {
             columns.push(
                 Column::new(idx, &market_image)
-                    .with_title(&format!("Mkt {}", ts.descr))
+                    .with_title(&format!("{}", ts.descr))
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );
@@ -154,7 +155,7 @@ where
                 columns.push(
                     Column::new(idx, &delta_to_last_image)
                         .with_title(&format!(
-                            "{} to {}",
+                            "{}-{}",
                             ts.descr,
                             networth.intervals.last().unwrap().descr,
                         ))
@@ -165,7 +166,11 @@ where
             if view_settings.column_market_delta_to_last {
                 columns.push(
                     Column::new(idx, &delta_market_to_last_image)
-                        .with_title("To last")
+                        .with_title(&format!(
+                            "{}-{}",
+                            ts.descr,
+                            networth.intervals.last().unwrap().descr,
+                        ))
                         .with_align(Align::Right)
                         .with_truncate(Truncate::Left),
                 );

@@ -16,12 +16,11 @@ use itertools::Itertools;
 
 #[derive(Default)]
 pub struct Settings {
+    // Display either the MultiValue, or convert to a Value using
+    // the --currency
     pub column_value: bool,
-    pub column_market: bool,
     pub column_delta: bool,
-    pub column_market_delta: bool,
     pub column_delta_to_last: bool,
-    pub column_market_delta_to_last: bool,
     pub column_price: bool,
     pub column_percent: bool, //  percent of total
     pub account_names: AccountNameDepth,
@@ -53,20 +52,11 @@ where
 
     type Data<'a> = NodeData<Key, NetworthRow>;
 
-    let mv_image = |row: &Data, idx: &usize| {
-        row.data.display_value(repo, *idx, &globals.format)
-    };
     let market_image = |row: &Data, idx: &usize| {
         row.data.display_market_value(repo, *idx, &globals.format)
     };
-    let delta_image = |row: &Data, idx: &usize| {
-        row.data.display_delta(repo, *idx, &globals.format)
-    };
     let delta_market_image = |row: &Data, idx: &usize| {
         row.data.display_market_delta(repo, *idx, &globals.format)
-    };
-    let delta_to_last_image = |row: &Data, idx: &usize| {
-        row.data.display_delta_to_last(repo, *idx, &globals.format)
     };
     let delta_market_to_last_image = |row: &Data, idx: &usize| {
         row.data
@@ -103,17 +93,8 @@ where
     {
         if view_settings.column_value {
             columns.push(
-                Column::new(idx, &mv_image)
-                    .with_title(&format!("{}", ts.descr))
-                    .with_align(Align::Right)
-                    .with_truncate(Truncate::Left)
-                    .with_footer(ColumnFooter::Hide),
-            );
-        }
-        if view_settings.column_market {
-            columns.push(
                 Column::new(idx, &market_image)
-                    .with_title(&format!("{}", ts.descr))
+                    .with_title(&ts.descr)
                     .with_align(Align::Right)
                     .with_truncate(Truncate::Left),
             );
@@ -137,33 +118,13 @@ where
         if let itertools::Position::First | itertools::Position::Middle = pos {
             if view_settings.column_delta {
                 columns.push(
-                    Column::new(idx, &delta_image)
+                    Column::new(idx, &delta_market_image)
                         .with_title("Delta")
                         .with_align(Align::Right)
                         .with_truncate(Truncate::Left),
                 );
             }
-            if view_settings.column_market_delta {
-                columns.push(
-                    Column::new(idx, &delta_market_image)
-                        .with_title("Delta Mkt")
-                        .with_align(Align::Right)
-                        .with_truncate(Truncate::Left),
-                );
-            }
             if view_settings.column_delta_to_last {
-                columns.push(
-                    Column::new(idx, &delta_to_last_image)
-                        .with_title(&format!(
-                            "{}-{}",
-                            ts.descr,
-                            networth.intervals.last().unwrap().descr,
-                        ))
-                        .with_align(Align::Right)
-                        .with_truncate(Truncate::Left),
-                );
-            }
-            if view_settings.column_market_delta_to_last {
                 columns.push(
                     Column::new(idx, &delta_market_to_last_image)
                         .with_title(&format!(

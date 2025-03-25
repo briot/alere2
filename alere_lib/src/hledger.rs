@@ -188,7 +188,7 @@ impl Exporter for Hledger {
                         hide_all_same: false,
                         group_by: crate::networth::GroupBy::None,
                         subtotals: false,
-                        commodity: None,
+                        commodity: None, // show MultiValue, not Value
                         elide_boring_accounts: false,
                         intervals: instants
                             .iter()
@@ -221,7 +221,9 @@ impl Exporter for Hledger {
                                 buf.write_all(
                                     node.data
                                         .data
-                                        .display_value(repo, colidx, format)
+                                        .display_market_value(
+                                            repo, colidx, format,
+                                        )
                                         .as_bytes(),
                                 )?;
                                 buf.write_all(b"\n\n")?;

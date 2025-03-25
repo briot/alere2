@@ -537,7 +537,7 @@ impl KmyMoneyImporter {
         let mut stream = query("SELECT * FROM kmmTransactions").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             match row.get::<&str, _>("txType") {
-                "S" | "N" => {
+                "N" => {
                     tx.insert(
                         row.get::<String, _>("id"),
                         (
@@ -564,6 +564,10 @@ impl KmyMoneyImporter {
                     // ??? Not imported from kmmTransactions
                     //    bankId
                     //    postDate
+                }
+                "S" => {
+                    // Do not import scheduled transactions that haven't been
+                    // entered.
                     // ??? Not imported from kmmSchedules
                     //    id
                     //    name
@@ -602,7 +606,14 @@ impl KmyMoneyImporter {
             let tid = row.get::<&str, _>("transactionId");
             let k_account: &str = row.get("accountId");
             let account = self.accounts.get(k_account).unwrap();
-            let (tx_currency, tx) = tx.get_mut(tid).unwrap();
+            let (tx_currency, tx) = match tx.get_mut(tid) {
+                Some((c, t)) => (c, t),
+                None => {
+                    //  The transaction was ignored earlier, likely it is
+                    //  a scheduled transaction.
+                    continue;
+                }
+            };
             let account_currency = self.commodities.get(k_account).unwrap();
             let account_precision = *self
                 .price_precisions

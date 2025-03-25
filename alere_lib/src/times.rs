@@ -8,7 +8,7 @@ use rust_intervals::Interval;
 /// Such a specification can be stored in configuration files, for instance
 /// as "one year ago".  That way, when we launch the application at some point
 /// in the future, this is still "one year ago".
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Instant {
     Epoch,
     Now,
@@ -263,12 +263,14 @@ impl ::core::str::FromStr for Instant {
 }
 
 /// A range of time [start; end[ not including the end
+#[derive(Debug)]
 pub struct TimeInterval {
     pub descr: String,
     pub intv: Interval<DateTime<Local>>,
 }
 
 /// A high-level description of time ranges
+#[derive(Debug)]
 pub enum Intv {
     UpTo(Instant), // from start of time to the given instant
 

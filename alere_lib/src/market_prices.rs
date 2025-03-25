@@ -312,7 +312,11 @@ mod test {
         prices.add(
             &target,
             &origin,
-            Price::new(t1 + Days::new(2), dec!(4), PriceSourceFrom::Transaction),
+            Price::new(
+                t1 + Days::new(2),
+                dec!(4),
+                PriceSourceFrom::Transaction,
+            ),
         );
         {
             let mut to_target =

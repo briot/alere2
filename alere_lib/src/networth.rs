@@ -151,15 +151,6 @@ impl NetworthRow {
         is_all_same(&self.0)
     }
 
-    pub fn display_value(
-        &self,
-        _repo: &Repository,
-        idx: usize,
-        format: &Formatter,
-    ) -> String {
-        let v = &self.0[idx].value;
-        v.display(format)
-    }
     pub fn display_market_value(
         &self,
         _repo: &Repository,
@@ -167,24 +158,6 @@ impl NetworthRow {
         format: &Formatter,
     ) -> String {
         let v = &self.0[idx].market_value;
-        v.display(format)
-    }
-    pub fn display_delta(
-        &self,
-        _repo: &Repository,
-        idx: usize,
-        format: &Formatter,
-    ) -> String {
-        let v = &(&self.0[idx + 1] - &self.0[idx]).value;
-        v.display(format)
-    }
-    pub fn display_delta_to_last(
-        &self,
-        _repo: &Repository,
-        idx: usize,
-        format: &Formatter,
-    ) -> String {
-        let v = &(self.0.last().unwrap() - &self.0[idx]).value;
         v.display(format)
     }
     pub fn display_market_delta(

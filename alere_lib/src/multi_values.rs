@@ -261,6 +261,30 @@ impl core::ops::Div<&MultiValue> for &MultiValue {
     }
 }
 
+impl core::ops::Div<&MultiValue> for MultiValue {
+    type Output = Option<Decimal>;
+
+    fn div(self, rhs: &MultiValue) -> Self::Output {
+        &self / rhs
+    }
+}
+
+impl core::ops::Div<MultiValue> for &MultiValue {
+    type Output = Option<Decimal>;
+
+    fn div(self, rhs: MultiValue) -> Self::Output {
+        self / &rhs
+    }
+}
+
+impl core::ops::Div<MultiValue> for MultiValue {
+    type Output = Option<Decimal>;
+
+    fn div(self, rhs: MultiValue) -> Self::Output {
+        &self / &rhs
+    }
+}
+
 impl core::ops::Add<&MultiValue> for &MultiValue {
     type Output = MultiValue;
 

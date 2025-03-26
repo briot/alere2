@@ -1,13 +1,12 @@
 use crate::{
-    accounts::AccountNameDepth,
     commodities::Commodity,
-    formatters::Formatter,
     multi_values::{MultiValue, Operation},
     repositories::Repository,
     times::Intv,
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use rust_decimal::Decimal;
 
 pub struct Settings {
     pub commodity: Option<Commodity>,
@@ -18,35 +17,58 @@ pub struct Settings {
 }
 
 /// Changes in one time range
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct PerAccount {
     pub start_value: MultiValue,
-    pub mkt_start_value: MultiValue,
     pub end_value: MultiValue,
-    pub mkt_end_value: MultiValue,
-
-    // Total change in market value
-    pub pnl_no_dividends: MultiValue,
-
-    // Gains from explicit user operations (credit, buying shares,...)
-    // This is computed in the settings' commodity at the time of the operation.
-    pub mkt_cashflow: MultiValue,
-
-    // Market value change from changes in prices and xrates.
-    // We have the invariants:
-    //     pnl = mkt_end_value - mkt_start_value
-    //     pnl = mkt_cashflow + mkt_unrealized
-    pub mkt_unrealized: MultiValue,
 }
 
 #[derive(Default)]
 pub struct Stats {
-    pub mkt_income: MultiValue,
-    pub mkt_expense: MultiValue,
-    pub mkt_passive_income: MultiValue,
-    pub mkt_unrealized: MultiValue,
-    pub mkt_start_networth: MultiValue,
-    pub mkt_end_networth: MultiValue,
+    // Networth at start and end of the period
+    pub start_networth: MultiValue,
+    pub end_networth: MultiValue,
+
+    // Total realized income (salaries, passive, rents,...).
+    // Note: this is generally a negative value (as it leaves a category to go
+    // INTO a user account)
+    pub income: MultiValue,
+
+    // Only the passive part of the income, e.g. dividends, interests paid,
+    // rents received, ...
+    // This is generally a negative value, see above
+    pub passive_income: MultiValue,
+
+    // Total expenses
+    // Note: this is generally a positive value (as it goes FROM user accounts)
+    pub expense: MultiValue,
+
+    // P&L = networth_at_end - networth_at_start
+    // The total variation of the networth.
+    pub pnl: MultiValue,
+
+    // Cashflow = income - expense
+    // This is the total amount of money added to the networth (i.e. to any of
+    // the user accounts) via actual money transfers.
+    pub cashflow: MultiValue,
+
+    // Unrealized = P&L - cashflow
+    // This is the variation in market value (prices and exchange rates) of
+    // investments.
+    pub unrealized: MultiValue,
+
+    // Saving rate = 1 - Expense / Income
+    // How much of the income we are saving (i.e. they remain in accounts)
+    pub saving_rate: Option<Decimal>,
+
+    // Financial independence = (passive_income + unrealized_income) / expenses
+    // How much our expenses are covered by passive income.  I.e. would we be
+    // able to cover those expenses if we stopped getting a salary.
+    pub financial_independence: Option<Decimal>,
+
+    // Passive income ratio = (passive_income + unrealized) / income
+    // What part of total income comes from sources other that salaries
+    pub passive_income_ratio: Option<Decimal>,
 }
 
 impl Stats {
@@ -55,7 +77,6 @@ impl Stats {
         repo: &Repository,
         settings: Settings,
         now: DateTime<Local>,
-        format: &Formatter,
     ) -> Result<Self> {
         let ts_range = &settings.over.to_ranges(now)?[0].intv;
         let mut stats = Stats::default();
@@ -63,172 +84,98 @@ impl Stats {
         let mut start_prices = repo.market_prices(settings.commodity.clone());
         let mut end_prices = repo.market_prices(settings.commodity.clone());
 
-        repo.accounts.iter()
-            .for_each(|acc| {
-                let kind = &acc.get_kind();
-                let mut per_account = PerAccount::default();
+        repo.accounts.iter().for_each(|acc| {
+            let kind = &acc.get_kind();
+            let mut per_account = PerAccount::default();
 
-                acc.iter_transactions().for_each(|tx| {
-                    // The sum of splits from networth account.  For instance,
-                    // this would be money transferred from one account to an
-                    // other to buy shares (but if there are bank fees those
-                    // are counted, while just looking at the amount to buy
-                    // shares would not include them).
-                    // These also do not include acc itself.
-                    let mut internal_flow = MultiValue::zero();
-                    let mut external_flow = MultiValue::zero();
+            // True if this transaction is about unrealized gain.  This
+            // is always true if our account itself is unrealized
+            let mut tx_is_unrealized = kind.is_unrealized();
 
-                    // True if this transaction is about unrealized gain.  This
-                    // is always true if our account itself is unrealized
-                    let mut tx_is_unrealized = kind.is_unrealized();
+            acc.iter_transactions().for_each(|tx| {
+                // The sum of splits from networth account.  For instance,
+                // this would be money transferred from one account to an
+                // other to buy shares (but if there are bank fees those
+                // are counted, while just looking at the amount to buy
+                // shares would not include them).
+                // These also do not include acc itself.
+                let mut internal_flow = MultiValue::zero();
+                let mut external_flow = MultiValue::zero();
 
-                    for s in tx.splits().iter() {
-                        if s.account == acc {
-                            // An operation before the start of the time range:
-                            // this is used to compute the starting state
-                            if ts_range.strictly_right_of(s.post_ts) {
-                                per_account.start_value.apply(&s.operation);
+                for s in tx.splits().iter() {
+                    if s.account == acc {
+                        // An operation before the start of the time range:
+                        // this is used to compute the starting state
+                        if ts_range.strictly_right_of(s.post_ts) {
+                            per_account.start_value.apply(&s.operation);
+                        }
+
+                        // An operation before the end of the time range:
+                        // this is used to compute the ending state.
+                        if !ts_range.strictly_left_of(s.post_ts) {
+                            per_account.end_value.apply(&s.operation);
+                        }
+                    } else {
+                        let k = s.account.get_kind();
+                        tx_is_unrealized |= k.is_unrealized();
+
+                        let val = match &s.operation {
+                            Operation::Credit(v) => {
+                                prices.convert_multi_value(v, &s.post_ts)
                             }
-
-                            // An operation before the end of the time range:
-                            // this is used to compute the ending state.
-                            if !ts_range.strictly_left_of(s.post_ts) {
-                                per_account.end_value.apply(&s.operation);
+                            Operation::AddShares { qty } => {
+                                prices.convert_value(qty, &s.post_ts)
                             }
+                            Operation::BuyAmount { .. }
+                            | Operation::BuyPrice { .. }
+                            | Operation::Reinvest { .. }
+                            | Operation::Split { .. }
+                            | Operation::Dividend => MultiValue::zero(),
+                        };
+
+                        if k.is_networth() {
+                            internal_flow += val;
                         } else {
-                            let k = s.account.get_kind();
-                            tx_is_unrealized |= k.is_unrealized();
-
-                            let val = match &s.operation {
-                                Operation::Credit(v) => {
-                                    prices.convert_multi_value(v, &s.post_ts)
-                                }
-                                Operation::AddShares { qty } => {
-                                    prices.convert_value(qty, &s.post_ts)
-                                }
-                                Operation::BuyAmount { .. }
-                                | Operation::BuyPrice { .. }
-                                | Operation::Reinvest { .. }
-                                | Operation::Split { .. }
-                                | Operation::Dividend => MultiValue::zero(),
-                            };
-
-                            if k.is_networth() {
-                                internal_flow += val;
-                            } else {
-                                external_flow += val;
-                            }
-                        }
-
-                        println!("MANU tx={:?}\n   internal={:?}\n   external={:?}\n   unrealized={:?}", tx, internal_flow, external_flow, tx_is_unrealized);
-
-                        if !tx_is_unrealized {
-                            per_account.mkt_cashflow -= &internal_flow;
+                            external_flow += val;
                         }
                     }
-                });
-
-                per_account.mkt_start_value = start_prices.convert_multi_value(
-                    &per_account.start_value,
-                    ts_range.lower()
-                       .expect("bounded interval"),
-                );
-                per_account.mkt_end_value = end_prices.convert_multi_value(
-                    &per_account.end_value,
-                    ts_range.upper()
-                       .expect("bounded interval"),
-                );
-                per_account.pnl_no_dividends =
-                    &per_account.mkt_end_value - &per_account.mkt_start_value;
-                per_account.mkt_unrealized =
-                    &per_account.pnl_no_dividends - &per_account.mkt_cashflow;
-
-                if !per_account.mkt_unrealized.is_zero() {
-                    println!(
-                        "MANU {} pnl_no_dividends={} = cashflow={} + unrealized={}",
-                        acc.name(AccountNameDepth::basename()),
-                        per_account.pnl_no_dividends.display(format),
-                        per_account.mkt_cashflow.display(format),
-                        per_account.mkt_unrealized.display(format),
-                    );
                 }
-                println!(
-                   "MANU {} start={} end={}",
-                   acc.name(AccountNameDepth::basename()),
-                    per_account.mkt_start_value.display(format),
-                    per_account.mkt_end_value.display(format));
+            });
 
-                if kind.is_unrealized() {
-                    //  stats.mkt_unrealized += per_account.pnl;
-                } else if kind.is_expense() {
-                    stats.mkt_expense += &per_account.pnl_no_dividends;
-                } else if kind.is_income() {
-                    stats.mkt_income += &per_account.pnl_no_dividends;
+            let mkt_start_value = start_prices.convert_multi_value(
+                &per_account.start_value,
+                ts_range.lower().expect("bounded interval"),
+            );
+            let mkt_end_value = end_prices.convert_multi_value(
+                &per_account.end_value,
+                ts_range.upper().expect("bounded interval"),
+            );
+            let pnl = &mkt_end_value - &mkt_start_value;
 
-                    if kind.is_passive_income() {
-                        stats.mkt_passive_income += &per_account.pnl_no_dividends;
-                    }
-                }
+            if tx_is_unrealized {
+            } else if kind.is_expense() {
+                stats.expense += &pnl;
+            } else if kind.is_passive_income() {
+                stats.income += &pnl;
+                stats.passive_income += &pnl;
+            } else if kind.is_income() {
+                stats.income += &pnl;
+            }
 
-                // if !tx_is_unrealized {
-                //     per_account.mkt_cashflow -= internal_flow;
-                // }
-
-                per_account.mkt_start_value = start_prices.convert_multi_value(
-                    &per_account.start_value,
-                    ts_range.lower().expect("bounded interval"),
-                );
-                per_account.mkt_end_value = end_prices.convert_multi_value(
-                    &per_account.end_value,
-                    ts_range.upper().expect("bounded interval"),
-                );
-                per_account.pnl_no_dividends =
-                    &per_account.mkt_end_value - &per_account.mkt_start_value;
-                per_account.mkt_unrealized =
-                    &per_account.pnl_no_dividends - &per_account.mkt_cashflow;
-
-                if kind.is_unrealized() {
-                    //  stats.mkt_unrealized += per_account.pnl;
-                } else if kind.is_expense() {
-                    stats.mkt_expense += &per_account.pnl_no_dividends;
-                } else if kind.is_income() {
-                    stats.mkt_income += &per_account.pnl_no_dividends;
-
-                    if kind.is_passive_income() {
-                        stats.mkt_passive_income += &per_account.pnl_no_dividends;
-                    }
-                }
-                if kind.is_networth() {
-                    stats.mkt_start_networth += per_account.mkt_start_value;
-                    stats.mkt_end_networth += per_account.mkt_end_value;
-                }
-                stats.mkt_unrealized += per_account.mkt_unrealized;
+            if kind.is_networth() {
+                stats.start_networth += mkt_start_value;
+                stats.end_networth += mkt_end_value;
+            }
         });
 
-        //        stats.start.mkt_all_income = start_prices
-        //            .convert_multi_value(&stats.start.all_income, &ts_range.lower());
-        //        stats.start.mkt_all_expense = start_prices
-        //            .convert_multi_value(&stats.start.all_expense, &ts_range.lower());
-        //        stats.start.mkt_networth = start_prices
-        //            .convert_multi_value(&stats.start.networth, &ts_range.lower());
-        //        stats.start.mkt_passive_income = start_prices.convert_multi_value(
-        //            &stats.start.passive_income,
-        //            &ts_range.lower(),
-        //        );
-        //        stats.start.mkt_unrealized = start_prices
-        //            .convert_multi_value(&stats.start.unrealized, &ts_range.lower());
-        //
-        //        stats.end.mkt_all_income = end_prices
-        //            .convert_multi_value(&stats.end.all_income, &ts_range.upper());
-        //        stats.end.mkt_all_expense = end_prices
-        //            .convert_multi_value(&stats.end.all_expense, &ts_range.upper());
-        //        stats.end.mkt_networth = end_prices
-        //            .convert_multi_value(&stats.end.networth, &ts_range.upper());
-        //        stats.end.mkt_passive_income = end_prices
-        //            .convert_multi_value(&stats.end.passive_income, &ts_range.upper());
-        //        stats.end.mkt_unrealized = end_prices
-        //            .convert_multi_value(&stats.end.unrealized, &ts_range.upper());
-
+        stats.pnl = &stats.end_networth - &stats.start_networth;
+        stats.cashflow = &stats.income + &stats.expense;
+        stats.unrealized = &stats.pnl + &stats.cashflow;
+        stats.saving_rate = &stats.cashflow / &stats.income;
+        stats.financial_independence =
+            (&stats.unrealized - &stats.passive_income) / &stats.expense;
+        stats.passive_income_ratio =
+            (&stats.passive_income - &stats.unrealized) / &stats.income;
         Ok(stats)
     }
 }

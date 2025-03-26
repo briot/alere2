@@ -4,7 +4,7 @@ use anyhow::Result;
 use rust_decimal::Decimal;
 
 fn percent(val: &Option<Decimal>) -> String {
-    val.map(|p| format!("{:.1}%", (p * Decimal::ONE_HUNDRED)))
+    val.map(|p| format!("{:.2}%", (p * Decimal::ONE_HUNDRED)))
         .unwrap_or("n/a".to_string())
 }
 
@@ -27,8 +27,8 @@ pub fn metrics_view(
         repo,
         alere_lib::metrics::Settings {
             commodity: globals.commodity.clone(),
-            over: Intv::LastNYears(1),
-            // over: Intv::YearAgo(1),
+            //over: Intv::LastNYears(1),
+            over: Intv::YearAgo(1),
         },
         globals.reftime,
     )?;
@@ -41,7 +41,7 @@ Networth:        {} to {}
 P&L:             {}
    = liquid      {}
    + illiquid    {}
-Income:          {} = passive {} + salaries + ...
+Income:          {} = passive {} + work {} + ...
 Expenses:        {}
 Cashflow:        {}
 Unrealized:      + {}
@@ -55,6 +55,7 @@ ROI for liquid:  {}
 Emergency fund:  {}
 Wealth:          {}
 Actual income tax rate: {}
+Taxes=           income {} + misc {}
 ",
         m.start_networth.display(&globals.format),
         m.end_networth.display(&globals.format),
@@ -67,6 +68,7 @@ Actual income tax rate: {}
         m.pnl_illiquid.display(&globals.format),
         (-&m.income).display(&globals.format),
         (-&m.passive_income).display(&globals.format),
+        (-&m.work_income).display(&globals.format),
         (-&m.expense).display(&globals.format),
         (-&m.cashflow).display(&globals.format),
         m.unrealized.display(&globals.format),
@@ -80,5 +82,7 @@ Actual income tax rate: {}
         duration(&m.emergency_fund),
         duration(&m.wealth),
         percent(&m.income_tax_rate),
+        m.income_tax.display(&globals.format),
+        m.misc_tax.display(&globals.format),
     ))
 }

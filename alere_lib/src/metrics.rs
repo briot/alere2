@@ -1,7 +1,5 @@
 use crate::{
-    accounts::AccountNameDepth,
     commodities::Commodity,
-    formatters::Formatter,
     multi_values::{MultiValue, Operation},
     repositories::Repository,
     times::Intv,
@@ -43,6 +41,9 @@ pub struct Metrics {
     // rents received, ...
     // This is generally a negative value, see above
     pub passive_income: MultiValue,
+
+    // Only the part of the income that comes from work
+    pub work_income: MultiValue,
 
     // Total expenses
     // Note: this is generally a positive value (as it goes FROM user accounts)
@@ -94,6 +95,8 @@ pub struct Metrics {
     pub wealth: Option<Decimal>,
 
     // How much income tax rate
+    pub income_tax: MultiValue,
+    pub misc_tax: MultiValue,
     pub income_tax_rate: Option<Decimal>,
 }
 
@@ -109,110 +112,93 @@ impl Metrics {
         let mut prices = repo.market_prices(settings.commodity.clone());
         let mut start_prices = repo.market_prices(settings.commodity.clone());
         let mut end_prices = repo.market_prices(settings.commodity.clone());
-        let mut income_tax = MultiValue::zero();
+        let mut start_value_liquid = MultiValue::zero();
+        let mut end_value_liquid = MultiValue::zero();
+        let mut start_value_illiquid = MultiValue::zero();
+        let mut end_value_illiquid = MultiValue::zero();
 
-        repo.accounts.iter().for_each(|acc| {
-            let kind = &acc.get_kind();
-            let mut start_value = MultiValue::zero();
-            let mut end_value = MultiValue::zero();
+        for tx in repo.transactions.iter() {
+            for s in tx.splits().iter() {
+                let kind = s.account.get_kind();
+                if kind.is_unrealized() {
+                    // nothing to do
+                } else if kind.is_expense()
+                    || kind.is_income()
+                    || kind.is_passive_income()
+                {
+                    let val = match &s.operation {
+                        Operation::Credit(v) => {
+                            prices.convert_multi_value(v, &s.post_ts)
+                        }
+                        Operation::AddShares { qty } => {
+                            prices.convert_value(qty, &s.post_ts)
+                        }
+                        Operation::BuyAmount { .. }
+                        | Operation::BuyPrice { .. }
+                        | Operation::Reinvest { .. }
+                        | Operation::Split { .. }
+                        | Operation::Dividend => MultiValue::zero(),
+                    };
 
-            // True if this transaction is about unrealized gain.  This
-            // is always true if our account itself is unrealized
-            let mut tx_is_unrealized = kind.is_unrealized();
-
-            acc.iter_transactions().for_each(|tx| {
-                // The sum of splits from networth account.  For instance,
-                // this would be money transferred from one account to an
-                // other to buy shares (but if there are bank fees those
-                // are counted, while just looking at the amount to buy
-                // shares would not include them).
-                // These also do not include acc itself.
-                let mut internal_flow = MultiValue::zero();
-                let mut external_flow = MultiValue::zero();
-
-                for s in tx.splits().iter() {
-                    if s.account == acc {
-                        // An operation before the start of the time range:
-                        // this is used to compute the starting state
-                        if ts_range.intv.strictly_right_of(s.post_ts) {
-                            start_value.apply(&s.operation);
+                    if ts_range.intv.contains(s.post_ts) {
+                        if kind.is_income_tax() {
+                            stats.income_tax += &val;
+                        } else if kind.is_misc_tax() {
+                            stats.misc_tax += &val;
                         }
 
-                        // An operation before the end of the time range:
-                        // this is used to compute the ending state.
-                        if !ts_range.intv.strictly_left_of(s.post_ts) {
-                            end_value.apply(&s.operation);
-                        }
-                    } else {
-                        let k = s.account.get_kind();
-                        tx_is_unrealized |= k.is_unrealized();
-
-                        let val = match &s.operation {
-                            Operation::Credit(v) => {
-                                prices.convert_multi_value(v, &s.post_ts)
-                            }
-                            Operation::AddShares { qty } => {
-                                prices.convert_value(qty, &s.post_ts)
-                            }
-                            Operation::BuyAmount { .. }
-                            | Operation::BuyPrice { .. }
-                            | Operation::Reinvest { .. }
-                            | Operation::Split { .. }
-                            | Operation::Dividend => MultiValue::zero(),
-                        };
-
-                        // Will be computed twice if a transaction has more
-                        // than two splits.
-                        if k.is_income_tax()
-                            && ts_range.intv.contains(s.post_ts)
-                        {
-                            println!("MANU income tax={:?} {} {:?}",
-                                s.post_ts,
-                                s.account.name(AccountNameDepth::unlimited()),
-                                val.display(&Formatter::default()));
-                            income_tax += &val;
-                        }
-
-                        if k.is_networth() {
-                            internal_flow += &val;
+                        if kind.is_expense() {
+                            stats.expense += &val;
+                        } else if kind.is_passive_income() {
+                            stats.passive_income += &val;
+                            stats.income += &val;
+                        } else if kind.is_work_income() {
+                            stats.work_income += &val;
+                            stats.income += &val;
                         } else {
-                            external_flow += &val;
+                            stats.income += &val;
+                        }
+                    }
+                } else if kind.is_networth() {
+                    // An operation before the start of the time range:
+                    // this is used to compute the starting state
+                    if ts_range.intv.strictly_right_of(s.post_ts) {
+                        if kind.is_liquid() {
+                            start_value_liquid.apply(&s.operation);
+                        } else {
+                            start_value_illiquid.apply(&s.operation);
+                        }
+                    }
+
+                    // An operation before the end of the time range:
+                    // this is used to compute the ending state.
+                    if !ts_range.intv.strictly_left_of(s.post_ts) {
+                        if kind.is_liquid() {
+                            end_value_liquid.apply(&s.operation);
+                        } else {
+                            end_value_illiquid.apply(&s.operation);
                         }
                     }
                 }
-            });
-
-            let mkt_start_value = start_prices.convert_multi_value(
-                &start_value,
-                ts_range.intv.lower().expect("bounded interval"),
-            );
-            let mkt_end_value = end_prices.convert_multi_value(
-                &end_value,
-                ts_range.intv.upper().expect("bounded interval"),
-            );
-            let pnl = &mkt_end_value - &mkt_start_value;
-
-            if tx_is_unrealized {
-            } else if kind.is_expense() {
-                stats.expense += &pnl;
-            } else if kind.is_passive_income() {
-                stats.income += &pnl;
-                stats.passive_income += &pnl;
-            } else if kind.is_income() {
-                stats.income += &pnl;
             }
+        }
 
-            if kind.is_networth() {
-                if kind.is_liquid() {
-                    stats.start_networth_liquid += mkt_start_value;
-                    stats.end_networth_liquid += mkt_end_value;
-                } else {
-                    stats.start_networth_illiquid += mkt_start_value;
-                    stats.end_networth_illiquid += mkt_end_value;
-                }
-            }
-        });
-
+        stats.start_networth_liquid = start_prices.convert_multi_value(
+            &start_value_liquid,
+            ts_range.intv.lower().expect("bounded interval"),
+        );
+        stats.start_networth_illiquid = start_prices.convert_multi_value(
+            &start_value_illiquid,
+            ts_range.intv.lower().expect("bounded interval"),
+        );
+        stats.end_networth_liquid = start_prices.convert_multi_value(
+            &end_value_liquid,
+            ts_range.intv.upper().expect("bounded interval"),
+        );
+        stats.end_networth_illiquid = start_prices.convert_multi_value(
+            &end_value_illiquid,
+            ts_range.intv.upper().expect("bounded interval"),
+        );
         stats.start_networth =
             &stats.start_networth_liquid + &stats.start_networth_illiquid;
         stats.end_networth =
@@ -243,15 +229,10 @@ impl Metrics {
         stats.wealth = &stats.end_networth / &daily_expense;
 
         let mkt_income_tax = end_prices.convert_multi_value(
-            &income_tax,
+            &stats.income_tax,
             ts_range.intv.upper().expect("bounded interval"),
         );
         stats.income_tax_rate = &mkt_income_tax / -&stats.income;
-        println!(
-            "MANU income_tax={} {}",
-            income_tax.display(&Formatter::default()),
-            mkt_income_tax.display(&Formatter::default())
-        );
 
         Ok(stats)
     }

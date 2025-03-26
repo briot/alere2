@@ -307,6 +307,15 @@ impl AccountKind {
         self.0.borrow().is_networth
     }
 
+    pub fn is_income_tax(&self) -> bool {
+        self.0.borrow().is_income_tax
+    }
+
+    pub fn is_liquid(&self) -> bool {
+        matches!(self.0.borrow().category, AccountCategory::EQUITY)
+        && self.is_networth()
+    }
+
     pub fn is_passive_income(&self) -> bool {
         self.0.borrow().is_passive_income
     }

@@ -94,6 +94,17 @@ impl Value {
     }
 }
 
+impl core::ops::Div<Decimal> for &Value {
+    type Output = Value;
+
+    fn div(self, rhs: Decimal) -> Self::Output {
+        Value {
+            amount: self.amount / rhs,
+            commodity: self.commodity.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 enum InnerValue {
     #[default]
@@ -257,6 +268,25 @@ impl core::ops::Div<&MultiValue> for &MultiValue {
             }
             (_, InnerValue::Multi(_)) => None,
             (InnerValue::Multi(_), _) => None,
+        }
+    }
+}
+
+impl core::ops::Div<Decimal> for &MultiValue {
+    type Output = MultiValue;
+
+    fn div(self, rhs: Decimal) -> Self::Output {
+        assert!(self.is_normalized());
+        match &self.0 {
+            InnerValue::Zero => MultiValue::zero(),
+            InnerValue::One(p1) => MultiValue(InnerValue::One(p1 / rhs)),
+            InnerValue::Multi(m1) => {
+                let mut map = m1.clone();
+                for v in map.values_mut() {
+                    v.amount /= rhs;
+                }
+                MultiValue(InnerValue::Multi(map))
+            }
         }
     }
 }

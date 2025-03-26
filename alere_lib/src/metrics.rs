@@ -1,5 +1,7 @@
 use crate::{
+    accounts::AccountNameDepth,
     commodities::Commodity,
+    formatters::Formatter,
     multi_values::{MultiValue, Operation},
     repositories::Repository,
     times::Intv,
@@ -23,6 +25,15 @@ pub struct Metrics {
     pub start_networth: MultiValue,
     pub end_networth: MultiValue,
 
+    // Networth = networth_liquid + networth_illiquid
+    // Only the liquid part (cash, investments,...) of the networth
+    pub start_networth_liquid: MultiValue,
+    pub end_networth_liquid: MultiValue,
+
+    // The illiquid part (real-estate,...)
+    pub start_networth_illiquid: MultiValue,
+    pub end_networth_illiquid: MultiValue,
+
     // Total realized income (salaries, passive, rents,...).
     // Note: this is generally a negative value (as it leaves a category to go
     // INTO a user account)
@@ -37,9 +48,11 @@ pub struct Metrics {
     // Note: this is generally a positive value (as it goes FROM user accounts)
     pub expense: MultiValue,
 
-    // P&L = networth_at_end - networth_at_start
+    // P&L = networth_at_end - networth_at_start = pnl_liquid + pnl_illiquid
     // The total variation of the networth.
     pub pnl: MultiValue,
+    pub pnl_liquid: MultiValue,
+    pub pnl_illiquid: MultiValue,
 
     // Cashflow = income - expense
     // This is the total amount of money added to the networth (i.e. to any of
@@ -50,6 +63,8 @@ pub struct Metrics {
     // This is the variation in market value (prices and exchange rates) of
     // investments.
     pub unrealized: MultiValue,
+    pub unrealized_liquid: MultiValue,
+    pub unrealized_illiquid: MultiValue,
 
     // Saving rate = 1 - Expense / Income
     // How much of the income we are saving (i.e. they remain in accounts)
@@ -63,6 +78,23 @@ pub struct Metrics {
     // Passive income ratio = (passive_income + unrealized) / income
     // What part of total income comes from sources other that salaries
     pub passive_income_ratio: Option<Decimal>,
+
+    // Return-on-Investment =
+    //    (passive_income + unrealized + pnl_illiquid) / networth
+    pub roi: Option<Decimal>,
+
+    // Return-on-Investment for liquid assets =
+    //    (passive_income + unrealized_liquid) / networth_liquid
+    pub roi_liquid: Option<Decimal>,
+
+    // How many days of expenses can be funded through liquid assets
+    pub emergency_fund: Option<Decimal>,
+
+    // How many days of expenses you own
+    pub wealth: Option<Decimal>,
+
+    // How much income tax rate
+    pub income_tax_rate: Option<Decimal>,
 }
 
 impl Metrics {
@@ -72,11 +104,12 @@ impl Metrics {
         settings: Settings,
         now: DateTime<Local>,
     ) -> Result<Self> {
-        let ts_range = &settings.over.to_ranges(now)?[0].intv;
+        let ts_range = &settings.over.to_ranges(now)?[0];
         let mut stats = Metrics::default();
         let mut prices = repo.market_prices(settings.commodity.clone());
         let mut start_prices = repo.market_prices(settings.commodity.clone());
         let mut end_prices = repo.market_prices(settings.commodity.clone());
+        let mut income_tax = MultiValue::zero();
 
         repo.accounts.iter().for_each(|acc| {
             let kind = &acc.get_kind();
@@ -101,13 +134,13 @@ impl Metrics {
                     if s.account == acc {
                         // An operation before the start of the time range:
                         // this is used to compute the starting state
-                        if ts_range.strictly_right_of(s.post_ts) {
+                        if ts_range.intv.strictly_right_of(s.post_ts) {
                             start_value.apply(&s.operation);
                         }
 
                         // An operation before the end of the time range:
                         // this is used to compute the ending state.
-                        if !ts_range.strictly_left_of(s.post_ts) {
+                        if !ts_range.intv.strictly_left_of(s.post_ts) {
                             end_value.apply(&s.operation);
                         }
                     } else {
@@ -128,10 +161,22 @@ impl Metrics {
                             | Operation::Dividend => MultiValue::zero(),
                         };
 
+                        // Will be computed twice if a transaction has more
+                        // than two splits.
+                        if k.is_income_tax()
+                            && ts_range.intv.contains(s.post_ts)
+                        {
+                            println!("MANU income tax={:?} {} {:?}",
+                                s.post_ts,
+                                s.account.name(AccountNameDepth::unlimited()),
+                                val.display(&Formatter::default()));
+                            income_tax += &val;
+                        }
+
                         if k.is_networth() {
-                            internal_flow += val;
+                            internal_flow += &val;
                         } else {
-                            external_flow += val;
+                            external_flow += &val;
                         }
                     }
                 }
@@ -139,11 +184,11 @@ impl Metrics {
 
             let mkt_start_value = start_prices.convert_multi_value(
                 &start_value,
-                ts_range.lower().expect("bounded interval"),
+                ts_range.intv.lower().expect("bounded interval"),
             );
             let mkt_end_value = end_prices.convert_multi_value(
                 &end_value,
-                ts_range.upper().expect("bounded interval"),
+                ts_range.intv.upper().expect("bounded interval"),
             );
             let pnl = &mkt_end_value - &mkt_start_value;
 
@@ -158,19 +203,56 @@ impl Metrics {
             }
 
             if kind.is_networth() {
-                stats.start_networth += mkt_start_value;
-                stats.end_networth += mkt_end_value;
+                if kind.is_liquid() {
+                    stats.start_networth_liquid += mkt_start_value;
+                    stats.end_networth_liquid += mkt_end_value;
+                } else {
+                    stats.start_networth_illiquid += mkt_start_value;
+                    stats.end_networth_illiquid += mkt_end_value;
+                }
             }
         });
 
+        stats.start_networth =
+            &stats.start_networth_liquid + &stats.start_networth_illiquid;
+        stats.end_networth =
+            &stats.end_networth_liquid + &stats.end_networth_illiquid;
+        stats.pnl_liquid =
+            &stats.end_networth_liquid - &stats.start_networth_liquid;
+        stats.pnl_illiquid =
+            &stats.end_networth_illiquid - &stats.start_networth_illiquid;
         stats.pnl = &stats.end_networth - &stats.start_networth;
         stats.cashflow = &stats.income + &stats.expense;
         stats.unrealized = &stats.pnl + &stats.cashflow;
+        stats.unrealized_liquid = &stats.pnl_liquid + &stats.cashflow;
+        stats.unrealized_illiquid = stats.pnl_illiquid.clone();
         stats.saving_rate = &stats.cashflow / &stats.income;
         stats.financial_independence =
             (&stats.unrealized - &stats.passive_income) / &stats.expense;
         stats.passive_income_ratio =
             (&stats.passive_income - &stats.unrealized) / &stats.income;
+        stats.roi =
+            (&stats.passive_income + &stats.unrealized + &stats.pnl_illiquid)
+                / &stats.start_networth;
+        stats.roi_liquid = (&stats.passive_income + &stats.unrealized_liquid)
+            / &stats.start_networth_liquid;
+
+        let days = ts_range.duration(now).num_days();
+        let daily_expense = &stats.expense / Decimal::from(days);
+        stats.emergency_fund = &stats.end_networth_liquid / &daily_expense;
+        stats.wealth = &stats.end_networth / &daily_expense;
+
+        let mkt_income_tax = end_prices.convert_multi_value(
+            &income_tax,
+            ts_range.intv.upper().expect("bounded interval"),
+        );
+        stats.income_tax_rate = &mkt_income_tax / -&stats.income;
+        println!(
+            "MANU income_tax={} {}",
+            income_tax.display(&Formatter::default()),
+            mkt_income_tax.display(&Formatter::default())
+        );
+
         Ok(stats)
     }
 }

@@ -269,6 +269,16 @@ pub struct TimeInterval {
     pub intv: Interval<DateTime<Local>>,
 }
 
+impl TimeInterval {
+    pub fn duration(&self, reftime: DateTime<Local>) -> chrono::TimeDelta {
+        let up = *self.intv.upper()
+            .unwrap_or(&Instant::Armageddon.to_time(reftime).unwrap());
+        let lo = *self.intv.lower()
+            .unwrap_or(&Instant::Epoch.to_time(reftime).unwrap());
+        up - lo
+    }
+}
+
 /// A high-level description of time ranges
 #[derive(Debug)]
 pub enum Intv {

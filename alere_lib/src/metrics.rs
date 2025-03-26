@@ -17,14 +17,8 @@ pub struct Settings {
 }
 
 /// Changes in one time range
-#[derive(Debug, Default)]
-pub struct PerAccount {
-    pub start_value: MultiValue,
-    pub end_value: MultiValue,
-}
-
 #[derive(Default)]
-pub struct Stats {
+pub struct Metrics {
     // Networth at start and end of the period
     pub start_networth: MultiValue,
     pub end_networth: MultiValue,
@@ -71,7 +65,7 @@ pub struct Stats {
     pub passive_income_ratio: Option<Decimal>,
 }
 
-impl Stats {
+impl Metrics {
     /// Compute various statistics over a range of time
     pub fn new(
         repo: &Repository,
@@ -79,14 +73,15 @@ impl Stats {
         now: DateTime<Local>,
     ) -> Result<Self> {
         let ts_range = &settings.over.to_ranges(now)?[0].intv;
-        let mut stats = Stats::default();
+        let mut stats = Metrics::default();
         let mut prices = repo.market_prices(settings.commodity.clone());
         let mut start_prices = repo.market_prices(settings.commodity.clone());
         let mut end_prices = repo.market_prices(settings.commodity.clone());
 
         repo.accounts.iter().for_each(|acc| {
             let kind = &acc.get_kind();
-            let mut per_account = PerAccount::default();
+            let mut start_value = MultiValue::zero();
+            let mut end_value = MultiValue::zero();
 
             // True if this transaction is about unrealized gain.  This
             // is always true if our account itself is unrealized
@@ -107,13 +102,13 @@ impl Stats {
                         // An operation before the start of the time range:
                         // this is used to compute the starting state
                         if ts_range.strictly_right_of(s.post_ts) {
-                            per_account.start_value.apply(&s.operation);
+                            start_value.apply(&s.operation);
                         }
 
                         // An operation before the end of the time range:
                         // this is used to compute the ending state.
                         if !ts_range.strictly_left_of(s.post_ts) {
-                            per_account.end_value.apply(&s.operation);
+                            end_value.apply(&s.operation);
                         }
                     } else {
                         let k = s.account.get_kind();
@@ -143,11 +138,11 @@ impl Stats {
             });
 
             let mkt_start_value = start_prices.convert_multi_value(
-                &per_account.start_value,
+                &start_value,
                 ts_range.lower().expect("bounded interval"),
             );
             let mkt_end_value = end_prices.convert_multi_value(
-                &per_account.end_value,
+                &end_value,
                 ts_range.upper().expect("bounded interval"),
             );
             let pnl = &mkt_end_value - &mkt_start_value;

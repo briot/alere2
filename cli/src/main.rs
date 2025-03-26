@@ -1,12 +1,12 @@
 mod args;
 mod global_settings;
+mod metrics_view;
 mod networth_view;
-mod stats_view;
 pub mod tables;
 
 use crate::{
     args::build_cli, global_settings::GlobalSettings,
-    networth_view::networth_view, stats_view::stats_view,
+    metrics_view::metrics_view, networth_view::networth_view,
 };
 use alere_lib::{
     accounts::AccountNameDepth,
@@ -50,8 +50,8 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
 }
 
 /// Display stats
-fn stats(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
-    let output = stats_view(repo, globals)?;
+fn metrics(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
+    let output = metrics_view(repo, globals)?;
     println!("{}", output);
     Ok(())
 }
@@ -177,8 +177,8 @@ fn main() -> Result<()> {
         Some(("cashflow", args)) => {
             cashflow(&mut repo, &settings, args)?;
         }
-        Some(("stats", _)) => {
-            stats(&repo, &settings)?;
+        Some(("metrics", _)) => {
+            metrics(&repo, &settings)?;
         }
         _ => unreachable!(),
     }

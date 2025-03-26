@@ -36,7 +36,7 @@ impl<'a> MarketPrices<'a> {
     }
 
     /// Convert each component of the multi-value to to_commodity, and sum
-    /// the results.  We still return a Value, since we might be missing
+    /// the results.  We still return a MultiValue, since we might be missing
     /// some exchange-rates, and could therefore left some of the components
     /// unconverted.
     pub fn convert_multi_value(

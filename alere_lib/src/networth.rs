@@ -153,7 +153,6 @@ impl NetworthRow {
 
     pub fn display_market_value(
         &self,
-        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
@@ -162,7 +161,6 @@ impl NetworthRow {
     }
     pub fn display_market_delta(
         &self,
-        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
@@ -171,7 +169,6 @@ impl NetworthRow {
     }
     pub fn display_market_delta_to_last(
         &self,
-        _repo: &Repository,
         idx: usize,
         format: &Formatter,
     ) -> String {
@@ -234,11 +231,6 @@ impl Networth {
             .collect::<Result<Vec<TimeInterval>>>()?;
 
         let col_count = intervals.len();
-
-        // We keep one cache for market prices per entry in as_of, since
-        // otherwise the current cache would keeping wiped out as we move from
-        // one column to the next.
-
         let mut market = repo.market_prices(settings.commodity.clone());
         let mut result = Networth {
             settings,

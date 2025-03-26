@@ -53,14 +53,13 @@ where
     type Data<'a> = NodeData<Key, NetworthRow>;
 
     let market_image = |row: &Data, idx: &usize| {
-        row.data.display_market_value(repo, *idx, &globals.format)
+        row.data.display_market_value(*idx, &globals.format)
     };
     let delta_market_image = |row: &Data, idx: &usize| {
-        row.data.display_market_delta(repo, *idx, &globals.format)
+        row.data.display_market_delta(*idx, &globals.format)
     };
     let delta_market_to_last_image = |row: &Data, idx: &usize| {
-        row.data
-            .display_market_delta_to_last(repo, *idx, &globals.format)
+        row.data.display_market_delta_to_last(*idx, &globals.format)
     };
     let node_image = |row: &Data, _idx: &usize| {
         match &row.key {

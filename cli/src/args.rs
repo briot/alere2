@@ -10,7 +10,7 @@ pub(crate) fn build_cli() -> Command {
         .flatten_help(true) // show help for all subcommands
         .arg_required_else_help(true) // show full help if nothing given
         .args(GlobalSettings::cli())
-        .subcommand(Command::new("stats").about("Show statistics"))
+        .subcommand(Command::new("metrics").about("Show metrics"))
         .subcommand(
             // Use    eval "$(alere completions zsh)"
             Command::new("completions")

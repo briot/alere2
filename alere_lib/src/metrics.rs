@@ -1,11 +1,13 @@
 use crate::{
     commodities::Commodity,
+    market_prices::MarketPrices,
     multi_values::{MultiValue, Operation},
     repositories::Repository,
-    times::Intv,
+    times::{Intv, TimeInterval},
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use itertools::Itertools;
 use rust_decimal::Decimal;
 
 pub struct Settings {
@@ -13,12 +15,13 @@ pub struct Settings {
 
     // What columns to display.  Each column aggregates all transaction within
     // a time interval.
-    pub over: Intv,
+    pub intervals: Vec<Intv>,
 }
 
 /// Changes in one time range
-#[derive(Default)]
 pub struct Metrics {
+    pub interval: TimeInterval,
+
     // Networth at start and end of the period
     pub start_networth: MultiValue,
     pub end_networth: MultiValue,
@@ -100,141 +103,172 @@ pub struct Metrics {
     pub income_tax_rate: Option<Decimal>,
 }
 
+#[derive(Default)]
+struct MetricsArgs {
+    start_liquid: MultiValue,
+    start_illiquid: MultiValue,
+    end_liquid: MultiValue,
+    end_illiquid: MultiValue,
+    income: MultiValue,
+    passive_income: MultiValue,
+    work_income: MultiValue,
+    expense: MultiValue,
+    income_tax: MultiValue,
+    misc_tax: MultiValue,
+}
+
 impl Metrics {
+    fn new(
+        prices: &mut MarketPrices,
+        now: DateTime<Local>,
+        args: MetricsArgs,
+        interval: TimeInterval,
+    ) -> Self {
+        let lo = interval.intv.lower().expect("bounded interval");
+        let up = interval.intv.upper().expect("bounded interval");
+        let start_liquid = prices.convert_multi_value(&args.start_liquid, lo);
+        let start_illiquid =
+            prices.convert_multi_value(&args.start_illiquid, lo);
+        let end_liquid = prices.convert_multi_value(&args.end_liquid, up);
+        let end_illiquid = prices.convert_multi_value(&args.end_illiquid, up);
+        let income_tax = prices.convert_multi_value(&args.income_tax, up);
+        let cashflow = &args.income + &args.expense;
+        let start_nw = &start_liquid + &start_illiquid;
+        let end_nw = &end_liquid + &end_illiquid;
+        let pnl = &end_nw - &start_nw;
+        let pnl_liquid = &end_liquid - &start_liquid;
+        let pnl_illiquid = &end_illiquid - &start_illiquid;
+        let unrealized = &pnl + &cashflow;
+        let unrealized_liquid = &pnl_liquid + &cashflow;
+        let days = interval.duration(now).num_days();
+        let daily_expense = &args.expense / Decimal::from(days);
+        Metrics {
+            interval,
+            unrealized_liquid: &pnl_liquid + &cashflow,
+            saving_rate: &cashflow / &args.income,
+            financial_independence: (&unrealized - &args.passive_income)
+                / &args.expense,
+            passive_income_ratio: (&args.passive_income - &unrealized)
+                / &args.income,
+            roi: (&args.passive_income + &unrealized + &pnl_illiquid)
+                / &start_nw,
+            roi_liquid: (&args.passive_income + unrealized_liquid)
+                / &start_liquid,
+            emergency_fund: &end_liquid / &daily_expense,
+            wealth: &end_nw / &daily_expense,
+            income_tax_rate: &income_tax / -&args.income,
+            unrealized,
+            unrealized_illiquid: pnl_illiquid.clone(),
+            income_tax,
+            misc_tax: args.misc_tax,
+            start_networth_liquid: start_liquid,
+            end_networth_liquid: end_liquid,
+            start_networth_illiquid: start_illiquid,
+            end_networth_illiquid: end_illiquid,
+            start_networth: start_nw,
+            end_networth: end_nw,
+            income: args.income,
+            passive_income: args.passive_income,
+            work_income: args.work_income,
+            expense: args.expense,
+            pnl,
+            pnl_liquid,
+            pnl_illiquid,
+            cashflow,
+        }
+    }
+
     /// Compute various statistics over a range of time
-    pub fn new(
+    pub fn load(
         repo: &Repository,
         settings: Settings,
         now: DateTime<Local>,
-    ) -> Result<Self> {
-        let ts_range = &settings.over.to_ranges(now)?[0];
-        let mut stats = Metrics::default();
+    ) -> Result<Vec<Self>> {
         let mut prices = repo.market_prices(settings.commodity.clone());
-        let mut start_prices = repo.market_prices(settings.commodity.clone());
-        let mut end_prices = repo.market_prices(settings.commodity.clone());
-        let mut start_value_liquid = MultiValue::zero();
-        let mut end_value_liquid = MultiValue::zero();
-        let mut start_value_illiquid = MultiValue::zero();
-        let mut end_value_illiquid = MultiValue::zero();
+        let mut result = Vec::new();
 
-        for tx in repo.transactions.iter() {
-            for s in tx.splits().iter() {
-                let kind = s.account.get_kind();
-                if kind.is_unrealized() {
-                    // nothing to do
-                } else if kind.is_expense()
-                    || kind.is_income()
-                    || kind.is_passive_income()
-                {
-                    let val = match &s.operation {
-                        Operation::Credit(v) => {
-                            prices.convert_multi_value(v, &s.post_ts)
-                        }
-                        Operation::AddShares { qty } => {
-                            prices.convert_value(qty, &s.post_ts)
-                        }
-                        Operation::BuyAmount { .. }
-                        | Operation::BuyPrice { .. }
-                        | Operation::Reinvest { .. }
-                        | Operation::Split { .. }
-                        | Operation::Dividend => MultiValue::zero(),
-                    };
+        for result_stats in settings
+            .intervals
+            .iter()
+            .map(|intv| intv.to_ranges(now))
+            .flatten_ok()
+        {
+            let interval = match result_stats {
+                Err(e) => Err(e)?,
+                Ok(interval) => interval,
+            };
+            let mut args = MetricsArgs::default();
 
-                    if ts_range.intv.contains(s.post_ts) {
-                        if kind.is_income_tax() {
-                            stats.income_tax += &val;
-                        } else if kind.is_misc_tax() {
-                            stats.misc_tax += &val;
+            for tx in repo.transactions.iter() {
+                for s in tx.splits().iter() {
+                    let kind = s.account.get_kind();
+                    if kind.is_unrealized() {
+                        // nothing to do
+                    } else if kind.is_expense()
+                        || kind.is_income()
+                        || kind.is_passive_income()
+                    {
+                        let val = match &s.operation {
+                            Operation::Credit(v) => {
+                                prices.convert_multi_value(v, &s.post_ts)
+                            }
+                            Operation::AddShares { qty } => {
+                                prices.convert_value(qty, &s.post_ts)
+                            }
+                            Operation::BuyAmount { .. }
+                            | Operation::BuyPrice { .. }
+                            | Operation::Reinvest { .. }
+                            | Operation::Split { .. }
+                            | Operation::Dividend => MultiValue::zero(),
+                        };
+
+                        if interval.intv.contains(s.post_ts) {
+                            if kind.is_income_tax() {
+                                args.income_tax += &val;
+                            } else if kind.is_misc_tax() {
+                                args.misc_tax += &val;
+                            }
+
+                            if kind.is_expense() {
+                                args.expense += &val;
+                            } else if kind.is_passive_income() {
+                                args.passive_income += &val;
+                                args.income += &val;
+                            } else if kind.is_work_income() {
+                                args.work_income += &val;
+                                args.income += &val;
+                            } else {
+                                args.income += &val;
+                            }
+                        }
+                    } else if kind.is_networth() {
+                        // An operation before the start of the time range:
+                        // this is used to compute the starting state
+                        if interval.intv.strictly_right_of(s.post_ts) {
+                            if kind.is_liquid() {
+                                args.start_liquid.apply(&s.operation);
+                            } else {
+                                args.start_illiquid.apply(&s.operation);
+                            }
                         }
 
-                        if kind.is_expense() {
-                            stats.expense += &val;
-                        } else if kind.is_passive_income() {
-                            stats.passive_income += &val;
-                            stats.income += &val;
-                        } else if kind.is_work_income() {
-                            stats.work_income += &val;
-                            stats.income += &val;
-                        } else {
-                            stats.income += &val;
-                        }
-                    }
-                } else if kind.is_networth() {
-                    // An operation before the start of the time range:
-                    // this is used to compute the starting state
-                    if ts_range.intv.strictly_right_of(s.post_ts) {
-                        if kind.is_liquid() {
-                            start_value_liquid.apply(&s.operation);
-                        } else {
-                            start_value_illiquid.apply(&s.operation);
-                        }
-                    }
-
-                    // An operation before the end of the time range:
-                    // this is used to compute the ending state.
-                    if !ts_range.intv.strictly_left_of(s.post_ts) {
-                        if kind.is_liquid() {
-                            end_value_liquid.apply(&s.operation);
-                        } else {
-                            end_value_illiquid.apply(&s.operation);
+                        // An operation before the end of the time range:
+                        // this is used to compute the ending state.
+                        if !interval.intv.strictly_left_of(s.post_ts) {
+                            if kind.is_liquid() {
+                                args.end_liquid.apply(&s.operation);
+                            } else {
+                                args.end_illiquid.apply(&s.operation);
+                            }
                         }
                     }
                 }
             }
+
+            result.push(Metrics::new(&mut prices, now, args, interval));
         }
 
-        stats.start_networth_liquid = start_prices.convert_multi_value(
-            &start_value_liquid,
-            ts_range.intv.lower().expect("bounded interval"),
-        );
-        stats.start_networth_illiquid = start_prices.convert_multi_value(
-            &start_value_illiquid,
-            ts_range.intv.lower().expect("bounded interval"),
-        );
-        stats.end_networth_liquid = start_prices.convert_multi_value(
-            &end_value_liquid,
-            ts_range.intv.upper().expect("bounded interval"),
-        );
-        stats.end_networth_illiquid = start_prices.convert_multi_value(
-            &end_value_illiquid,
-            ts_range.intv.upper().expect("bounded interval"),
-        );
-        stats.start_networth =
-            &stats.start_networth_liquid + &stats.start_networth_illiquid;
-        stats.end_networth =
-            &stats.end_networth_liquid + &stats.end_networth_illiquid;
-        stats.pnl_liquid =
-            &stats.end_networth_liquid - &stats.start_networth_liquid;
-        stats.pnl_illiquid =
-            &stats.end_networth_illiquid - &stats.start_networth_illiquid;
-        stats.pnl = &stats.end_networth - &stats.start_networth;
-        stats.cashflow = &stats.income + &stats.expense;
-        stats.unrealized = &stats.pnl + &stats.cashflow;
-        stats.unrealized_liquid = &stats.pnl_liquid + &stats.cashflow;
-        stats.unrealized_illiquid = stats.pnl_illiquid.clone();
-        stats.saving_rate = &stats.cashflow / &stats.income;
-        stats.financial_independence =
-            (&stats.unrealized - &stats.passive_income) / &stats.expense;
-        stats.passive_income_ratio =
-            (&stats.passive_income - &stats.unrealized) / &stats.income;
-        stats.roi =
-            (&stats.passive_income + &stats.unrealized + &stats.pnl_illiquid)
-                / &stats.start_networth;
-        stats.roi_liquid = (&stats.passive_income + &stats.unrealized_liquid)
-            / &stats.start_networth_liquid;
-
-        let days = ts_range.duration(now).num_days();
-        let daily_expense = &stats.expense / Decimal::from(days);
-        stats.emergency_fund = &stats.end_networth_liquid / &daily_expense;
-        stats.wealth = &stats.end_networth / &daily_expense;
-
-        let mkt_income_tax = end_prices.convert_multi_value(
-            &stats.income_tax,
-            ts_range.intv.upper().expect("bounded interval"),
-        );
-        stats.income_tax_rate = &mkt_income_tax / -&stats.income;
-
-        Ok(stats)
+        Ok(result)
     }
 }
 

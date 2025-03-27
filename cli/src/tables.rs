@@ -141,11 +141,11 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
         self
     }
 
-    pub fn add_rows(&mut self, rows: impl IntoIterator<Item = TRow>) {
-        self.rows.extend(rows.into_iter().map(|row| {
+    pub fn add_rows(&mut self, rows: &[TRow], indent: usize) {
+        self.rows.extend(rows.iter().map(|row| {
             RowData::Cells(
-                0,
-                self.columns.iter().map(|col| col.content(&row)).collect(),
+                indent,
+                self.columns.iter().map(|col| col.content(row)).collect(),
             )
         }));
     }

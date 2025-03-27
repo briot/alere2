@@ -271,9 +271,13 @@ pub struct TimeInterval {
 
 impl TimeInterval {
     pub fn duration(&self, reftime: DateTime<Local>) -> chrono::TimeDelta {
-        let up = *self.intv.upper()
+        let up = *self
+            .intv
+            .upper()
             .unwrap_or(&Instant::Armageddon.to_time(reftime).unwrap());
-        let lo = *self.intv.lower()
+        let lo = *self
+            .intv
+            .lower()
             .unwrap_or(&Instant::Epoch.to_time(reftime).unwrap());
         up - lo
     }
@@ -294,6 +298,7 @@ pub enum Intv {
     SpecificYear(u16), // one specific year (e.g. 2023)
     YearAgo(i32),    // a full year: 0=current year, -1=last year,...
     Yearly { begin: Instant, end: Instant },
+    YearToDate,
 }
 
 impl Intv {
@@ -314,9 +319,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Last day".to_string()
+                        "One day".to_string()
                     } else {
-                        format!("Last {} days", *count)
+                        format!("{} days", *count)
                     },
                 }]
             }
@@ -326,9 +331,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Last month".to_string()
+                        "One month".to_string()
                     } else {
-                        format!("Last {} months", *count)
+                        format!("{} months", *count)
                     },
                 }]
             }
@@ -338,9 +343,9 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: if *count == 1 {
-                        "Last year".to_string()
+                        "One year".to_string()
                     } else {
-                        format!("Last {} years", *count)
+                        format!("{} years", *count)
                     },
                 }]
             }
@@ -350,6 +355,14 @@ impl Intv {
                 vec![TimeInterval {
                     intv: Interval::new_closed_open(lower, upper),
                     descr: format!("{}", lower.year()),
+                }]
+            }
+            Intv::YearToDate => {
+                let lower = Instant::StartYearsAgo(0).to_time(now)?;
+                let upper = Instant::Now.to_time(now)?;
+                vec![TimeInterval {
+                    intv: Interval::new_closed_open(lower, upper),
+                    descr: "YTD".to_string(),
                 }]
             }
             Intv::MonthAgo(count) => {

@@ -317,7 +317,7 @@ impl AccountKind {
 
     pub fn is_liquid(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::EQUITY)
-        && self.is_networth()
+            && self.is_networth()
     }
 
     pub fn is_work_income(&self) -> bool {

@@ -1,6 +1,7 @@
 use crate::{
     accounts::{Account, AccountNameDepth},
     errors::AlrError,
+    formatters::Formatter,
     multi_values::{MultiValue, Operation, Value},
     payees::Payee,
 };
@@ -10,6 +11,7 @@ use std::{
     cell::{Ref, RefCell},
     rc::Rc,
 };
+use itertools::Itertools;
 
 #[derive(Debug)]
 pub enum ReconcileKind {
@@ -239,6 +241,13 @@ impl Transaction {
             .min()
             .unwrap_or(Local::now())
     }
+
+    pub fn display(&self, format: &Formatter) -> String {
+        format!(
+            "[{}]",
+            self.0.borrow().splits.iter().map(|s| s.display(format)).join(", ")
+        )
+    }
 }
 
 #[derive(Default)]
@@ -309,6 +318,61 @@ pub struct Split {
     pub post_ts: DateTime<Local>,
 
     pub operation: Operation,
+}
+
+impl Split {
+    pub fn display(&self, format: &Formatter) -> String {
+        let n = self.account.name(AccountNameDepth::unlimited());
+        match &self.operation {
+            Operation::Credit(v) => {
+                format!("Credit({} {} {})", self.post_ts, n, v.display(format))
+            }
+            Operation::AddShares { qty } => {
+                format!(
+                    "AddShares({} {} {})",
+                    self.post_ts,
+                    n,
+                    qty.display(format)
+                )
+            }
+            Operation::BuyAmount { qty, amount } => {
+                format!(
+                    "BuyAmount({} {} {} for {})",
+                    self.post_ts,
+                    n,
+                    qty.display(format),
+                    amount.display(format)
+                )
+            }
+            Operation::BuyPrice { qty, price } => {
+                format!(
+                    "BuyPrice({} {} {}@{})",
+                    self.post_ts,
+                    n,
+                    qty.display(format),
+                    price.display(format)
+                )
+            }
+            Operation::Reinvest { shares, amount } => {
+                format!(
+                    "Reinvest({} {} {} for {})",
+                    self.post_ts,
+                    n,
+                    shares.display(format),
+                    amount.display(format)
+                )
+            }
+            Operation::Split { ratio, commodity } => {
+                format!(
+                    "Split({} {} {} {:?})",
+                    self.post_ts, n, ratio, commodity,
+                )
+            }
+            Operation::Dividend => {
+                format!("Dividend({} {}", self.post_ts, n)
+            }
+        }
+    }
 }
 
 impl core::fmt::Debug for Split {

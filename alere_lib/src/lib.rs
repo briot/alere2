@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod multi_values;
 pub mod networth;
 pub mod payees;
+pub mod perf;
 pub mod price_sources;
 pub mod prices;
 pub mod repositories;

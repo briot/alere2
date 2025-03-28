@@ -11,6 +11,7 @@ pub(crate) fn build_cli() -> Command {
         .arg_required_else_help(true) // show full help if nothing given
         .args(GlobalSettings::cli())
         .subcommand(Command::new("metrics").about("Show metrics"))
+        .subcommand(Command::new("perf").about("Show stock performance"))
         .subcommand(
             // Use    eval "$(alere completions zsh)"
             Command::new("completions")

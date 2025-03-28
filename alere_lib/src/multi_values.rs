@@ -82,6 +82,13 @@ pub struct Value {
 }
 
 impl Value {
+    pub fn zero(commodity: &Commodity) -> Self {
+        Value {
+            commodity: commodity.clone(),
+            amount: Decimal::ZERO,
+        }
+    }
+
     pub fn abs(&self) -> Value {
         Value {
             amount: self.amount.abs(),
@@ -145,6 +152,36 @@ impl MultiValue {
     /// True if the amount is zero for all commodities
     pub fn is_zero(&self) -> bool {
         matches!(self.0, InnerValue::Zero)
+    }
+
+    /// If there is a single commodity used in this value, return it.
+    pub fn commodity(&self) -> Option<Commodity> {
+        match &self.0 {
+            InnerValue::Zero => None,
+            InnerValue::One(pair) => Some(pair.commodity.clone()),
+            InnerValue::Multi(_) => None,
+        }
+    }
+
+    /// Multiply the amount for a given commodity by the given ratio
+    pub fn split(&mut self, commodity: &Commodity, ratio: Decimal) {
+        match &mut self.0 {
+            InnerValue::Zero => {}
+            InnerValue::One(pair) => {
+                if pair.commodity == *commodity {
+                    pair.amount *= ratio;
+                } else {
+                    // the amount was zero for this commodity, so still zero
+                }
+            }
+            InnerValue::Multi(map) => {
+                if let Some(v) = map.get_mut(&commodity.get_id()) {
+                    v.amount *= ratio;
+                } else {
+                    // the amount was zero for this commodity, so still zero
+                }
+            }
+        }
     }
 
     /// Iterate over all commodities of the value, skipping zero.
@@ -211,20 +248,9 @@ impl MultiValue {
             Operation::Reinvest { shares, .. } => {
                 *self += shares;
             }
-            Operation::Split { ratio, commodity } => match &mut self.0 {
-                InnerValue::Zero => {}
-                InnerValue::One(pair) => {
-                    if pair.commodity == *commodity {
-                        pair.amount *= ratio;
-                    }
-                }
-                InnerValue::Multi(map) => {
-                    //  ??? Clone should not be necessary
-                    if let Some(v) = map.get_mut(&commodity.get_id()) {
-                        v.amount *= ratio;
-                    }
-                }
-            },
+            Operation::Split { ratio, commodity } => {
+                self.split(commodity, *ratio);
+            }
             Operation::Dividend => {}
         };
         self.normalize();
@@ -288,6 +314,14 @@ impl core::ops::Div<Decimal> for &MultiValue {
                 MultiValue(InnerValue::Multi(map))
             }
         }
+    }
+}
+
+impl core::ops::Div<Decimal> for MultiValue {
+    type Output = MultiValue;
+
+    fn div(self, rhs: Decimal) -> Self::Output {
+        &self / rhs
     }
 }
 
@@ -399,6 +433,15 @@ impl core::ops::Add<MultiValue> for &MultiValue {
 
     fn add(self, rhs: MultiValue) -> Self::Output {
         self + &rhs
+    }
+}
+
+
+impl core::ops::Add<&Value> for &MultiValue {
+    type Output = MultiValue;
+
+    fn add(self, rhs: &Value) -> Self::Output {
+        self + MultiValue(InnerValue::One(rhs.clone()))
     }
 }
 
@@ -596,6 +639,12 @@ impl core::ops::Sub<&MultiValue> for &MultiValue {
 impl core::ops::SubAssign<Value> for MultiValue {
     fn sub_assign(&mut self, rhs: Value) {
         *self -= MultiValue(InnerValue::One(rhs));
+    }
+}
+
+impl core::ops::SubAssign<&Value> for MultiValue {
+    fn sub_assign(&mut self, rhs: &Value) {
+        *self -= MultiValue(InnerValue::One(rhs.clone()));
     }
 }
 

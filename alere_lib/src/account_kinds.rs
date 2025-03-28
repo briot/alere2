@@ -284,6 +284,15 @@ impl AccountKind {
         matches!(self.0.borrow().category, AccountCategory::INCOME)
     }
 
+    pub fn is_user(&self) -> bool {
+        matches!(
+            self.0.borrow().category,
+            AccountCategory::EQUITY
+                | AccountCategory::ASSET
+                | AccountCategory::LIABILITY
+        )
+    }
+
     /// True if this kind works for Equity (e.g. reconciliation, initial
     /// balance,...)
     pub fn is_equity(&self) -> bool {
@@ -318,6 +327,14 @@ impl AccountKind {
     pub fn is_liquid(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::EQUITY)
             && self.is_networth()
+    }
+
+    pub fn is_trading(&self) -> bool {
+        self.0.borrow().is_trading
+    }
+
+    pub fn is_stock(&self) -> bool {
+        self.0.borrow().is_stock
     }
 
     pub fn is_work_income(&self) -> bool {

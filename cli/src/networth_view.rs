@@ -70,7 +70,6 @@ where
             Key::Institution(None) => "Unknown".to_string(),
             Key::AccountKind(kind) => kind.get_name(),
         }
-        //repo.get_account_name(row.key, view_settings.account_names)
     };
     let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
     let percent_image = |row: &Data, idx: &usize| {

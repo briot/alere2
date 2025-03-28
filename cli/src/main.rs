@@ -2,11 +2,13 @@ mod args;
 mod global_settings;
 mod metrics_view;
 mod networth_view;
+mod perfs_view;
 pub mod tables;
 
 use crate::{
     args::build_cli, global_settings::GlobalSettings,
     metrics_view::metrics_view, networth_view::networth_view,
+    perfs_view::perfs_view,
 };
 use alere_lib::{
     accounts::AccountNameDepth,
@@ -49,9 +51,16 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
     Ok(())
 }
 
-/// Display stats
+/// Display metrics
 fn metrics(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
     let output = metrics_view(repo, globals)?;
+    println!("{}", output);
+    Ok(())
+}
+
+/// Display stock performance
+fn perfs(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
+    let output = perfs_view(repo, globals)?;
     println!("{}", output);
     Ok(())
 }
@@ -179,6 +188,9 @@ fn main() -> Result<()> {
         }
         Some(("metrics", _)) => {
             metrics(&repo, &settings)?;
+        }
+        Some(("perf", _)) => {
+            perfs(&repo, &settings)?;
         }
         _ => unreachable!(),
     }

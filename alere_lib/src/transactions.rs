@@ -7,11 +7,11 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use itertools::Itertools;
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
 };
-use itertools::Itertools;
 
 #[derive(Debug)]
 pub enum ReconcileKind {
@@ -245,7 +245,12 @@ impl Transaction {
     pub fn display(&self, format: &Formatter) -> String {
         format!(
             "[{}]",
-            self.0.borrow().splits.iter().map(|s| s.display(format)).join(", ")
+            self.0
+                .borrow()
+                .splits
+                .iter()
+                .map(|s| s.display(format))
+                .join(", ")
         )
     }
 }

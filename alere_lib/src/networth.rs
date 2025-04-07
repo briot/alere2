@@ -33,7 +33,7 @@ impl GroupBy {
 
 pub struct Settings {
     // Do not show rows if the value is zero
-    pub hide_zero: bool,
+    pub hide_zero_rows: bool,
 
     // Do not show rows if the value or market_value hasn't changed between
     // all timestamps.  If there is a single timestamp, rows are always
@@ -295,7 +295,7 @@ impl Networth {
         result.tree.retain(|node| {
             node.has_children()   // Always keep parent nodes with children
             || (
-                (!result.settings.hide_zero || !node.data.data.is_zero())
+                (!result.settings.hide_zero_rows || !node.data.data.is_zero())
                 && (!result.settings.hide_all_same
                     || !node.data.data.is_all_same()))
         });

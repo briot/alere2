@@ -264,7 +264,7 @@ impl MultiValue {
 
     pub fn display_into(&self, into: &mut String, format: &Formatter) {
         match &self.0 {
-            InnerValue::Zero => format.push(into, Decimal::ZERO, "", false, 0),
+            InnerValue::Zero => format.push_zero(into),
             InnerValue::One(pair) => {
                 format.push_from_commodity(into, pair.amount, &pair.commodity)
             }
@@ -435,7 +435,6 @@ impl core::ops::Add<MultiValue> for &MultiValue {
         self + &rhs
     }
 }
-
 
 impl core::ops::Add<&Value> for &MultiValue {
     type Output = MultiValue;

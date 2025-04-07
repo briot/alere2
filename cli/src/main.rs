@@ -12,7 +12,7 @@ use crate::{
 };
 use alere_lib::{
     accounts::AccountNameDepth,
-    formatters::{Formatter, SymbolQuote},
+    formatters::{Formatter, SymbolQuote, Zero},
     hledger::Hledger,
     importers::{Exporter, Importer},
     kmymoney::KmyMoneyImporter,
@@ -29,8 +29,8 @@ use std::path::Path;
 /// Export all transaction to hledger format
 fn export_hledger(repo: &mut Repository, output: &Path) -> Result<()> {
     let format = Formatter {
-        quote_symbol: SymbolQuote::QuoteSpecial,
-        zero: "0",
+        quote_symbol: SymbolQuote::QuotedNameIfSpecial,
+        zero: Zero::Replace("0"),
         //  separators: Separators::None,
         ..Formatter::default()
     };
@@ -77,7 +77,7 @@ fn networth(
         |acc| acc.get_kind().is_networth(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero: globals.hide_zero,
+            hide_zero_rows: true,
             hide_all_same: false,
             group_by: GroupBy::ParentAccount,
             subtotals: true,
@@ -105,25 +105,34 @@ fn networth(
 /// Show income-expenses
 fn cashflow(
     repo: &mut Repository,
-    globals: &GlobalSettings,
+    globals: &mut GlobalSettings,
     args: &ArgMatches,
 ) -> Result<()> {
+    globals.format.negate = true;
+
     let income_expenses = networth_view(
         repo,
         args,
         |acc| acc.get_kind().is_expense() || acc.get_kind().is_income(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero: globals.hide_zero,
+            hide_zero_rows: true,
             hide_all_same: false,
             group_by: GroupBy::ParentAccount,
             subtotals: true,
             commodity: globals.commodity.clone(),
             elide_boring_accounts: true,
-            intervals: vec![Intv::LastNYears(1), Intv::LastNMonths(1)],
+            intervals: vec![
+                Intv::LastNYears(1),
+                Intv::Monthly {
+                    begin: Instant::MonthsAgo(2),
+                    end: Instant::Now,
+                },
+                // Intv::LastNMonths(1),
+            ],
         },
         &crate::networth_view::Settings {
-            column_value: false,
+            column_value: true,
             column_delta: false,
             column_delta_to_last: false,
             column_price: false,
@@ -184,7 +193,7 @@ fn main() -> Result<()> {
             networth(&mut repo, &settings, args)?;
         }
         Some(("cashflow", args)) => {
-            cashflow(&mut repo, &settings, args)?;
+            cashflow(&mut repo, &mut settings, args)?;
         }
         Some(("metrics", _)) => {
             metrics(&repo, &settings)?;

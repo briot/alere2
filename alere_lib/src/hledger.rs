@@ -48,7 +48,7 @@ impl Exporter for Hledger {
 
         for com in repo.commodities.iter_commodities() {
             buf.write_all(b"commodity ")?;
-            buf.write_all(format.display_symbol(&com.get_symbol()).as_bytes())?;
+            buf.write_all(format.display_symbol(com).as_bytes())?;
             buf.write_all(b"\n   format ")?;
             let v = Value {
                 commodity: com.clone(),
@@ -184,7 +184,7 @@ impl Exporter for Hledger {
                 let networth = Networth::new(
                     repo,
                     crate::networth::Settings {
-                        hide_zero: false,
+                        hide_zero_rows: false,
                         hide_all_same: false,
                         group_by: crate::networth::GroupBy::None,
                         subtotals: false,
@@ -243,14 +243,10 @@ impl Exporter for Hledger {
                 buf.write_all(b"P ")?;
                 buf.write_all(p.timestamp.date_naive().to_string().as_bytes())?;
                 buf.write_all(b" ")?;
-                buf.write_all(
-                    format.display_symbol(&from.get_symbol()).as_bytes(),
-                )?;
+                buf.write_all(format.display_symbol(from).as_bytes())?;
                 buf.write_all(b" ")?;
                 buf.write_all(p.price.to_string().as_bytes())?;
-                buf.write_all(
-                    format.display_symbol(&to.get_symbol()).as_bytes(),
-                )?;
+                buf.write_all(format.display_symbol(to).as_bytes())?;
                 buf.write_all(b"\n")?;
             }
         }

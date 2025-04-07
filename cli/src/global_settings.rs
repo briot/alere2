@@ -1,4 +1,8 @@
-use alere_lib::{commodities::Commodity, repositories::Repository};
+use alere_lib::{
+    commodities::Commodity,
+    formatters::{Formatter, Negative, Separators, SymbolQuote, Zero},
+    repositories::Repository,
+};
 use chrono::{DateTime, Local};
 use clap::{arg, Arg, ArgAction, ArgMatches};
 
@@ -12,9 +16,6 @@ pub struct GlobalSettings {
 
     // Reference time for all relative dates ("a year ago").
     pub reftime: DateTime<Local>,
-
-    // If true, a zero value is displayed as an empty cell instead
-    pub hide_zero: bool,
 }
 
 impl GlobalSettings {
@@ -28,16 +29,27 @@ impl GlobalSettings {
         ]
     }
 
-    /// Create the settings from the command line arguments.  This creates
-    /// the fields that are necessary for parsing the repository, but some
-    /// fields can only be computed later once the repository has been loaded.
+    /// Create the settings from the command line arguments.  This creates the
+    /// fields that are necessary for parsing the repository, but some fields
+    /// can only be computed later once the repository has been loaded.
     pub fn new(args: &ArgMatches) -> Self {
         GlobalSettings {
             commodity_str: args.get_one::<String>("currency").cloned(),
             commodity: None,
-            hide_zero: !args.get_flag("empty"),
             reftime: Local::now(),
-            format: alere_lib::formatters::Formatter::default(),
+            format: Formatter {
+                quote_symbol: SymbolQuote::UnquotedSymbol,
+                hide_symbol_if: None,
+                negative: Negative::MinusSign,
+                separators: Separators::Every3Digit(','),
+                comma: '.',
+                negate: false,
+                zero: if args.get_flag("empty") {
+                    Zero::Empty
+                } else {
+                    Zero::Replace("0")
+                },
+            },
             table: crate::tables::Settings {
                 colsep: "│".to_string(),
                 indent_size: 2,
@@ -51,6 +63,7 @@ impl GlobalSettings {
             .commodity_str
             .as_ref()
             .and_then(|m| repo.commodities.find(m));
+        self.format.hide_symbol_if = self.commodity.clone();
 
         match &self.commodity_str {
             None => {}

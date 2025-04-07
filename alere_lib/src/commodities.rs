@@ -25,6 +25,10 @@ impl Commodity {
         self.0.borrow().display_precision
     }
 
+    pub fn get_name(&self) -> Ref<'_, String> {
+        Ref::map(self.0.borrow(), |d| &d.name)
+    }
+
     pub fn get_symbol(&self) -> Ref<'_, String> {
         Ref::map(self.0.borrow(), |d| &d.symbol)
     }
@@ -167,7 +171,7 @@ struct CommodityDetails {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use crate::commodities::{Commodity, CommodityCollection};
 
     pub fn create_currency(

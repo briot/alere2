@@ -48,10 +48,10 @@ pub struct Formatter {
     pub separators: Separators,
     pub comma: char,
     pub zero: Zero,
-    pub negate: bool,  // display opposite sign
-    // ??? support for printing currencies as EUR rather than the symbol
-    // (non-unicode)
-    // ??? support for color
+    pub negate: bool, // display opposite sign
+                      // ??? support for printing currencies as EUR rather than the symbol
+                      // (non-unicode)
+                      // ??? support for color
 }
 
 impl Default for Formatter {
@@ -71,14 +71,10 @@ impl Default for Formatter {
 impl Formatter {
     /// Display the absolute value of value
     fn push_abs_num(&self, into: &mut String, value: Decimal, precision: u8) {
-        let mut rounded = value.abs().round_dp_with_strategy(
+        let rounded = value.abs().round_dp_with_strategy(
             precision as u32,
             RoundingStrategy::MidpointTowardZero,
         );
-
-        if self.negate {
-            rounded = -rounded;
-        }
 
         match self.separators {
             Separators::None => {
@@ -108,6 +104,13 @@ impl Formatter {
                     }
                 }
             }
+        }
+    }
+
+    fn hide_commodity(&self, commodity: &Commodity) -> bool {
+        match &self.hide_symbol_if {
+            None => false,
+            Some(c) => c == commodity,
         }
     }
 
@@ -152,28 +155,28 @@ impl Formatter {
         }
     }
 
-    pub fn display_symbol(&self, com: &Commodity) -> String {
-        let mut buffer = String::new();
-        self.push_commodity(&mut buffer, com);
-        buffer
-    }
-
-    pub fn push_from_commodity(
+    fn push_commodity_and_space(
         &self,
         into: &mut String,
-        value: Decimal,
         commodity: &Commodity,
+        space_after: bool,
     ) {
-        self.push(into, value, commodity);
+        if !self.hide_commodity(commodity) {
+            if !space_after {
+                into.push(' ');
+            }
+            self.push_commodity(into, commodity);
+            if space_after {
+                into.push(' ');
+            }
+        }
     }
 
-    pub fn display_from_commodity(
-        &self,
-        value: Decimal,
-        commodity: &Commodity,
-    ) -> String {
+    pub fn display_symbol(&self, com: &Commodity) -> String {
         let mut buffer = String::new();
-        self.push_from_commodity(&mut buffer, value, commodity);
+        if !self.hide_commodity(com) {
+            self.push_commodity(&mut buffer, com);
+        }
         buffer
     }
 
@@ -196,62 +199,50 @@ impl Formatter {
             return;
         }
 
+        let v = if self.negate { -value } else { value };
         let precision = comm.get_display_precision();
-
-        if let Some(hide) = &self.hide_symbol_if {
-            if hide == comm {
-                self.push_abs_num(into, value, precision);
-                return;
-            }
-        }
 
         let symbol_after = comm.symbol_after();
         if !symbol_after {
-            if value.is_sign_negative() {
+            if v.is_sign_negative() {
                 match self.negative {
                     Negative::SeparateSign => {
                         into.push('-');
-                        self.push_commodity(into, comm);
-                        into.push(' ');
-                        self.push_abs_num(into, value, precision);
+                        self.push_commodity_and_space(into, comm, true);
+                        self.push_abs_num(into, v, precision);
                     }
                     Negative::MinusSign => {
-                        self.push_commodity(into, comm);
-                        into.push(' ');
+                        self.push_commodity_and_space(into, comm, true);
                         into.push('-');
-                        self.push_abs_num(into, value, precision);
+                        self.push_abs_num(into, v, precision);
                     }
                     Negative::Parenthesis => {
-                        self.push_commodity(into, comm);
-                        into.push(' ');
+                        self.push_commodity_and_space(into, comm, true);
                         into.push('(');
-                        self.push_abs_num(into, value, precision);
+                        self.push_abs_num(into, v, precision);
                         into.push(')');
                     }
                 }
             } else {
-                self.push_commodity(into, comm);
-                into.push(' ');
-                self.push_abs_num(into, value, precision);
+                self.push_commodity_and_space(into, comm, true);
+                self.push_abs_num(into, v, precision);
             }
-        } else if value.is_sign_negative() {
+        } else if v.is_sign_negative() {
             match self.negative {
                 Negative::SeparateSign | Negative::MinusSign => {
                     into.push('-');
-                    self.push_abs_num(into, value, precision);
+                    self.push_abs_num(into, v, precision);
                 }
                 Negative::Parenthesis => {
                     into.push('(');
-                    self.push_abs_num(into, value, precision);
+                    self.push_abs_num(into, v, precision);
                     into.push(')');
                 }
             }
-            into.push(' ');
-            self.push_commodity(into, comm);
+            self.push_commodity_and_space(into, comm, false);
         } else {
-            self.push_abs_num(into, value, precision);
-            into.push(' ');
-            self.push_commodity(into, comm);
+            self.push_abs_num(into, v, precision);
+            self.push_commodity_and_space(into, comm, false);
         }
     }
 }
@@ -274,10 +265,8 @@ mod test {
         let mysym_after = create_currency(&mut cc, "MY SYMB", 2, true);
 
         // check no leading ',' is added
-        assert_eq!(
-            f.display(dec!(234567), &eur_after),
-            "234,567.00 EUR"
-        );
+        assert_eq!(f.display(dec!(234567), &eur_after), "234,567.00 EUR");
+        assert_eq!(f.display(dec!(-130628.38), &eur_after), "-130,628.38 EUR");
 
         assert_eq!(
             f.display(dec!(1234567.238), &eur_after),

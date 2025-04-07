@@ -10,6 +10,7 @@ pub struct GlobalSettings {
     pub commodity_str: Option<String>,
     pub commodity: Option<Commodity>,
     pub table: crate::tables::Settings,
+    pub empty: bool,
 
     // How to display numbers
     pub format: alere_lib::formatters::Formatter,
@@ -37,6 +38,7 @@ impl GlobalSettings {
             commodity_str: args.get_one::<String>("currency").cloned(),
             commodity: None,
             reftime: Local::now(),
+            empty: args.get_flag("empty"),
             format: Formatter {
                 quote_symbol: SymbolQuote::UnquotedSymbol,
                 hide_symbol_if: None,
@@ -44,11 +46,7 @@ impl GlobalSettings {
                 separators: Separators::Every3Digit(','),
                 comma: '.',
                 negate: false,
-                zero: if args.get_flag("empty") {
-                    Zero::Empty
-                } else {
-                    Zero::Replace("0")
-                },
+                zero: Zero::Replace("0"),
             },
             table: crate::tables::Settings {
                 colsep: "│".to_string(),

@@ -77,7 +77,7 @@ fn networth(
         |acc| acc.get_kind().is_networth(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero_rows: true,
+            hide_zero_rows: !globals.empty,
             hide_all_same: false,
             group_by: GroupBy::ParentAccount,
             subtotals: true,
@@ -116,7 +116,7 @@ fn cashflow(
         |acc| acc.get_kind().is_expense() || acc.get_kind().is_income(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero_rows: true,
+            hide_zero_rows: !globals.empty,
             hide_all_same: false,
             group_by: GroupBy::ParentAccount,
             subtotals: true,

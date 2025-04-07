@@ -97,7 +97,7 @@ impl Value {
     }
 
     pub fn display(&self, format: &Formatter) -> String {
-        format.display_from_commodity(self.amount, &self.commodity)
+        format.display(self.amount, &self.commodity)
     }
 }
 
@@ -266,14 +266,14 @@ impl MultiValue {
         match &self.0 {
             InnerValue::Zero => format.push_zero(into),
             InnerValue::One(pair) => {
-                format.push_from_commodity(into, pair.amount, &pair.commodity)
+                format.push(into, pair.amount, &pair.commodity)
             }
             InnerValue::Multi(map) => {
                 for (idx, v) in map.values().enumerate() {
                     if idx > 0 {
                         into.push_str(" + ");
                     }
-                    format.push_from_commodity(into, v.amount, &v.commodity);
+                    format.push(into, v.amount, &v.commodity);
                 }
             }
         }

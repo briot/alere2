@@ -99,6 +99,10 @@ impl Value {
     pub fn display(&self, format: &Formatter) -> String {
         format.display(self.amount, &self.commodity)
     }
+
+    pub fn is_negative(&self) -> bool {
+        self.amount.is_sign_negative()
+    }
 }
 
 impl core::ops::Div<Decimal> for &Value {

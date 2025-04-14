@@ -19,7 +19,7 @@ pub fn perfs_view(
     repo: &Repository,
     globals: &GlobalSettings,
 ) -> Result<String> {
-    let perfs = Performance::load(
+    let mut perfs = Performance::load(
         repo,
         alere_lib::perf::Settings {
             commodity: globals.commodity.clone(),
@@ -116,8 +116,9 @@ pub fn perfs_view(
     ];
 
     let mut table = Table::new(columns, &globals.table).with_col_headers();
+    perfs.sort_by_key(|p| account_image(p, &0));
     for row in &perfs {
-        if !row.equity.is_zero() {
+        if !row.invested.is_zero() {
             table.add_row(row, 0);
         }
     }

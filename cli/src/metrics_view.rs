@@ -89,7 +89,7 @@ pub fn metrics_view(
     let mut table = Table::new(columns, &globals.table).with_col_headers();
     table.add_rows(
         &[
-            TableRow::new("networth", &m, |s| {
+            TableRow::new("networth at end", &m, |s| {
                 s.end_networth.display(&globals.format)
             }),
             TableRow::new("Income", &m, |s| {

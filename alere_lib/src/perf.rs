@@ -1,7 +1,6 @@
 use crate::{
     accounts::Account,
     commodities::Commodity,
-    formatters::Formatter,
     market_prices::MarketPrices,
     multi_values::{MultiValue, Operation, Value},
     repositories::Repository,
@@ -210,13 +209,13 @@ impl Performance {
                         };
                     }
                 }
-                println!(
-                    "MANU {} shares={} invested={} realized={}",
-                    tx.display(&Formatter::default()),
-                    args.shares.display(&Formatter::default()),
-                    args.invested.display(&Formatter::default()),
-                    args.realized.display(&Formatter::default())
-                );
+                //println!(
+                //    "MANU {} shares={} invested={} realized={}",
+                //    tx.display(&Formatter::default()),
+                //    args.shares.display(&Formatter::default()),
+                //    args.invested.display(&Formatter::default()),
+                //    args.realized.display(&Formatter::default())
+                //);
                 //dbg!(tx, &args.shares, &args.invested, &args.realized);
             }
 

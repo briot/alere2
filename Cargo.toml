@@ -5,6 +5,7 @@ members = [ "alere_lib", "cli" ]
 [workspace.dependencies]
 anyhow = "1.0.86"
 cargo-audit = "0.21.2"
+cargo-expand = "1.0.106"
 chrono = { version = "0.4.23", features = ["serde"] }
 chrono-tz = "0.6.1"
 futures = "0.3"

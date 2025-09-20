@@ -125,7 +125,7 @@ fn cashflow(
             intervals: vec![
                 Intv::LastNYears(1),
                 Intv::Monthly {
-                    begin: Instant::MonthsAgo(2),
+                    begin: Instant::MonthsAgo(5),
                     end: Instant::Now,
                 },
                 // Intv::LastNMonths(1),

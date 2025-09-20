@@ -61,7 +61,7 @@ impl Repository {
     pub fn market_prices(
         &self,
         to_commodity: Option<Commodity>,
-    ) -> MarketPrices {
+    ) -> MarketPrices<'_> {
         MarketPrices::new(
             &self.prices,
             self.commodities.list_currencies(),

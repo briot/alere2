@@ -270,6 +270,7 @@ pub struct TimeInterval {
 }
 
 impl TimeInterval {
+    #[must_use] 
     pub fn duration(&self, reftime: DateTime<Local>) -> chrono::TimeDelta {
         let up = *self
             .intv

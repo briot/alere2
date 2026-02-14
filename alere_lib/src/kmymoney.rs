@@ -516,17 +516,17 @@ impl KmyMoneyImporter {
 
     /// Example of multi-currency transaction:
     ///   kmmTransactions:
-    ///   *  id=1   currencyId=USD
+    ///   * id=1   currencyId=USD
     ///
     ///   kmmSplits:
-    ///   *  transactionId=1  account=brokerage(currency=EUR)
-    ///      value=-1592.12 (expressed in kmmTransactions.currencyId USD)
-    ///      shares=-1315.76 (expressions in split.account.currency EUR)
-    ///      price= N/A
+    ///   * transactionId=1  account=brokerage(currency=EUR)
+    ///     value=-1592.12 (expressed in kmmTransactions.currencyId USD)
+    ///     shares=-1315.76 (expressions in split.account.currency EUR)
+    ///     price= N/A
     ///   * transactionId=1   account=stock(currency=STOCK)
-    ///      value=1592.12 (in kmmTransactions.currencyId USD)
-    ///      shares=32     (in STOCK)
-    ///      price=48.85   (in USD)
+    ///     value=1592.12 (in kmmTransactions.currencyId USD)
+    ///     shares=32     (in STOCK)
+    ///     price=48.85   (in USD)
     async fn import_transactions(
         &mut self,
         conn: &mut SqliteConnection,

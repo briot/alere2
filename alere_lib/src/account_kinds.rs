@@ -127,6 +127,7 @@ impl Default for AccountKindCollection {
 
 impl AccountKindCollection {
     /// Lookup an account that matches "Equity"
+    #[must_use] 
     pub fn get_equity(&self) -> AccountKind {
         self.kinds
             .values()
@@ -137,6 +138,7 @@ impl AccountKindCollection {
 
     /// Lookup account kind by name.
     /// This is case-insensitive.
+    #[must_use] 
     pub fn lookup(&self, name: &str) -> Option<&AccountKind> {
         self.kinds.get(name)
     }
@@ -230,6 +232,7 @@ impl AccountKindDetails {
 pub struct AccountKind(Rc<RefCell<AccountKindDetails>>);
 
 impl AccountKind {
+    #[must_use] 
     pub fn new(
         name: &str,
         name_when_positive: &str,
@@ -243,47 +246,58 @@ impl AccountKind {
             category,
         ))))
     }
+    #[must_use] 
     pub fn set_is_work_income(self, is_work_income: bool) -> Self {
         self.0.borrow_mut().is_work_income = is_work_income;
         self
     }
+    #[must_use] 
     pub fn set_is_passive_income(self, is_passive_income: bool) -> Self {
         self.0.borrow_mut().is_passive_income = is_passive_income;
         self
     }
+    #[must_use] 
     pub fn set_is_unrealized(self, is_unrealized: bool) -> Self {
         self.0.borrow_mut().is_unrealized = is_unrealized;
         self
     }
+    #[must_use] 
     pub fn set_is_networth(self, is_networth: bool) -> Self {
         self.0.borrow_mut().is_networth = is_networth;
         self
     }
+    #[must_use] 
     pub fn set_is_trading(self, is_trading: bool) -> Self {
         self.0.borrow_mut().is_trading = is_trading;
         self
     }
+    #[must_use] 
     pub fn set_is_stock(self, is_stock: bool) -> Self {
         self.0.borrow_mut().is_stock = is_stock;
         self
     }
+    #[must_use] 
     pub fn set_is_income_tax(self, is_income_tax: bool) -> Self {
         self.0.borrow_mut().is_income_tax = is_income_tax;
         self
     }
+    #[must_use] 
     pub fn set_is_misc_tax(self, is_misc_tax: bool) -> Self {
         self.0.borrow_mut().is_misc_tax = is_misc_tax;
         self
     }
 
+    #[must_use] 
     pub fn is_expense(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::EXPENSE)
     }
 
+    #[must_use] 
     pub fn is_income(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::INCOME)
     }
 
+    #[must_use] 
     pub fn is_user(&self) -> bool {
         matches!(
             self.0.borrow().category,
@@ -295,52 +309,64 @@ impl AccountKind {
 
     /// True if this kind works for Equity (e.g. reconciliation, initial
     /// balance,...)
+    #[must_use] 
     pub fn is_equity(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::EQUITY)
             && !self.is_networth()
     }
 
+    #[must_use] 
     pub fn get_name(&self) -> String {
         self.0.borrow().name.clone()
     }
 
+    #[must_use] 
     pub fn cmp_name(&self, right: &AccountKind) -> std::cmp::Ordering {
         self.0.borrow().name.cmp(&right.0.borrow().name)
     }
 
+    #[must_use] 
     pub fn is_unrealized(&self) -> bool {
         self.0.borrow().is_unrealized
     }
 
+    #[must_use] 
     pub fn is_networth(&self) -> bool {
         self.0.borrow().is_networth
     }
 
+    #[must_use] 
     pub fn is_income_tax(&self) -> bool {
         self.0.borrow().is_income_tax
     }
 
+    #[must_use] 
     pub fn is_misc_tax(&self) -> bool {
         self.0.borrow().is_misc_tax
     }
 
+    #[must_use] 
     pub fn is_liquid(&self) -> bool {
         matches!(self.0.borrow().category, AccountCategory::EQUITY)
             && self.is_networth()
     }
 
+    #[must_use] 
     pub fn is_trading(&self) -> bool {
         self.0.borrow().is_trading
     }
 
+    #[must_use] 
     pub fn is_stock(&self) -> bool {
         self.0.borrow().is_stock
     }
 
+    #[must_use] 
     pub fn is_work_income(&self) -> bool {
         self.0.borrow().is_work_income
     }
 
+    #[must_use] 
     pub fn is_passive_income(&self) -> bool {
         self.0.borrow().is_passive_income
     }

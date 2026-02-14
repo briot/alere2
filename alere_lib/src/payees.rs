@@ -9,6 +9,7 @@ use std::{
 pub struct Payee(Rc<RefCell<PayeeDetails>>);
 
 impl Payee {
+    #[must_use] 
     pub fn get_name(&self) -> Ref<'_, String> {
         Ref::map(self.0.borrow(), |p| &p.name)
     }

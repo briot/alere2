@@ -12,27 +12,33 @@ pub struct Commodity(Rc<RefCell<CommodityDetails>>);
 
 impl Commodity {
     /// Return a persistent, unique id
+    #[must_use] 
     pub fn get_id(&self) -> CommodityId {
         self.0.borrow().id
     }
 
+    #[must_use] 
     pub fn is_currency(&self) -> bool {
         self.0.borrow().is_currency
     }
 
     /// Returns the display precision for a given commodity.
+    #[must_use] 
     pub fn get_display_precision(&self) -> u8 {
         self.0.borrow().display_precision
     }
 
+    #[must_use] 
     pub fn get_name(&self) -> Ref<'_, String> {
         Ref::map(self.0.borrow(), |d| &d.name)
     }
 
+    #[must_use] 
     pub fn get_symbol(&self) -> Ref<'_, String> {
         Ref::map(self.0.borrow(), |d| &d.symbol)
     }
 
+    #[must_use] 
     pub fn symbol_after(&self) -> bool {
         self.0.borrow().symbol_after
     }
@@ -41,6 +47,7 @@ impl Commodity {
         self.0.borrow_mut().isin = Some(isin.to_string());
     }
 
+    #[must_use] 
     pub fn matches(&self, name: &str) -> bool {
         self.0.borrow().name == name
     }
@@ -108,6 +115,7 @@ impl CommodityCollection {
         self.add(name, name, false, is_currency, None, 2)
     }
 
+    #[must_use] 
     pub fn list_currencies(&self) -> &[Commodity] {
         &self.currencies
     }
@@ -116,6 +124,7 @@ impl CommodityCollection {
         self.commodities.iter()
     }
 
+    #[must_use] 
     pub fn find(&self, name: &str) -> Option<Commodity> {
         self.commodities.iter().find(|c| c.matches(name)).cloned()
     }

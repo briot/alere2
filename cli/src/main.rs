@@ -196,7 +196,7 @@ fn run_subcommand(
                 let matches = build_cli().try_get_matches_from(args)?;
                 let mut global =
                     GlobalSettings::new_with_defaults(&matches, settings);
-                global.postprocess(&repo);
+                global.postprocess(repo);
                 run_subcommand(repo, &matches, &mut global)?;
             }
         }

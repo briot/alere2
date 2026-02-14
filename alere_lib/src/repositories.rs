@@ -58,6 +58,7 @@ impl Repository {
         Ok(())
     }
 
+    #[must_use] 
     pub fn market_prices(
         &self,
         to_commodity: Option<Commodity>,

@@ -63,8 +63,9 @@ pub fn metrics_view(
             intervals: vec![
                 Intv::Yearly {
                     begin: Instant::StartYear(2022),
-                    end: Instant::EndYear(2024),
+                    end: Instant::EndYear(2025),
                 },
+                Intv::LastNMonths(1),
                 Intv::LastNYears(1),
                 Intv::YearToDate,
             ],

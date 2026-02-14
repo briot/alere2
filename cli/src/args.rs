@@ -44,4 +44,13 @@ pub(crate) fn build_cli() -> Command {
                 .args(crate::networth_view::Settings::cli()),
         )
         .subcommand(Command::new("cashflow").about("Show cashflow"))
+        .subcommand(
+            Command::new("batch")
+                .about("Run all commands found in the file")
+                .arg(
+                    Arg::new("file")
+                        .required(true)
+                        .value_parser(clap::value_parser!(std::path::PathBuf)),
+                ),
+        )
 }

@@ -26,7 +26,8 @@ impl GlobalSettings {
             arg!(--currency [CURRENCY] "Show market values with this currency")
                 .global(true),
             arg!(--empty "Show rows with only zero values")
-                .action(ArgAction::SetTrue),
+                .action(ArgAction::SetTrue)
+                .global(true),
         ]
     }
 
@@ -39,6 +40,31 @@ impl GlobalSettings {
             commodity: None,
             reftime: Local::now(),
             empty: args.get_flag("empty"),
+            format: Formatter {
+                quote_symbol: SymbolQuote::UnquotedSymbol,
+                hide_symbol_if: None,
+                negative: Negative::MinusSign,
+                separators: Separators::Every3Digit(','),
+                comma: '.',
+                negate: false,
+                zero: Zero::Replace("0"),
+            },
+            table: crate::tables::Settings {
+                colsep: "│".to_string(),
+                indent_size: 2,
+            },
+        }
+    }
+
+    pub fn new_with_defaults(args: &ArgMatches, defaults: &Self) -> Self {
+        GlobalSettings {
+            commodity_str: args
+                .get_one::<String>("currency")
+                .cloned()
+                .or(defaults.commodity_str.clone()),
+            commodity: None,
+            reftime: Local::now(),
+            empty: args.get_flag("empty") || defaults.empty,
             format: Formatter {
                 quote_symbol: SymbolQuote::UnquotedSymbol,
                 hide_symbol_if: None,

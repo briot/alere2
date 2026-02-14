@@ -291,7 +291,7 @@ impl KmyMoneyImporter {
                 row.get("accountNumber"),
                 false,
                 row.try_get::<NaiveDate, _>("openingDate")
-                    .ok()  // we can have NULL or empty string
+                    .ok() // we can have NULL or empty string
                     .and_then(|d| d.and_hms_opt(0, 0, 0))
                     .map(|dt| dt.and_local_timezone(Local).unwrap()),
                 // ??? Not imported
@@ -633,11 +633,11 @@ impl KmyMoneyImporter {
                     .and_then(|p| self.payees.get(p)),
             );
 
-            let rec_date: Option<DateTime<Local>> =
-                row.try_get::<NaiveDate, _>("reconcileDate")
-                    .ok()  // we can have NULL or empty string
-                    .and_then(|d| d.and_hms_opt(0, 0, 0))
-                    .map(|dt| dt.and_local_timezone(Local).unwrap());
+            let rec_date: Option<DateTime<Local>> = row
+                .try_get::<NaiveDate, _>("reconcileDate")
+                .ok() // we can have NULL or empty string
+                .and_then(|d| d.and_hms_opt(0, 0, 0))
+                .map(|dt| dt.and_local_timezone(Local).unwrap());
 
             // In kmymoney, we have a sell of ETH (price_precision is 5)
             // at a price 2450.75413 EUR (and the price_precision for
@@ -675,8 +675,11 @@ impl KmyMoneyImporter {
                     //   Same information as above but positive value.
                     Operation::Dividend
                 }
-                (Some("Add"), p) if p.is_none() || p == Some(Decimal::ONE) || p == Some(Decimal::ZERO)=> {
-
+                (Some("Add"), p)
+                    if p.is_none()
+                        || p == Some(Decimal::ONE)
+                        || p == Some(Decimal::ZERO) =>
+                {
                     // kmymoney doesn't balance those add shares transactions.
                     // So we create an extra split to make them balanced.
                     if equity_account.is_none() {

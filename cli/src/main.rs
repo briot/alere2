@@ -24,7 +24,7 @@ use anyhow::Result;
 use clap::ArgMatches;
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Export all transaction to hledger format
 fn export_hledger(repo: &mut Repository, output: &Path) -> Result<()> {
@@ -144,10 +144,71 @@ fn cashflow(
     Ok(())
 }
 
-fn main() -> Result<()> {
-    let args = build_cli().get_matches();
-    let mut settings = GlobalSettings::new(&args);
+fn run_subcommand(
+    repo: &mut Repository,
+    matches: &clap::ArgMatches,
+    settings: &mut GlobalSettings,
+) -> Result<()> {
+    match matches.subcommand() {
+        Some(("completions", args)) => {
+            if let Some(shell) =
+                args.get_one::<clap_complete_command::Shell>("shell")
+            {
+                let mut command = build_cli();
+                shell.generate(&mut command, &mut std::io::stdout());
+            }
+        }
+        Some(("export", sub)) => match sub.subcommand() {
+            Some(("hledger", sub)) => {
+                export_hledger(
+                    repo,
+                    Path::new(
+                        sub.get_one::<String>("output").expect("required"),
+                    ),
+                )?;
+            }
+            _ => unreachable!(),
+        },
+        Some(("networth", args)) => {
+            networth(repo, settings, args)?;
+        }
+        Some(("cashflow", args)) => {
+            cashflow(repo, settings, args)?;
+        }
+        Some(("metrics", _)) => {
+            metrics(repo, settings)?;
+        }
+        Some(("perf", _)) => {
+            perfs(repo, settings)?;
+        }
+        Some(("batch", args)) => {
+            let file: &PathBuf = args.get_one("file").unwrap();
+            let content = std::fs::read_to_string(file)?;
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let args = shlex::split(line).ok_or_else(|| {
+                    anyhow::anyhow!("invalid quoting: {}", line)
+                })?;
+                let args = std::iter::once("alere".to_string()).chain(args);
+                let matches = build_cli().try_get_matches_from(args)?;
+                let mut global =
+                    GlobalSettings::new_with_defaults(&matches, settings);
+                global.postprocess(&repo);
+                run_subcommand(repo, &matches, &mut global)?;
+            }
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
+}
 
+fn main() -> Result<()> {
+    let cli = build_cli();
+    let args = cli.get_matches();
+    let mut settings = GlobalSettings::new(&args);
     let progress = ProgressBar::new(1) //  we do not know the length
         .with_style(
             ProgressStyle::with_template(
@@ -168,40 +229,5 @@ fn main() -> Result<()> {
     progress.finish_and_clear();
 
     settings.postprocess(&repo);
-
-    match args.subcommand() {
-        Some(("completions", sub_matches)) => {
-            if let Some(shell) =
-                sub_matches.get_one::<clap_complete_command::Shell>("shell")
-            {
-                let mut command = build_cli();
-                shell.generate(&mut command, &mut std::io::stdout());
-            }
-        }
-        Some(("export", sub)) => match sub.subcommand() {
-            Some(("hledger", sub)) => {
-                export_hledger(
-                    &mut repo,
-                    Path::new(
-                        sub.get_one::<String>("output").expect("required"),
-                    ),
-                )?;
-            }
-            _ => unreachable!(),
-        },
-        Some(("networth", args)) => {
-            networth(&mut repo, &settings, args)?;
-        }
-        Some(("cashflow", args)) => {
-            cashflow(&mut repo, &mut settings, args)?;
-        }
-        Some(("metrics", _)) => {
-            metrics(&repo, &settings)?;
-        }
-        Some(("perf", _)) => {
-            perfs(&repo, &settings)?;
-        }
-        _ => unreachable!(),
-    }
-    Ok(())
+    run_subcommand(&mut repo, &args, &mut settings)
 }

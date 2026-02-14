@@ -572,6 +572,7 @@ dependencies = [
  "indicatif",
  "itertools",
  "rust_decimal",
+ "shlex",
 ]
 
 [[package]]

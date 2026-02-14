@@ -118,6 +118,7 @@ pub struct Table<'a, TRow, TCol> {
     settings: Settings,
 }
 impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
+    #[must_use] 
     pub fn new(
         columns: Vec<Column<'a, TRow, TCol>>,
         settings: &Settings,
@@ -130,11 +131,13 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
         }
     }
 
+    #[must_use] 
     pub fn with_title(mut self, title: &str) -> Self {
         self.title = Some(title.to_string());
         self
     }
 
+    #[must_use] 
     pub fn with_col_headers(mut self) -> Self {
         self.rows.push(RowData::Headers);
         self.rows.push(RowData::Separator);

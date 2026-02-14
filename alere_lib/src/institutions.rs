@@ -35,11 +35,13 @@ impl InstitutionCollection {
 pub struct Institution(Rc<RefCell<InstitutionDetails>>);
 
 impl Institution {
+    #[must_use] 
     pub fn set_icon(self, icon: String) -> Self {
         self.0.borrow_mut().icon = Some(icon);
         self
     }
 
+    #[must_use] 
     pub fn cmp_name(&self, right: &Institution) -> std::cmp::Ordering {
         self.0.borrow().name.cmp(&right.0.borrow().name)
     }
@@ -52,6 +54,7 @@ impl Institution {
         self.0.borrow_mut().url = Some(url.to_string());
     }
 
+    #[must_use] 
     pub fn get_name(&self) -> String {
         self.0.borrow().name.clone()
     }

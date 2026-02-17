@@ -97,7 +97,7 @@ impl Transaction {
         })))
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn new_with_default() -> Self {
         Transaction(Rc::new(RefCell::new(TransactionDetails::default())))
     }
@@ -124,7 +124,7 @@ impl Transaction {
 
     /// Check that the transaction obeys the accounting equations, i.e.
     ///    Equity = Assets + Income − Expenses
-    #[must_use] 
+    #[must_use]
     pub fn is_balanced(&self) -> bool {
         let mut total = MultiValue::zero();
         for s in &self.0.borrow().splits {
@@ -212,19 +212,19 @@ impl Transaction {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn splits(&self) -> Ref<'_, Vec<Split>> {
         Ref::map(self.0.borrow(), |tx| &tx.splits)
     }
 
     /// Find a memo or description for the transaction, possibly looking into
     /// splits themselves.
-    #[must_use] 
+    #[must_use]
     pub fn memo(&self) -> Ref<'_, Option<String>> {
         Ref::map(self.0.borrow(), |tx| &tx.memo)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn timestamp_for_account(
         &self,
         account: &Account,
@@ -239,7 +239,7 @@ impl Transaction {
 
     /// Return the timestamp to use for the transaction.  This is computed
     /// as the oldest timestamp among all the splits
-    #[must_use] 
+    #[must_use]
     pub fn timestamp(&self) -> DateTime<Local> {
         self.splits()
             .iter()
@@ -248,7 +248,7 @@ impl Transaction {
             .unwrap_or(Local::now())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display(&self, format: &Formatter) -> String {
         format!(
             "[{}]",
@@ -333,7 +333,7 @@ pub struct Split {
 }
 
 impl Split {
-    #[must_use] 
+    #[must_use]
     pub fn display(&self, format: &Formatter) -> String {
         let n = self.account.name(AccountNameDepth::unlimited());
         match &self.operation {

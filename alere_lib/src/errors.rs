@@ -15,4 +15,10 @@ pub enum AlrError {
 
     #[error("{0}")]
     ParseError(String),
+
+    #[error("Invalid number")]
+    InvalidNumber,
+
+    #[error("Invalid format")]
+    InvalidFormat,
 }

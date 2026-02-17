@@ -122,14 +122,7 @@ fn cashflow(
             subtotals: true,
             commodity: globals.commodity.clone(),
             elide_boring_accounts: true,
-            intervals: vec![
-                Intv::LastNYears(1),
-                Intv::Monthly {
-                    begin: Instant::MonthsAgo(5),
-                    end: Instant::Now,
-                },
-                // Intv::LastNMonths(1),
-            ],
+            intervals: args.get_many("periods").unwrap().cloned().collect(),
         },
         &crate::networth_view::Settings {
             column_value: true,

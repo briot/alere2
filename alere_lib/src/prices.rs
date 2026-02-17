@@ -38,7 +38,7 @@ pub struct Price {
 
 impl Price {
     /// Create a new price
-    #[must_use] 
+    #[must_use]
     pub fn new(
         timestamp: DateTime<Local>,
         price: Decimal,
@@ -54,17 +54,17 @@ impl Price {
     /// Compare two prices chronologically.
     /// We do not implement std::cmd::PartialOrd since it seems like the latter
     /// should compare actual prices.
-    #[must_use] 
+    #[must_use]
     pub fn older_than(&self, price: &Price) -> std::cmp::Ordering {
         self.timestamp.cmp(&price.timestamp)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn older_than_ts(&self, ts: &DateTime<Local>) -> std::cmp::Ordering {
         self.timestamp.cmp(ts)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn more_recent_than_ts(
         &self,
         ts: &DateTime<Local>,
@@ -73,7 +73,7 @@ impl Price {
     }
 
     /// Invert the price
-    #[must_use] 
+    #[must_use]
     pub fn invert(&self) -> Price {
         Price {
             timestamp: self.timestamp,

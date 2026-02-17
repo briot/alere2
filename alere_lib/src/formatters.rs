@@ -172,7 +172,7 @@ impl Formatter {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display_symbol(&self, com: &Commodity) -> String {
         let mut buffer = String::new();
         if !self.hide_commodity(com) {
@@ -181,7 +181,7 @@ impl Formatter {
         buffer
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display(&self, value: Decimal, comm: &Commodity) -> String {
         let mut buffer = String::new();
         self.push(&mut buffer, value, comm);

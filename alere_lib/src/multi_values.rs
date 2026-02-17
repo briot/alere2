@@ -82,7 +82,7 @@ pub struct Value {
 }
 
 impl Value {
-    #[must_use] 
+    #[must_use]
     pub fn zero(commodity: &Commodity) -> Self {
         Value {
             commodity: commodity.clone(),
@@ -90,7 +90,7 @@ impl Value {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn abs(&self) -> Value {
         Value {
             amount: self.amount.abs(),
@@ -98,12 +98,12 @@ impl Value {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display(&self, format: &Formatter) -> String {
         format.display(self.amount, &self.commodity)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_negative(&self) -> bool {
         self.amount.is_sign_negative()
     }
@@ -141,13 +141,13 @@ enum InnerValue {
 
 impl MultiValue {
     ///  Return a zero value (currency doesn't matter)
-    #[must_use] 
+    #[must_use]
     pub fn zero() -> Self {
         MultiValue(InnerValue::Zero)
     }
 
     /// A value in one commodity
-    #[must_use] 
+    #[must_use]
     pub fn new(amount: Decimal, commodity: &Commodity) -> Self {
         if amount.is_zero() {
             MultiValue::zero()
@@ -160,13 +160,13 @@ impl MultiValue {
     }
 
     /// True if the amount is zero for all commodities
-    #[must_use] 
+    #[must_use]
     pub fn is_zero(&self) -> bool {
         matches!(self.0, InnerValue::Zero)
     }
 
     /// If there is a single commodity used in this value, return it.
-    #[must_use] 
+    #[must_use]
     pub fn commodity(&self) -> Option<Commodity> {
         match &self.0 {
             InnerValue::Zero => None,
@@ -198,7 +198,7 @@ impl MultiValue {
 
     /// Iterate over all commodities of the value, skipping zero.
     // ??? Requires malloc for the return type, can we remove iter()
-    #[must_use] 
+    #[must_use]
     pub fn iter(&self) -> Box<dyn Iterator<Item = Value> + '_> {
         match &self.0 {
             InnerValue::Zero => Box::new(std::iter::empty()),
@@ -269,7 +269,7 @@ impl MultiValue {
         self.normalize();
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display(&self, format: &Formatter) -> String {
         let mut into = String::new();
         self.display_into(&mut into, format);

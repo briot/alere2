@@ -14,25 +14,25 @@ use std::{cell::RefCell, rc::Rc};
 pub struct AccountNameDepth(usize);
 impl AccountNameDepth {
     /// Only show the basename of the account
-    #[must_use] 
+    #[must_use]
     pub fn basename() -> Self {
         AccountNameDepth(1)
     }
 
     /// Show all levels
-    #[must_use] 
+    #[must_use]
     pub fn unlimited() -> Self {
         AccountNameDepth(usize::MAX)
     }
 
     /// Only show a limited number of levels
-    #[must_use] 
+    #[must_use]
     pub fn limit(max: usize) -> Self {
         AccountNameDepth(max)
     }
 
     /// Increase the limit
-    #[must_use] 
+    #[must_use]
     pub fn inc(&self, increment: usize) -> Self {
         if self.0 == usize::MAX {
             AccountNameDepth::unlimited()
@@ -194,7 +194,7 @@ impl Account {
     }
 
     /// Return the name of the account, including parents
-    #[must_use] 
+    #[must_use]
     pub fn name(&self, kind: AccountNameDepth) -> String {
         let mut result = String::new();
         self.name_internal(kind, &mut result);
@@ -205,14 +205,14 @@ impl Account {
         self.0.borrow_mut().parent = Some(parent);
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_parent(&self) -> Option<Account> {
         self.0.borrow().parent.clone()
     }
 
     /// Return the institution to which an account belongs.  If the account
     /// itself doesn't specify this information, look in the parent account.
-    #[must_use] 
+    #[must_use]
     pub fn get_institution(&self) -> Option<Institution> {
         match &self.0.borrow().institution {
             None => match &self.0.borrow().parent {
@@ -291,12 +291,12 @@ impl Account {
         });
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn cmp_name(&self, right: &Account) -> std::cmp::Ordering {
         self.0.borrow().name.cmp(&right.0.borrow().name)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_kind(&self) -> AccountKind {
         self.0.borrow().kind.clone()
     }
@@ -305,7 +305,7 @@ impl Account {
         self.0.borrow_mut().id = id;
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_id(&self) -> AccountId {
         self.0.borrow().id
     }

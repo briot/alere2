@@ -26,7 +26,7 @@ pub enum GroupBy {
 }
 impl GroupBy {
     /// Whether output should reserve space for indentation
-    #[must_use] 
+    #[must_use]
     pub fn need_indent(&self) -> bool {
         matches!(self, GroupBy::None)
     }
@@ -98,14 +98,14 @@ impl Balance {
 
     /// True if the value is zero.
     /// We do not check the market_value, which will be zero also in that case.
-    #[must_use] 
+    #[must_use]
     pub fn is_zero(&self) -> bool {
         self.value.is_zero()
     }
 
     /// Compute the price used to convert from value to market_value.
     /// If we have multiple commodities, this returns nothing.
-    #[must_use] 
+    #[must_use]
     pub fn get_price(&self) -> Option<Decimal> {
         &self.market_value / &self.value
     }
@@ -154,7 +154,7 @@ impl NetworthRow {
         is_all_same(&self.0)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn display_market_value(
         &self,
         idx: usize,
@@ -163,7 +163,7 @@ impl NetworthRow {
         let v = &self.0[idx].market_value;
         v.display(format)
     }
-    #[must_use] 
+    #[must_use]
     pub fn display_market_delta(
         &self,
         idx: usize,
@@ -172,7 +172,7 @@ impl NetworthRow {
         let v = &(&self.0[idx + 1] - &self.0[idx]).market_value;
         v.display(format)
     }
-    #[must_use] 
+    #[must_use]
     pub fn display_market_delta_to_last(
         &self,
         idx: usize,
@@ -183,7 +183,7 @@ impl NetworthRow {
     }
 
     /// Show the price used to compute the market value of the idx-th column
-    #[must_use] 
+    #[must_use]
     pub fn display_price(&self, idx: usize) -> String {
         let p = self.0[idx].get_price();
         match p {
@@ -193,7 +193,7 @@ impl NetworthRow {
     }
 
     /// Display value as percent of the total
-    #[must_use] 
+    #[must_use]
     pub fn display_percent(&self, total: &Self, idx: usize) -> String {
         let percent = &self.0[idx].market_value / &total.0[idx].market_value;
         match percent {

@@ -1,5 +1,6 @@
 use crate::global_settings::GlobalSettings;
-use clap::{arg, Arg, Command};
+use alere_lib::times::Intv;
+use clap::{arg, Arg, ArgAction, Command};
 
 pub(crate) fn build_cli() -> Command {
     Command::new("alere")
@@ -43,7 +44,16 @@ pub(crate) fn build_cli() -> Command {
                 .about("Show current networth")
                 .args(crate::networth_view::Settings::cli()),
         )
-        .subcommand(Command::new("cashflow").about("Show cashflow"))
+        .subcommand(
+            Command::new("cashflow")
+                .about("Show cashflow")
+                .arg(
+                    arg!(-p --periods <INTERVAL> "Columns to display (e.g 1y or 2m..now)")
+                    .value_parser(clap::value_parser!(Intv))
+                    .value_delimiter(',')
+                    .action(ArgAction::Append)
+                )
+        )
         .subcommand(
             Command::new("batch")
                 .about("Run all commands found in the file")

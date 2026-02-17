@@ -23,12 +23,12 @@ pub enum PriceSourceFrom {
 pub struct PriceSource(Rc<RefCell<PriceSourceDetails>>);
 
 impl PriceSource {
-    #[must_use] 
+    #[must_use]
     pub fn get_name(&self) -> Ref<'_, String> {
         Ref::map(self.0.borrow(), |p| &p.name)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_id(&self) -> PriceSourceId {
         self.0.borrow().id
     }

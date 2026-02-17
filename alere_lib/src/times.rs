@@ -3,12 +3,31 @@ use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
 use regex::Regex;
 use rust_intervals::Interval;
+use std::str::FromStr;
 
 /// Specifies an instant in time, that is relative to some "now".
 /// Such a specification can be stored in configuration files, for instance
 /// as "one year ago".  That way, when we launch the application at some point
 /// in the future, this is still "one year ago".
-#[derive(Clone, Debug)]
+///
+/// ```
+/// # use std::str::FromStr;
+/// # use alere_lib::Instant;
+/// assert!(matches!(Instant::from_str("now").unwrap(), Instant::Now));
+/// assert!(matches!(Instant::from_str("epoch").unwrap(), Instant::Epoch));
+/// assert!(matches!(Instant::from_str("7d").unwrap(), Instant::DaysAgo(7)));
+/// assert!(matches!(Instant::from_str("3m").unwrap(), Instant::MonthsAgo(3)));
+/// assert!(matches!(Instant::from_str("2y").unwrap(), Instant::YearsAgo(2)));
+/// assert!(matches!(
+///     Instant::from_str("start-2024-01-01").unwrap(),
+///     Instant::StartDay(_)
+/// ));
+/// assert!(matches!(
+///     Instant::from_str("2024-01-01T12:00:00Z").unwrap(),
+///     Instant::Timestamp(_)
+/// ));
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub enum Instant {
     Epoch,
     Now,
@@ -101,9 +120,9 @@ impl Instant {
 impl std::fmt::Display for Instant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instant::Epoch => write!(f, "")?,
+            Instant::Epoch => write!(f, "epoch")?,
             Instant::Now => write!(f, "now")?,
-            Instant::Armageddon => write!(f, "∞")?,
+            Instant::Armageddon => write!(f, "end")?,
             Instant::DaysAgo(count) => {
                 if *count == 1 {
                     write!(f, "yesterday")?
@@ -192,9 +211,9 @@ impl ::core::str::FromStr for Instant {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "" => Ok(Instant::Epoch),
+            "epoch" => Ok(Instant::Epoch),
             "now" => Ok(Instant::Now),
-            "∞" => Ok(Instant::Armageddon),
+            "end" => Ok(Instant::Armageddon),
             "yesterday" => Ok(Instant::DaysAgo(1)),
             "start of yesterday" => Ok(Instant::StartDaysAgo(1)),
             "end of yesterday" => Ok(Instant::EndDaysAgo(1)),
@@ -206,6 +225,9 @@ impl ::core::str::FromStr for Instant {
             "end of last year" => Ok(Instant::EndYearsAgo(1)),
             _ => {
                 if let Some(d) = check_regexp!(s, r"(\d+) days ago", i32) {
+                    return Ok(Instant::DaysAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"^(\d+)d$", i32) {
                     return Ok(Instant::DaysAgo(d));
                 }
                 if let Some(d) =
@@ -232,12 +254,18 @@ impl ::core::str::FromStr for Instant {
                 if let Some(d) = check_regexp!(s, r"(\d+) months ago", i32) {
                     return Ok(Instant::MonthsAgo(d));
                 }
+                if let Some(d) = check_regexp!(s, r"^(\d+)m$", i32) {
+                    return Ok(Instant::MonthsAgo(d));
+                }
                 if let Some(d) =
                     check_regexp!(s, r"start of (\d+) months ago", i32)
                 {
                     return Ok(Instant::StartMonthsAgo(d));
                 }
                 if let Some(d) = check_regexp!(s, r"(\d+) years ago", i32) {
+                    return Ok(Instant::YearsAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"^(\d+)y$", i32) {
                     return Ok(Instant::YearsAgo(d));
                 }
                 if let Some(d) =
@@ -270,7 +298,7 @@ pub struct TimeInterval {
 }
 
 impl TimeInterval {
-    #[must_use] 
+    #[must_use]
     pub fn duration(&self, reftime: DateTime<Local>) -> chrono::TimeDelta {
         let up = *self
             .intv
@@ -285,7 +313,23 @@ impl TimeInterval {
 }
 
 /// A high-level description of time ranges
-#[derive(Debug)]
+///
+/// ```
+/// # use std::str::FromStr;
+/// # use alere_lib::Intv;
+/// assert!(matches!(Intv::from_str("7d").unwrap(), Intv::LastNDays(7)));
+/// assert!(matches!(Intv::from_str("3m").unwrap(), Intv::LastNMonths(3)));
+/// assert!(matches!(Intv::from_str("2y").unwrap(), Intv::LastNYears(2)));
+/// assert!(matches!(Intv::from_str("m0").unwrap(), Intv::MonthAgo(0)));
+/// assert!(matches!(Intv::from_str("y-1").unwrap(), Intv::YearAgo(-1)));
+/// assert!(matches!(Intv::from_str("2023").unwrap(), Intv::SpecificYear(2023)));
+/// assert!(matches!(Intv::from_str("ytd").unwrap(), Intv::YearToDate));
+/// assert!(matches!(
+///     Intv::from_str("2024-01-01..2024-01-31").unwrap(),
+///     Intv::Monthly { .. }
+/// ));
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub enum Intv {
     UpTo(Instant), // from start of time to the given instant
 
@@ -488,6 +532,69 @@ fn end_of_month<TZ: TimeZone>(
     let sd = start_of_day(sm, tz);
     let next_month = add_months(sd, 1);
     Ok(next_month - chrono::TimeDelta::nanoseconds(1))
+}
+
+impl FromStr for Intv {
+    type Err = AlrError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+
+        if s == "ytd" {
+            return Ok(Intv::YearToDate);
+        }
+
+        if let Some(rest) = s.strip_prefix("upto ") {
+            return Ok(Intv::UpTo(rest.parse()?));
+        }
+
+        // Range syntax: begin..end
+        if let Some((b, e)) = s.split_once("..") {
+            let begin = b.trim().parse()?;
+            let end = e.trim().parse()?;
+            return Ok(Intv::Monthly { begin, end });
+        }
+
+        // Specific year
+        if s.len() == 4 && s.chars().all(|c| c.is_ascii_digit()) {
+            return Ok(Intv::SpecificYear(
+                s.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+
+        // m0, m-1
+        if let Some(num) = s.strip_prefix('m') {
+            return Ok(Intv::MonthAgo(
+                num.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+
+        // y0, y-1
+        if let Some(num) = s.strip_prefix('y') {
+            return Ok(Intv::YearAgo(
+                num.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+
+        // 7d / 3m / 2y
+        if let Some(num) = s.strip_suffix('d') {
+            return Ok(Intv::LastNDays(
+                num.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+        if let Some(num) = s.strip_suffix('m') {
+            return Ok(Intv::LastNMonths(
+                num.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+        if let Some(num) = s.strip_suffix('y') {
+            return Ok(Intv::LastNYears(
+                num.parse().map_err(|_| AlrError::InvalidNumber)?,
+            ));
+        }
+
+        Err(AlrError::InvalidFormat)
+    }
 }
 
 #[cfg(test)]

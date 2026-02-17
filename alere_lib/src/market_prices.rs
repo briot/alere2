@@ -22,7 +22,7 @@ impl<'a> MarketPrices<'a> {
     /// Will compute market values into to_commodity, by using prices from
     /// the repository.
     /// If to_commodity is None, no conversion is made.
-    #[must_use] 
+    #[must_use]
     pub fn new(
         known_prices: &'a PriceCollection,
         turnkey_currencies: &'a [Commodity],
@@ -200,11 +200,9 @@ impl<'a> MarketPrices<'a> {
                     }
 
                     // Do a full search if we did not find anything before
-                    None
-                    | Some(PairCacheLine {
-                        found: None,
-                        ..
-                    }) => (0_usize, prices.as_slice()),
+                    None | Some(PairCacheLine { found: None, .. }) => {
+                        (0_usize, prices.as_slice())
+                    }
                 };
 
                 let index = base_idx

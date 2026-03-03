@@ -193,31 +193,43 @@ impl<'a> MarketPrices<'a> {
                         found: Some(f),
                     }) => {
                         if req < as_of {
-                            (f.0, &prices[f.0..])
+                            (f.0, prices.get(f.0..))
+                            //(f.0, &prices[f.0..])
                         } else {
-                            (0, &prices[0..f.0])
+                            (0, prices.get(0..f.0))
+                            //(0, &prices[0..f.0])
                         }
                     }
 
                     // Do a full search if we did not find anything before
                     None | Some(PairCacheLine { found: None, .. }) => {
-                        (0_usize, prices.as_slice())
+                        (0_usize, Some(prices.as_slice()))
+                        //(0_usize, prices.as_slice())
                     }
                 };
 
-                let index = base_idx
-                    + bisect_right_by(all_prices, |p| {
-                        p.more_recent_than_ts(as_of)
-                    });
-                if index == 0 {
-                    PairCacheLine {
-                        request_ts: *as_of,
-                        found: None,
+                if let Some(all_prices) = all_prices {
+                    let index = base_idx
+                        + bisect_right_by(all_prices, |p| {
+                            p.more_recent_than_ts(as_of)
+                        });
+                    if index != 0
+                        && let Some(p) = prices.get(index - 1)
+                    {
+                        PairCacheLine {
+                            request_ts: *as_of,
+                            found: Some((index, p.clone())),
+                        }
+                    } else {
+                        PairCacheLine {
+                            request_ts: *as_of,
+                            found: None,
+                        }
                     }
                 } else {
                     PairCacheLine {
                         request_ts: *as_of,
-                        found: Some((index, prices[index - 1].clone())),
+                        found: None,
                     }
                 }
             }

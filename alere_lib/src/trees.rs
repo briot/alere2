@@ -164,8 +164,8 @@ impl<K: Clone, T: Clone> TreeNode<K, T> {
     /// Collapse the node: if it has a single child, replace the node by
     /// this child.  This loses any data associated with self though.
     pub fn collapse_if_one_child(&mut self) {
-        if self.children.0.len() == 1 {
-            let c = &self.children.0[0].data;
+        if let [first] = &self.children.0[..] {
+            let c = &first.data;
             self.data = NodeData {
                 key: c.key.clone(),
                 data: c.data.clone(),
@@ -260,7 +260,7 @@ impl<K: PartialEq + Clone, T> NodeList<K, T> {
     {
         // Go through an index to avoid issues with the borrow checker
         if let Some(i) = self.0.iter().position(|n| n.data.key == *key) {
-            &mut self.0[i]
+            self.0.get_mut(i).unwrap()
         } else {
             self.0
                 .push(TreeNode::new(key.clone(), create(key), self_depth));

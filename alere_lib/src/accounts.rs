@@ -184,11 +184,11 @@ pub struct Account(Rc<RefCell<AccountDetails>>);
 
 impl Account {
     fn name_internal(&self, kind: AccountNameDepth, into: &mut String) {
-        if kind.0 > 1 {
-            if let Some(p) = &self.0.borrow().parent {
-                p.name_internal(AccountNameDepth(kind.0 - 1), into);
-                into.push(':');
-            }
+        if kind.0 > 1
+            && let Some(p) = &self.0.borrow().parent
+        {
+            p.name_internal(AccountNameDepth(kind.0 - 1), into);
+            into.push(':');
         }
         into.push_str(&self.0.borrow().name);
     }

@@ -43,12 +43,16 @@ impl TableRow {
         }
     }
 
-    fn name(&self, _idx: &usize) -> String {
-        self.name.to_string()
+    fn name(&self, _idx: &usize) -> Result<String> {
+        Ok(self.name.to_string())
     }
 
-    fn image(&self, idx: &usize) -> String {
-        self.values[*idx].clone()
+    fn image(&self, idx: &usize) -> Result<String> {
+        if let Some(v) = self.values.get(*idx) {
+            Ok(v.clone())
+        } else {
+            Ok(String::new())
+        }
     }
 }
 
@@ -73,11 +77,13 @@ pub fn metrics_view(
         globals.reftime,
     )?;
 
-    let mut columns = vec![Column::new(0, &TableRow::name)
-        .with_title("Metric")
-        .with_width(Width::ExpandWithMin(8))
-        .with_truncate(Truncate::Right)
-        .with_align(Align::Left)];
+    let mut columns = vec![
+        Column::new(0, &TableRow::name)
+            .with_title("Metric")
+            .with_width(Width::ExpandWithMin(8))
+            .with_truncate(Truncate::Right)
+            .with_align(Align::Left),
+    ];
     for (idx, s) in m.iter().enumerate() {
         columns.push(
             Column::new(idx, &TableRow::image)

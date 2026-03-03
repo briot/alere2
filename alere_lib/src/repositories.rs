@@ -51,7 +51,11 @@ impl Repository {
                         ),
                     );
                 }
-                _ => {}
+                Operation::Credit(_)
+                | Operation::AddShares { .. }
+                | Operation::Reinvest { .. }
+                | Operation::Dividend
+                | Operation::Split { .. } => {}
             }
         }
         self.transactions.add(tx)?;

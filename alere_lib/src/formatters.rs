@@ -81,22 +81,24 @@ impl Formatter {
                 into.push_str(&rounded.to_string());
             }
             Separators::Every3Digit(sep) => {
-                let val: Vec<char> = rounded.to_string().chars().collect();
-                let decimal =
-                    val.iter().position(|&r| r == '.').unwrap_or(val.len());
+                let val = rounded.to_string();
+                let left = match val.split_once('.') {
+                    Some((left, _)) => left,
+                    None => &val,
+                };
 
-                for (idx, p) in val[0..decimal].iter().enumerate() {
-                    if idx > 0 && (decimal - idx) % 3 == 0 {
+                for (idx, p) in left.chars().enumerate() {
+                    if idx > 0 && (left.len() - idx) % 3 == 0 {
                         into.push(sep);
                     }
-                    into.push(*p);
+                    into.push(p);
                 }
 
                 if precision > 0 {
                     into.push(self.comma);
                     let mut count = 0_u8;
-                    for p in val.iter().skip(decimal + 1) {
-                        into.push(*p);
+                    for p in val.chars().skip(left.len() + 1) {
+                        into.push(p);
                         count += 1;
                     }
                     for _ in count + 1..=precision {
@@ -251,8 +253,8 @@ impl Formatter {
 
 #[cfg(test)]
 mod test {
-    use crate::commodities::test::create_currency;
     use crate::commodities::CommodityCollection;
+    use crate::commodities::test::create_currency;
     use crate::formatters::{Formatter, Negative, Separators, SymbolQuote};
     use rust_decimal_macros::dec;
 

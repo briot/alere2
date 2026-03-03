@@ -6,8 +6,10 @@ mod perfs_view;
 pub mod tables;
 
 use crate::{
-    args::build_cli, global_settings::GlobalSettings,
-    metrics_view::metrics_view, networth_view::networth_view,
+    args::{Cli, Commands, ExportFormat},
+    global_settings::GlobalSettings,
+    metrics_view::metrics_view,
+    networth_view::networth_view,
     perfs_view::perfs_view,
 };
 use alere_lib::{
@@ -21,10 +23,10 @@ use alere_lib::{
     times::{Instant, Intv},
 };
 use anyhow::Result;
-use clap::ArgMatches;
+use clap::{CommandFactory, Parser};
 use futures::executor::block_on;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Export all transaction to hledger format
 fn export_hledger(repo: &mut Repository, output: &Path) -> Result<()> {
@@ -69,11 +71,10 @@ fn perfs(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
 fn networth(
     repo: &mut Repository,
     globals: &GlobalSettings,
-    args: &ArgMatches,
+    _settings: &crate::networth_view::Settings,
 ) -> Result<()> {
     let output = networth_view(
         repo,
-        args,
         |acc| acc.get_kind().is_networth(),
         globals,
         alere_lib::networth::Settings {
@@ -106,13 +107,12 @@ fn networth(
 fn cashflow(
     repo: &mut Repository,
     globals: &mut GlobalSettings,
-    args: &ArgMatches,
+    periods: &[Intv],
 ) -> Result<()> {
     globals.format.negate = true;
 
     let income_expenses = networth_view(
         repo,
-        args,
         |acc| acc.get_kind().is_expense() || acc.get_kind().is_income(),
         globals,
         alere_lib::networth::Settings {
@@ -122,7 +122,7 @@ fn cashflow(
             subtotals: true,
             commodity: globals.commodity.clone(),
             elide_boring_accounts: true,
-            intervals: args.get_many("periods").unwrap().cloned().collect(),
+            intervals: periods.to_vec(),
         },
         &crate::networth_view::Settings {
             column_value: true,
@@ -139,43 +139,33 @@ fn cashflow(
 
 fn run_subcommand(
     repo: &mut Repository,
-    matches: &clap::ArgMatches,
+    command: &Commands,
     settings: &mut GlobalSettings,
 ) -> Result<()> {
-    match matches.subcommand() {
-        Some(("completions", args)) => {
-            if let Some(shell) =
-                args.get_one::<clap_complete_command::Shell>("shell")
-            {
-                let mut command = build_cli();
-                shell.generate(&mut command, &mut std::io::stdout());
-            }
+    match command {
+        Commands::Completions { shell } => {
+            shell.generate(&mut Cli::command(), &mut std::io::stdout());
         }
-        Some(("export", sub)) => match sub.subcommand() {
-            Some(("hledger", sub)) => {
-                export_hledger(
-                    repo,
-                    Path::new(
-                        sub.get_one::<String>("output").expect("required"),
-                    ),
-                )?;
+        Commands::Export { format } => match format {
+            ExportFormat::Hledger { output } => {
+                export_hledger(repo, Path::new(output))?;
             }
-            _ => unreachable!(),
         },
-        Some(("networth", args)) => {
-            networth(repo, settings, args)?;
+        Commands::Networth {
+            settings: networth_settings,
+        } => {
+            networth(repo, settings, networth_settings)?;
         }
-        Some(("cashflow", args)) => {
-            cashflow(repo, settings, args)?;
+        Commands::Cashflow { periods } => {
+            cashflow(repo, settings, periods)?;
         }
-        Some(("metrics", _)) => {
+        Commands::Metrics => {
             metrics(repo, settings)?;
         }
-        Some(("perf", _)) => {
+        Commands::Perf => {
             perfs(repo, settings)?;
         }
-        Some(("batch", args)) => {
-            let file: &PathBuf = args.get_one("file").unwrap();
+        Commands::Batch { file } => {
             let content = std::fs::read_to_string(file)?;
             for line in content.lines() {
                 let line = line.trim();
@@ -186,22 +176,26 @@ fn run_subcommand(
                     anyhow::anyhow!("invalid quoting: {}", line)
                 })?;
                 let args = std::iter::once("alere".to_string()).chain(args);
-                let matches = build_cli().try_get_matches_from(args)?;
-                let mut global =
-                    GlobalSettings::new_with_defaults(&matches, settings);
+                let cli = Cli::try_parse_from(args)?;
+                let mut global = GlobalSettings {
+                    commodity_str: cli
+                        .global
+                        .commodity_str
+                        .or(settings.commodity_str.clone()),
+                    empty: cli.global.empty || settings.empty,
+                    ..GlobalSettings::default()
+                };
                 global.postprocess(repo);
-                run_subcommand(repo, &matches, &mut global)?;
+                run_subcommand(repo, &cli.command, &mut global)?;
             }
         }
-        _ => unreachable!(),
     }
     Ok(())
 }
 
 fn main() -> Result<()> {
-    let cli = build_cli();
-    let args = cli.get_matches();
-    let mut settings = GlobalSettings::new(&args);
+    let cli = Cli::parse();
+    let mut settings = cli.global;
     let progress = ProgressBar::new(1) //  we do not know the length
         .with_style(
             ProgressStyle::with_template(
@@ -222,5 +216,5 @@ fn main() -> Result<()> {
     progress.finish_and_clear();
 
     settings.postprocess(&repo);
-    run_subcommand(&mut repo, &args, &mut settings)
+    run_subcommand(&mut repo, &cli.command, &mut settings)
 }

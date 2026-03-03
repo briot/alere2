@@ -61,13 +61,15 @@ where
     let delta_market_to_last_image = |row: &Data, idx: &usize| {
         row.data.display_market_delta_to_last(*idx, &globals.format)
     };
-    let node_image = |row: &Data, _idx: &usize| match &row.key {
-        Key::Account(a) => {
-            a.name(view_settings.account_names.inc(row.collapse_depth))
-        }
-        Key::Institution(Some(inst)) => inst.get_name(),
-        Key::Institution(None) => "Unknown".to_string(),
-        Key::AccountKind(kind) => kind.get_name(),
+    let node_image = |row: &Data, _idx: &usize| {
+        Ok(match &row.key {
+            Key::Account(a) => {
+                a.name(view_settings.account_names.inc(row.collapse_depth))
+            }
+            Key::Institution(Some(inst)) => inst.get_name(),
+            Key::Institution(None) => "Unknown".to_string(),
+            Key::AccountKind(kind) => kind.get_name(),
+        })
     };
     let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
     let percent_image = |row: &Data, idx: &usize| {
@@ -136,7 +138,9 @@ where
     }
 
     let mut table = Table::new(columns, &globals.table).with_col_headers();
-    networth.tree.sort(|nodedata| node_image(nodedata, &0));
+    networth
+        .tree
+        .sort(|nodedata| node_image(nodedata, &0).unwrap());
 
     networth.tree.traverse(
         |node| {

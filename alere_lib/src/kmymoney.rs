@@ -26,33 +26,35 @@ pub fn parse_price(text: &str, price_precision: u8) -> Result<Option<Decimal>> {
         return Ok(None);
     }
 
-    let s: Vec<&str> = text.split('/').collect();
-    assert_eq!(s.len(), 2);
+    if let Some((n, d)) = text.split_once('/') {
+        let num = n.parse::<i64>()?;
+        if num == 0 {
+            return Ok(Some(Decimal::ZERO));
+        }
 
-    let num = s[0].parse::<i64>()?;
-    if num == 0 {
-        return Ok(Some(Decimal::ZERO));
+        let den = d.parse::<i64>()?;
+        let v = Decimal::from(num) / Decimal::from(den);
+
+        // If we have "13687/35" (which is 391.0571...), kmymoney expects 391.05,
+        // so we need to truncate the number (alternative would be to
+        // round_dp_with_strategy(RoundingStrategy::ToZero).
+        let rounded = v.trunc_with_scale(price_precision as u32);
+
+        // An integer representation (which is only meaningful when we know the
+        // price precision) is to use
+        //    rounded * Decimal::from(i32::pow(10, price_precision))
+
+        Ok(Some(rounded))
+    } else {
+        let num: i64 = text.parse()?;
+        Ok(Some(Decimal::from(num)))
     }
-
-    let den = s[1].parse::<i64>()?;
-    let v = Decimal::from(num) / Decimal::from(den);
-
-    // If we have "13687/35" (which is 391.0571...), kmymoney expects 391.05,
-    // so we need to truncate the number (alternative would be to
-    // round_dp_with_strategy(RoundingStrategy::ToZero).
-    let rounded = v.trunc_with_scale(price_precision as u32);
-
-    // An integer representation (which is only meaningful when we know the
-    // price precision) is to use
-    //    rounded * Decimal::from(i32::pow(10, price_precision))
-
-    Ok(Some(rounded))
 }
 
 #[cfg(feature = "kmymoney")]
 use ::{
     futures::TryStreamExt, //  make try_next visible
-    sqlx::{query, Connection, Row, SqliteConnection},
+    sqlx::{Connection, Row, SqliteConnection, query},
 };
 
 #[cfg(feature = "kmymoney")]
@@ -326,17 +328,17 @@ impl KmyMoneyImporter {
             query("SELECT id, parentId FROM kmmAccounts").fetch(conn);
         while let Some(row) = stream.try_next().await? {
             let parent_kmm_id: Option<&str> = row.get("parentId");
-            if let Some(pid) = parent_kmm_id {
-                if !pid.is_empty() {
-                    let parent = self
-                        .accounts
-                        .get(pid)
-                        .with_context(|| format!("No such account {pid:?}"))?
-                        .clone();
-                    let kmm_id: &str = row.get("id");
-                    let acc = self.accounts.get_mut(kmm_id).unwrap();
-                    acc.set_parent(parent);
-                }
+            if let Some(pid) = parent_kmm_id
+                && !pid.is_empty()
+            {
+                let parent = self
+                    .accounts
+                    .get(pid)
+                    .with_context(|| format!("No such account {pid:?}"))?
+                    .clone();
+                let kmm_id: &str = row.get("id");
+                let acc = self.accounts.get_mut(kmm_id).unwrap();
+                acc.set_parent(parent);
             }
         }
         Ok(())
@@ -650,13 +652,20 @@ impl KmyMoneyImporter {
 
             let price = parse_price(
                 row.get("price"),
-                self.price_precisions[account_currency],
+                *self.price_precisions.get(account_currency).unwrap_or_else(
+                    || panic!("Unknown currency {:?}", account_currency),
+                ),
             )?;
             let value =
                 parse_price(row.get("value"), account_precision)?.unwrap();
             let shares = parse_price(
                 row.get("shares"),
-                self.smallest_account_fraction[account_currency],
+                *self
+                    .smallest_account_fraction
+                    .get(account_currency)
+                    .unwrap_or_else(|| {
+                        panic!("Unknown currency {:?}", account_currency)
+                    }),
             )?
             .unwrap();
 
@@ -717,7 +726,8 @@ impl KmyMoneyImporter {
                 (Some("Buy"), Some(p)) => {
                     let diff = (p * shares - value).abs();
                     if diff >= dec!(0.007) {
-                        println!("{tid} price {:?}={:?} shares {:?}={:?} value {:?}={:?} computed_value={:?} diff={:?} smallest={:?}/{:?}/{:?}/{:?}",
+                        println!(
+                            "{tid} price {:?}={:?} shares {:?}={:?} value {:?}={:?} computed_value={:?} diff={:?} smallest={:?}/{:?}/{:?}/{:?}",
                             row.get::<&str, _>("price"),
                             p,
                             row.get::<&str, _>("shares"),
@@ -726,10 +736,31 @@ impl KmyMoneyImporter {
                             value,
                             p * shares,
                             diff,
-                            self.smallest_account_fraction[account_currency],
-                            self.smallest_account_fraction[tx_currency],
-                            self.price_precisions[account_currency],
-                            self.price_precisions[tx_currency]);
+                            self.smallest_account_fraction
+                                .get(account_currency)
+                                .unwrap_or_else(|| panic!(
+                                    "unknown currency {:?}",
+                                    account_currency
+                                )),
+                            self.smallest_account_fraction
+                                .get(tx_currency)
+                                .unwrap_or_else(|| panic!(
+                                    "unknown currency {:?}",
+                                    tx_currency
+                                )),
+                            self.price_precisions
+                                .get(account_currency)
+                                .unwrap_or_else(|| panic!(
+                                    "unknown currency {:?}",
+                                    account_currency
+                                )),
+                            self.price_precisions
+                                .get(tx_currency)
+                                .unwrap_or_else(|| panic!(
+                                    "unknown currency {:?}",
+                                    tx_currency
+                                ))
+                        );
                     }
 
                     Operation::BuyAmount {
@@ -818,7 +849,7 @@ impl KmyMoneyImporter {
         }
 
         for t in tx.into_iter() {
-            repo.add_transaction(t.1 .1)?;
+            repo.add_transaction(t.1.1)?;
         }
         Ok(())
     }

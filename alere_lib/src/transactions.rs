@@ -83,13 +83,9 @@ impl Transaction {
 
     pub fn new_with_details(details: TransactionArgs) -> Self {
         Transaction(Rc::new(RefCell::new(TransactionDetails {
-            memo: details.memo.and_then(|m| {
-                if m.is_empty() {
-                    None
-                } else {
-                    Some(m.into())
-                }
-            }),
+            memo: details
+                .memo
+                .and_then(|m| if m.is_empty() { None } else { Some(m.into()) }),
             check_number: details.check_number.map(str::to_string),
             payee: details.payee,
             _entry_date: details.entry_date,
@@ -165,12 +161,12 @@ impl Transaction {
                 let is_none = self.0.borrow().check_number.is_none();
                 if is_none {
                     self.0.borrow_mut().check_number = Some(num.into());
-                } else if let Some(old) = &self.0.borrow().check_number {
-                    if old != num {
-                        Err(format!(
-                            "Non-matching check number, had {old:?}, now {num}"
-                        ))?;
-                    }
+                } else if let Some(old) = &self.0.borrow().check_number
+                    && old != num
+                {
+                    Err(format!(
+                        "Non-matching check number, had {old:?}, now {num}"
+                    ))?;
                 }
             }
         }

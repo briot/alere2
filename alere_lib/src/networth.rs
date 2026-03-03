@@ -1,5 +1,6 @@
 use crate::accounts::Account;
 use crate::commodities::Commodity;
+use crate::errors::AlrError;
 use crate::formatters::Formatter;
 use crate::market_prices::MarketPrices;
 use crate::multi_values::MultiValue;
@@ -154,51 +155,55 @@ impl NetworthRow {
         is_all_same(&self.0)
     }
 
-    #[must_use]
     pub fn display_market_value(
         &self,
         idx: usize,
         format: &Formatter,
-    ) -> String {
-        let v = &self.0[idx].market_value;
-        v.display(format)
+    ) -> Result<String> {
+        let cell = &self.0.get(idx).ok_or(AlrError::IndexError)?;
+        let v = &cell.market_value;
+        Ok(v.display(format))
     }
-    #[must_use]
+
     pub fn display_market_delta(
         &self,
         idx: usize,
         format: &Formatter,
-    ) -> String {
-        let v = &(&self.0[idx + 1] - &self.0[idx]).market_value;
-        v.display(format)
+    ) -> Result<String> {
+        let nextcell = self.0.get(idx + 1).ok_or(AlrError::IndexError)?;
+        let cell = self.0.get(idx).ok_or(AlrError::IndexError)?;
+        let v = &(nextcell - cell).market_value;
+        Ok(v.display(format))
     }
-    #[must_use]
+
     pub fn display_market_delta_to_last(
         &self,
         idx: usize,
         format: &Formatter,
-    ) -> String {
-        let v = &(self.0.last().unwrap() - &self.0[idx]).market_value;
-        v.display(format)
+    ) -> Result<String> {
+        let cell = self.0.get(idx).ok_or(AlrError::IndexError)?;
+        let v = &(self.0.last().unwrap() - cell).market_value;
+        Ok(v.display(format))
     }
 
     /// Show the price used to compute the market value of the idx-th column
-    #[must_use]
-    pub fn display_price(&self, idx: usize) -> String {
-        let p = self.0[idx].get_price();
+    pub fn display_price(&self, idx: usize) -> Result<String> {
+        let cell = self.0.get(idx).ok_or(AlrError::IndexError)?;
+        let p = cell.get_price();
         match p {
-            None => String::new(),
-            Some(p) => p.to_string(),
+            None => Ok(String::new()),
+            Some(p) => Ok(p.to_string()),
         }
     }
 
     /// Display value as percent of the total
-    #[must_use]
-    pub fn display_percent(&self, total: &Self, idx: usize) -> String {
-        let percent = &self.0[idx].market_value / &total.0[idx].market_value;
+    pub fn display_percent(&self, total: &Self, idx: usize) -> Result<String> {
+        let cell = self.0.get(idx).ok_or(AlrError::IndexError)?;
+        let tot = total.0.get(idx).ok_or(AlrError::IndexError)?;
+        let percent = &cell.market_value / &tot.market_value;
         match percent {
-            None => String::new(),
-            Some(p) => format!("{:.1}%", p * Decimal::ONE_HUNDRED),
+            None => Ok(String::new()),
+            Some(p) => Ok(format!("{:.1}%", p * Decimal::ONE_HUNDRED)),
         }
     }
 }
@@ -276,24 +281,26 @@ impl Networth {
             //  ??? We could just iterate over all transactions and apply
             //  splits to corresponding accounts.
             acc.for_each_split(|s| {
-                for (idx, intv) in result.intervals.iter().enumerate() {
+                for (intv, r) in result.intervals.iter().zip(&mut row.0) {
                     if intv.intv.contains(s.post_ts) {
-                        row.0[idx].value.apply(&s.operation);
+                        r.value.apply(&s.operation);
                     }
                 }
             });
 
-            for (idx, v) in row.0.iter_mut().enumerate() {
+            for ((v, intv), res) in row
+                .0
+                .iter_mut()
+                .zip(&result.intervals)
+                .zip(&mut result.total.0)
+            {
                 v.compute_market(
                     &mut market,
                     // At end of interval (but this is open, so is not
                     // full accurate).
-                    result.intervals[idx]
-                        .intv
-                        .upper()
-                        .expect("bounded interval"),
+                    intv.intv.upper().expect("bounded interval"),
                 );
-                result.total.0[idx] += v;
+                *res += v;
             }
         });
 

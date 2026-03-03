@@ -43,24 +43,28 @@ pub fn perfs_view(
         }
     };
     let account_image = |row: &Performance, _idx: &usize| {
-        row.account.name(AccountNameDepth::unlimited())
+        Ok(row.account.name(AccountNameDepth::unlimited()))
     };
-    let equity_image =
-        |row: &Performance, _idx: &usize| row.equity.display(&globals.format);
-    let shares_image =
-        |row: &Performance, _idx: &usize| row.shares.display(&globals.format);
-    let invested_image =
-        |row: &Performance, _idx: &usize| row.invested.display(&globals.format);
-    let realized_image =
-        |row: &Performance, _idx: &usize| row.realized.display(&globals.format);
-    let roi_image = |row: &Performance, _idx: &usize| returns(&row.roi);
+    let equity_image = |row: &Performance, _idx: &usize| {
+        Ok(row.equity.display(&globals.format))
+    };
+    let shares_image = |row: &Performance, _idx: &usize| {
+        Ok(row.shares.display(&globals.format))
+    };
+    let invested_image = |row: &Performance, _idx: &usize| {
+        Ok(row.invested.display(&globals.format))
+    };
+    let realized_image = |row: &Performance, _idx: &usize| {
+        Ok(row.realized.display(&globals.format))
+    };
+    let roi_image = |row: &Performance, _idx: &usize| Ok(returns(&row.roi));
     let pnl_image =
-        |row: &Performance, _idx: &usize| row.pnl.display(&globals.format);
+        |row: &Performance, _idx: &usize| Ok(row.pnl.display(&globals.format));
     let weighted_avg_image =
-        |row: &Performance, _idx: &usize| mv(&row.weighted_average);
+        |row: &Performance, _idx: &usize| Ok(mv(&row.weighted_average));
     let avg_cost_image =
-        |row: &Performance, _idx: &usize| mv(&row.average_cost);
-    let price_image = |row: &Performance, _idx: &usize| mv(&row.price);
+        |row: &Performance, _idx: &usize| Ok(mv(&row.average_cost));
+    let price_image = |row: &Performance, _idx: &usize| Ok(mv(&row.price));
 
     let columns = vec![
         Column::new(0, &account_image)
@@ -116,7 +120,7 @@ pub fn perfs_view(
     ];
 
     let mut table = Table::new(columns, &globals.table).with_col_headers();
-    perfs.sort_by_key(|p| account_image(p, &0));
+    perfs.sort_by_key(|p| account_image(p, &0).unwrap());
     for row in &perfs {
         if !row.invested.is_zero() {
             table.add_row(row, 0);

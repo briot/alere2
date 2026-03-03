@@ -21,4 +21,7 @@ pub enum AlrError {
 
     #[error("Invalid format")]
     InvalidFormat,
+
+    #[error("Invalid index")]
+    IndexError,
 }

@@ -221,7 +221,7 @@ impl Exporter for Hledger {
                                 buf.write_all(
                                     node.data
                                         .data
-                                        .display_market_value(colidx, format)
+                                        .display_market_value(colidx, format)?
                                         .as_bytes(),
                                 )?;
                                 buf.write_all(b"\n\n")?;

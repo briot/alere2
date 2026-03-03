@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 #[derive(Clone, Copy)]
 pub enum Width {
     Fixed(usize),
@@ -28,7 +30,7 @@ pub struct Column<'a, TRow, TCol> {
     footer: ColumnFooter,
     title: Option<String>,
     data: TCol,
-    get_content: &'a dyn Fn(&TRow, &TCol) -> String,
+    get_content: &'a dyn Fn(&TRow, &TCol) -> Result<String>,
     show_indent: bool,
 
     min_width: usize,
@@ -37,7 +39,7 @@ pub struct Column<'a, TRow, TCol> {
 impl<'a, TRow, TCol> Column<'a, TRow, TCol> {
     pub fn new(
         data: TCol,
-        get_content: &'a dyn Fn(&TRow, &TCol) -> String,
+        get_content: &'a dyn Fn(&TRow, &TCol) -> Result<String>,
     ) -> Self {
         Self {
             align: Align::Left,
@@ -84,7 +86,7 @@ impl<'a, TRow, TCol> Column<'a, TRow, TCol> {
         self
     }
 
-    fn content(&self, row: &TRow) -> String {
+    fn content(&self, row: &TRow) -> Result<String> {
         (self.get_content)(row, &self.data)
     }
 }
@@ -148,7 +150,10 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
         self.rows.extend(rows.iter().map(|row| {
             RowData::Cells(
                 indent,
-                self.columns.iter().map(|col| col.content(row)).collect(),
+                self.columns
+                    .iter()
+                    .map(|col| col.content(row).unwrap())
+                    .collect(),
             )
         }));
     }
@@ -156,7 +161,10 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
     pub fn add_row(&mut self, row: &TRow, indent: usize) {
         self.rows.push(RowData::Cells(
             indent,
-            self.columns.iter().map(|col| col.content(row)).collect(),
+            self.columns
+                .iter()
+                .map(|col| col.content(row).unwrap())
+                .collect(),
         ));
     }
 
@@ -168,7 +176,7 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                 .iter()
                 .map(|col| match col.footer {
                     ColumnFooter::Hide => String::new(),
-                    ColumnFooter::Show => col.content(total),
+                    ColumnFooter::Show => col.content(total).unwrap(),
                 })
                 .collect(),
         ));
@@ -205,8 +213,12 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                                     }
                                 }
                                 RowData::Cells(indent, columns) => {
-                                    indent * self.settings.indent_size
-                                        + columns[colidx].chars().count()
+                                    if let Some(c) = columns.get(colidx) {
+                                        indent * self.settings.indent_size
+                                            + c.chars().count()
+                                    } else {
+                                        0
+                                    }
                                 }
                             },
                         );
@@ -236,8 +248,12 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                                         indent * self.settings.indent_size
                                             + col_min,
                                     );
-                                    indent * self.settings.indent_size
-                                        + columns[colidx].chars().count()
+                                    if let Some(c) = columns.get(colidx) {
+                                        indent * self.settings.indent_size
+                                            + c.chars().count()
+                                    } else {
+                                        0
+                                    }
                                 }
                             },
                         );
@@ -332,17 +348,19 @@ impl<'a, TRow, TCol> Table<'a, TRow, TCol> {
                         } else {
                             0
                         };
-                        push_align(
-                            &mut result,
-                            truncate(
-                                &columns[colidx],
-                                col.truncate,
+                        if let Some(c) = columns.get(colidx) {
+                            push_align(
+                                &mut result,
+                                truncate(
+                                    c,
+                                    col.truncate,
+                                    col.computed_width - idt,
+                                ),
                                 col.computed_width - idt,
-                            ),
-                            col.computed_width - idt,
-                            col.align,
-                            idt,
-                        );
+                                col.align,
+                                idt,
+                            );
+                        }
                     }
                 }
 

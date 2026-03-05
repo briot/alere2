@@ -10,31 +10,30 @@ use alere_lib::{
     trees::NodeData,
 };
 use anyhow::Result;
-use clap::{Arg, ArgMatches};
+use clap::Parser;
 use console::Term;
 use itertools::Itertools;
 
-#[derive(Default)]
+#[derive(Parser, Default)]
 pub struct Settings {
     // Display either the MultiValue, or convert to a Value using
     // the --currency
+    #[clap(skip)]
     pub column_value: bool,
+    #[clap(skip)]
     pub column_delta: bool,
+    #[clap(skip)]
     pub column_delta_to_last: bool,
+    #[clap(skip)]
     pub column_price: bool,
+    #[clap(skip)]
     pub column_percent: bool, //  percent of total
+    #[clap(skip)]
     pub account_names: AccountNameDepth,
-}
-
-impl Settings {
-    pub fn cli() -> impl IntoIterator<Item = Arg> {
-        []
-    }
 }
 
 pub fn networth_view<F>(
     repo: &Repository,
-    _args: &ArgMatches,
     account_filter: F,
     globals: &GlobalSettings,
     networth_settings: alere_lib::networth::Settings,

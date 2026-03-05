@@ -25,7 +25,7 @@ use alere_lib::{
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use futures::executor::block_on;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::Path;
 
 /// Export all transaction to hledger format
@@ -196,14 +196,19 @@ fn run_subcommand(
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let mut settings = cli.global;
-    let progress = ProgressBar::new(1) //  we do not know the length
+    
+    let multi = MultiProgress::new();
+    let logger = env_logger::Builder::from_default_env().build();
+    indicatif_log_bridge::LogWrapper::new(multi.clone(), logger).try_init().unwrap();
+    
+    let progress = multi.add(ProgressBar::new(1) //  we do not know the length
         .with_style(
             ProgressStyle::with_template(
                 "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}",
             )
             .unwrap(),
         )
-        .with_message("importing kmy");
+        .with_message("importing kmy"));
 
     let mut kmy = KmyMoneyImporter::default();
     let mut repo = block_on(kmy.import_file(

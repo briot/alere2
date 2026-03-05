@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 
 pub struct Settings {
@@ -23,6 +24,8 @@ struct PerfArgs {
     // total number of shares times the price.  But users might also simply
     // track with some "unrealized" credits.
     unrealized: MultiValue,
+    
+    first_tx: Option<DateTime<Local>>,
 }
 
 pub struct Performance {
@@ -56,12 +59,23 @@ impl Performance {
 
         let shares = args.shares.iter().next().map(|v| v.amount);
         let roi = (&equity + &args.realized) / &args.invested;
+        
+        let annualized_roi = if let (Some(r), Some(first)) = (roi, args.first_tx) {
+            let years = (now - first).num_days() as f64 / 365.25;
+            if years > 0.0 {
+                Some(Decimal::from_f64_retain(r.to_f64().unwrap().powf(1.0 / years)).unwrap())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         Performance {
             account: account.clone(),
             roi,
             period_roi: None,
-            annualized_roi: None,
+            annualized_roi,
             pnl: &equity - &args.invested + &args.realized,
             period_pnl: MultiValue::default(),
             average_cost: shares.map(|s| (&args.invested - &args.realized) / s),
@@ -105,6 +119,10 @@ impl Performance {
             // much the operation actually cost.
 
             for tx in acc.iter_transactions() {
+                if args.first_tx.is_none() {
+                    args.first_tx = tx.splits().first().map(|s| s.post_ts);
+                }
+                
                 let mut external_amount = MultiValue::zero();
                 let mut internal_unrealized = MultiValue::zero();
                 let mut is_unrealized = false;

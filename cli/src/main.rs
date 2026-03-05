@@ -3,7 +3,6 @@ mod global_settings;
 mod metrics_view;
 mod networth_view;
 mod perfs_view;
-pub mod tables;
 
 use crate::{
     args::{Cli, Commands, ExportFormat},
@@ -196,19 +195,23 @@ fn run_subcommand(
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let mut settings = cli.global;
-    
+
     let multi = MultiProgress::new();
     let logger = env_logger::Builder::from_default_env().build();
-    indicatif_log_bridge::LogWrapper::new(multi.clone(), logger).try_init().unwrap();
-    
-    let progress = multi.add(ProgressBar::new(1) //  we do not know the length
-        .with_style(
-            ProgressStyle::with_template(
-                "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}",
+    indicatif_log_bridge::LogWrapper::new(multi.clone(), logger)
+        .try_init()
+        .unwrap();
+
+    let progress = multi.add(
+        ProgressBar::new(1) //  we do not know the length
+            .with_style(
+                ProgressStyle::with_template(
+                    "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}",
+                )
+                .unwrap(),
             )
-            .unwrap(),
-        )
-        .with_message("importing kmy"));
+            .with_message("importing kmy"),
+    );
 
     let mut kmy = KmyMoneyImporter::default();
     let mut repo = block_on(kmy.import_file(

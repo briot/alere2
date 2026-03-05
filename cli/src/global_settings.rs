@@ -20,9 +20,6 @@ pub struct GlobalSettings {
     pub commodity: Option<Commodity>,
 
     #[clap(skip)]
-    pub table: crate::tables::Settings,
-
-    #[clap(skip)]
     pub format: alere_lib::formatters::Formatter,
 
     #[clap(skip)]
@@ -60,10 +57,6 @@ impl Default for GlobalSettings {
                 comma: '.',
                 negate: false,
                 zero: Zero::Replace("0"),
-            },
-            table: crate::tables::Settings {
-                colsep: "│".to_string(),
-                indent_size: 2,
             },
         }
     }

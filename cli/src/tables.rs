@@ -425,7 +425,7 @@ mod test {
 
     #[test]
     fn test_table() {
-        let col1_image = |row: &[&str; 2], idx: &usize| row[*idx].to_string();
+        let col1_image = |row: &[&str; 2], idx: &usize| Ok(row[*idx].to_string());
 
         let columns = vec![
             Column::new(0, &col1_image)

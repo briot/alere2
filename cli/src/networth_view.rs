@@ -1,7 +1,4 @@
-use crate::{
-    global_settings::GlobalSettings,
-    tables::{Align, Column, ColumnFooter, Table, Truncate, Width},
-};
+use crate::global_settings::GlobalSettings;
 use alere_lib::{
     accounts::{Account, AccountNameDepth},
     networth::{Networth, NetworthRow},
@@ -11,8 +8,8 @@ use alere_lib::{
 };
 use anyhow::Result;
 use clap::Parser;
-use console::Term;
 use itertools::Itertools;
+use tabled::{builder::Builder, settings::Style};
 
 #[derive(Parser, Default)]
 pub struct Settings {
@@ -51,107 +48,130 @@ where
 
     type Data<'a> = NodeData<Key, NetworthRow>;
 
-    let market_image = |row: &Data, idx: &usize| {
-        row.data.display_market_value(*idx, &globals.format)
-    };
-    let delta_market_image = |row: &Data, idx: &usize| {
-        row.data.display_market_delta(*idx, &globals.format)
-    };
-    let delta_market_to_last_image = |row: &Data, idx: &usize| {
-        row.data.display_market_delta_to_last(*idx, &globals.format)
-    };
-    let node_image = |row: &Data, _idx: &usize| {
-        Ok(match &row.key {
-            Key::Account(a) => {
-                a.name(view_settings.account_names.inc(row.collapse_depth))
-            }
-            Key::Institution(Some(inst)) => inst.get_name(),
-            Key::Institution(None) => "Unknown".to_string(),
-            Key::AccountKind(kind) => kind.get_name(),
-        })
-    };
-    let price_image = |row: &Data, idx: &usize| row.data.display_price(*idx);
-    let percent_image = |row: &Data, idx: &usize| {
-        row.data.display_percent(&networth.total, *idx)
+    let node_name = |row: &Data| match &row.key {
+        Key::Account(a) => {
+            a.name(view_settings.account_names.inc(row.collapse_depth))
+        }
+        Key::Institution(Some(inst)) => inst.get_name(),
+        Key::Institution(None) => "Unknown".to_string(),
+        Key::AccountKind(kind) => kind.get_name(),
     };
 
-    let mut columns = Vec::new();
-    columns.push(
-        Column::new(0, &node_image)
-            .show_indent()
-            .with_title("Account")
-            .with_width(Width::ExpandWithMin(8))
-            .with_truncate(Truncate::Left)
-            .with_footer(ColumnFooter::Hide),
-    );
-
-    for (pos, (idx, ts)) in
-        networth.intervals.iter().enumerate().with_position()
+    // Build header row
+    let mut header = vec!["Account".to_string()];
+    for (pos, (_, ts)) in networth.intervals.iter().enumerate().with_position()
     {
         if view_settings.column_value {
-            columns.push(
-                Column::new(idx, &market_image)
-                    .with_title(&ts.descr)
-                    .with_align(Align::Right)
-                    .with_truncate(Truncate::Left),
-            );
+            header.push(ts.descr.clone());
         }
         if view_settings.column_price {
-            columns.push(
-                Column::new(idx, &price_image)
-                    .with_title(&format!("Price {}", ts.descr))
-                    .with_align(Align::Right)
-                    .with_truncate(Truncate::Left),
-            );
+            header.push(format!("Price {}", ts.descr));
         }
         if view_settings.column_percent {
-            columns.push(
-                Column::new(idx, &percent_image)
-                    .with_title("% total")
-                    .with_align(Align::Right)
-                    .with_truncate(Truncate::Left),
-            );
+            header.push("% total".to_string());
         }
         if let itertools::Position::First | itertools::Position::Middle = pos {
             if view_settings.column_delta {
-                columns.push(
-                    Column::new(idx, &delta_market_image)
-                        .with_title("Delta")
-                        .with_align(Align::Right)
-                        .with_truncate(Truncate::Left),
-                );
+                header.push("Delta".to_string());
             }
             if view_settings.column_delta_to_last {
-                columns.push(
-                    Column::new(idx, &delta_market_to_last_image)
-                        .with_title(&format!(
-                            "{}-{}",
-                            ts.descr,
-                            networth.intervals.last().unwrap().descr,
-                        ))
-                        .with_align(Align::Right)
-                        .with_truncate(Truncate::Left),
-                );
+                header.push(format!(
+                    "{}-{}",
+                    ts.descr,
+                    networth.intervals.last().unwrap().descr,
+                ));
             }
         }
     }
 
-    let mut table = Table::new(columns, &globals.table).with_col_headers();
-    networth
-        .tree
-        .sort(|nodedata| node_image(nodedata, &0).unwrap());
+    let mut builder = Builder::default();
+    builder.push_record(header);
+
+    networth.tree.sort(node_name);
 
     networth.tree.traverse(
         |node| {
-            table.add_row(&node.data, node.data.depth);
+            let indent = "  ".repeat(node.data.depth);
+            let mut row = vec![format!("{}{}", indent, node_name(&node.data))];
+
+            for (pos, (idx, _)) in
+                networth.intervals.iter().enumerate().with_position()
+            {
+                if view_settings.column_value {
+                    row.push(
+                        node.data
+                            .data
+                            .display_market_value(idx, &globals.format)?,
+                    );
+                }
+                if view_settings.column_price {
+                    row.push(node.data.data.display_price(idx)?);
+                }
+                if view_settings.column_percent {
+                    row.push(
+                        node.data.data.display_percent(&networth.total, idx)?,
+                    );
+                }
+                if let itertools::Position::First
+                | itertools::Position::Middle = pos
+                {
+                    if view_settings.column_delta {
+                        row.push(
+                            node.data
+                                .data
+                                .display_market_delta(idx, &globals.format)?,
+                        );
+                    }
+                    if view_settings.column_delta_to_last {
+                        row.push(node.data.data.display_market_delta_to_last(
+                            idx,
+                            &globals.format,
+                        )?);
+                    }
+                }
+            }
+
+            builder.push_record(row);
             Ok(())
         },
         true,
     )?;
 
-    table.add_footer(&Data::new(
-        Key::Institution(None), //  ??? irrelevant
-        networth.total.clone(),
-    ));
-    Ok(table.to_string(Term::stdout().size().1 as usize))
+    // Add footer
+    let mut footer = vec!["Total".to_string()];
+    for (pos, (idx, _)) in networth.intervals.iter().enumerate().with_position()
+    {
+        if view_settings.column_value {
+            footer.push(
+                networth.total.display_market_value(idx, &globals.format)?,
+            );
+        }
+        if view_settings.column_price {
+            footer.push(String::new());
+        }
+        if view_settings.column_percent {
+            footer.push(String::new());
+        }
+        if let itertools::Position::First | itertools::Position::Middle = pos {
+            if view_settings.column_delta {
+                footer.push(
+                    networth
+                        .total
+                        .display_market_delta(idx, &globals.format)?,
+                );
+            }
+            if view_settings.column_delta_to_last {
+                footer.push(
+                    networth
+                        .total
+                        .display_market_delta_to_last(idx, &globals.format)?,
+                );
+            }
+        }
+    }
+    builder.push_record(footer);
+
+    let mut table = builder.build();
+    table.with(Style::modern());
+    Ok(table.to_string())
 }

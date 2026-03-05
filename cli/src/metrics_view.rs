@@ -1,15 +1,15 @@
-use crate::{
-    global_settings::GlobalSettings,
-    tables::{Align, Column, Table, Truncate, Width},
-};
+use crate::global_settings::GlobalSettings;
 use alere_lib::{
     metrics::Metrics,
     repositories::Repository,
     times::{Instant, Intv},
 };
 use anyhow::Result;
-use console::Term;
 use rust_decimal::Decimal;
+use tabled::{
+    Table, Tabled,
+    settings::{Alignment, Modify, Style, object::Columns},
+};
 
 fn percent(val: &Option<Decimal>) -> String {
     val.map(|p| format!("{:.2}%", (p * Decimal::ONE_HUNDRED)))
@@ -19,7 +19,7 @@ fn percent(val: &Option<Decimal>) -> String {
 fn duration(val: &Option<Decimal>) -> String {
     val.map(|p| {
         let days_in_year = Decimal::from(365_i16);
-        let days_in_month = days_in_year / Decimal::from(12_i8); // approximate
+        let days_in_month = days_in_year / Decimal::from(12_i8);
         let years = (p / days_in_year).floor();
         let months = ((p - years * days_in_year) / days_in_month).floor();
         format!("{}y {}m", years, months)
@@ -27,31 +27,32 @@ fn duration(val: &Option<Decimal>) -> String {
     .unwrap_or("n/a".to_string())
 }
 
-struct TableRow {
+#[derive(Tabled)]
+struct MetricRow {
+    #[tabled(rename = "Metric")]
     name: String,
-    values: Vec<String>,
+    #[tabled(rename = "")]
+    col1: String,
+    #[tabled(rename = "")]
+    col2: String,
+    #[tabled(rename = "")]
+    col3: String,
+    #[tabled(rename = "")]
+    col4: String,
 }
 
-impl TableRow {
+impl MetricRow {
     fn new<F>(name: &str, metrics: &[Metrics], get: F) -> Self
     where
         F: FnMut(&Metrics) -> String,
     {
-        TableRow {
+        let values: Vec<String> = metrics.iter().map(get).collect();
+        MetricRow {
             name: name.to_string(),
-            values: metrics.iter().map(get).collect(),
-        }
-    }
-
-    fn name(&self, _idx: &usize) -> Result<String> {
-        Ok(self.name.to_string())
-    }
-
-    fn image(&self, idx: &usize) -> Result<String> {
-        if let Some(v) = self.values.get(*idx) {
-            Ok(v.clone())
-        } else {
-            Ok(String::new())
+            col1: values.first().cloned().unwrap_or_default(),
+            col2: values.get(1).cloned().unwrap_or_default(),
+            col3: values.get(2).cloned().unwrap_or_default(),
+            col4: values.get(3).cloned().unwrap_or_default(),
         }
     }
 }
@@ -77,84 +78,71 @@ pub fn metrics_view(
         globals.reftime,
     )?;
 
-    let mut columns = vec![
-        Column::new(0, &TableRow::name)
-            .with_title("Metric")
-            .with_width(Width::ExpandWithMin(8))
-            .with_truncate(Truncate::Right)
-            .with_align(Align::Left),
+    let rows = vec![
+        MetricRow::new("networth at end", &m, |s| {
+            s.end_networth.display(&globals.format)
+        }),
+        MetricRow::new("Income", &m, |s| (-&s.income).display(&globals.format)),
+        MetricRow::new("  work", &m, |s| {
+            (-&s.work_income).display(&globals.format)
+        }),
+        MetricRow::new("  passive", &m, |s| {
+            (-&s.passive_income).display(&globals.format)
+        }),
+        MetricRow::new("Expense", &m, |s| {
+            (-&s.expense).display(&globals.format)
+        }),
+        MetricRow::new("  Income tax", &m, |s| {
+            (-&s.income_tax).display(&globals.format)
+        }),
+        MetricRow::new("  Misc tax", &m, |s| {
+            (-&s.misc_tax).display(&globals.format)
+        }),
+        MetricRow::new("Cashflow", &m, |s| {
+            (-&s.cashflow).display(&globals.format)
+        }),
+        MetricRow::new("Unrealized", &m, |s| {
+            s.unrealized.display(&globals.format)
+        }),
+        MetricRow::new("  Liquid", &m, |s| {
+            s.unrealized_liquid.display(&globals.format)
+        }),
+        MetricRow::new("  Illiquid", &m, |s| {
+            s.unrealized_illiquid.display(&globals.format)
+        }),
+        MetricRow::new("P&L", &m, |s| s.pnl.display(&globals.format)),
+        MetricRow::new("  Liquid", &m, |s| {
+            s.pnl_liquid.display(&globals.format)
+        }),
+        MetricRow::new("  Illiquid", &m, |s| {
+            s.pnl_illiquid.display(&globals.format)
+        }),
+        MetricRow::new("Saving Rate", &m, |s| percent(&s.saving_rate)),
+        MetricRow::new("Financial Independence", &m, |s| {
+            percent(&s.financial_independence)
+        }),
+        MetricRow::new("Passive Income Ratio", &m, |s| {
+            percent(&s.passive_income_ratio)
+        }),
+        MetricRow::new("Return on Investment", &m, |s| percent(&s.roi)),
+        MetricRow::new("  Liquid", &m, |s| percent(&s.roi_liquid)),
+        MetricRow::new("Emergency Fund", &m, |s| duration(&s.emergency_fund)),
+        MetricRow::new("Wealth", &m, |s| duration(&s.wealth)),
+        MetricRow::new("Income Tax Rate", &m, |s| percent(&s.income_tax_rate)),
     ];
-    for (idx, s) in m.iter().enumerate() {
-        columns.push(
-            Column::new(idx, &TableRow::image)
-                .with_title(&s.interval.descr)
-                .with_align(Align::Right)
-                .with_truncate(Truncate::Left),
+
+    let mut table = Table::new(rows);
+    table
+        .with(Style::modern())
+        .with(Modify::new(Columns::new(1..)).with(Alignment::right()));
+
+    // Set column headers
+    if let Some((first, _)) = m.split_first() {
+        table.modify(
+            tabled::settings::object::Rows::first(),
+            tabled::settings::Format::content(|_| first.interval.descr.clone()),
         );
     }
 
-    let mut table = Table::new(columns, &globals.table).with_col_headers();
-    table.add_rows(
-        &[
-            TableRow::new("networth at end", &m, |s| {
-                s.end_networth.display(&globals.format)
-            }),
-            TableRow::new("Income", &m, |s| {
-                (-&s.income).display(&globals.format)
-            }),
-            TableRow::new("  work", &m, |s| {
-                (-&s.work_income).display(&globals.format)
-            }),
-            TableRow::new("  passive", &m, |s| {
-                (-&s.passive_income).display(&globals.format)
-            }),
-            TableRow::new("Expense", &m, |s| {
-                (-&s.expense).display(&globals.format)
-            }),
-            TableRow::new("  Income tax", &m, |s| {
-                (-&s.income_tax).display(&globals.format)
-            }),
-            TableRow::new("  Misc tax", &m, |s| {
-                (-&s.misc_tax).display(&globals.format)
-            }),
-            TableRow::new("Cashflow", &m, |s| {
-                (-&s.cashflow).display(&globals.format)
-            }),
-            TableRow::new("Unrealized", &m, |s| {
-                s.unrealized.display(&globals.format)
-            }),
-            TableRow::new("  Liquid", &m, |s| {
-                s.unrealized_liquid.display(&globals.format)
-            }),
-            TableRow::new("  Illiquid", &m, |s| {
-                s.unrealized_illiquid.display(&globals.format)
-            }),
-            TableRow::new("P&L", &m, |s| s.pnl.display(&globals.format)),
-            TableRow::new("  Liquid", &m, |s| {
-                s.pnl_liquid.display(&globals.format)
-            }),
-            TableRow::new("  Illiquid", &m, |s| {
-                s.pnl_illiquid.display(&globals.format)
-            }),
-            TableRow::new("Saving Rate", &m, |s| percent(&s.saving_rate)),
-            TableRow::new("Financial Independence", &m, |s| {
-                percent(&s.financial_independence)
-            }),
-            TableRow::new("Passive Income Ratio", &m, |s| {
-                percent(&s.passive_income_ratio)
-            }),
-            TableRow::new("Return on Investment", &m, |s| percent(&s.roi)),
-            TableRow::new("  Liquid", &m, |s| percent(&s.roi_liquid)),
-            TableRow::new("Emergency Fund", &m, |s| {
-                duration(&s.emergency_fund)
-            }),
-            TableRow::new("Wealth", &m, |s| duration(&s.wealth)),
-            TableRow::new("Income Tax Rate", &m, |s| {
-                percent(&s.income_tax_rate)
-            }),
-        ],
-        0,
-    );
-
-    Ok(table.to_string(Term::stdout().size().1 as usize))
+    Ok(table.to_string())
 }

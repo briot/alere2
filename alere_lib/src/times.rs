@@ -617,8 +617,14 @@ mod test {
         // Output timezone uses a fixed offset so the tests succeed wherever
         // we run them.
         let tz = FixedOffset::east_opt(4 * 3600).unwrap();
-        let sep_10 = Paris.with_ymd_and_hms(2024, 9, 10, 12, 0, 0).unwrap().with_timezone(&Local);
-        let aug_31 = Paris.with_ymd_and_hms(2024, 8, 31, 12, 0, 0).unwrap().with_timezone(&Local);
+        let sep_10 = Paris
+            .with_ymd_and_hms(2024, 9, 10, 12, 0, 0)
+            .unwrap()
+            .with_timezone(&Local);
+        let aug_31 = Paris
+            .with_ymd_and_hms(2024, 8, 31, 12, 0, 0)
+            .unwrap()
+            .with_timezone(&Local);
 
         assert_eq!(
             Instant::Now.to_time(sep_10)?.with_timezone(&tz).to_string(),
@@ -702,7 +708,10 @@ mod test {
 
     #[test]
     fn test_interval() -> Result<()> {
-        let sep01 = Paris.with_ymd_and_hms(2024, 9, 1, 12, 0, 0).unwrap().with_timezone(&Local);
+        let sep01 = Paris
+            .with_ymd_and_hms(2024, 9, 1, 12, 0, 0)
+            .unwrap()
+            .with_timezone(&Local);
         assert_eq!(
             intv_to_string(
                 Intv::Yearly {

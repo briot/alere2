@@ -1,18 +1,65 @@
-use crate::{
-    global_settings::GlobalSettings,
-    tables::{Align, Column, ColumnFooter, Table, Truncate, Width},
-};
+use crate::global_settings::GlobalSettings;
 use alere_lib::{
     accounts::AccountNameDepth, multi_values::MultiValue, perf::Performance,
     repositories::Repository,
 };
 use anyhow::Result;
-use console::Term;
 use rust_decimal::Decimal;
+use tabled::{
+    Table, Tabled,
+    settings::{Alignment, Modify, Style, object::Columns},
+};
 
 fn returns(val: &Option<Decimal>) -> String {
     val.map(|p| format!("{:.2}%", ((p - Decimal::ONE) * Decimal::ONE_HUNDRED)))
         .unwrap_or("n/a".to_string())
+}
+
+#[derive(Tabled)]
+struct PerfRow {
+    #[tabled(rename = "Account")]
+    account: String,
+    #[tabled(rename = "Equity")]
+    equity: String,
+    #[tabled(rename = "Invested")]
+    invested: String,
+    #[tabled(rename = "Realized")]
+    realized: String,
+    #[tabled(rename = "Return")]
+    roi: String,
+    #[tabled(rename = "P&L")]
+    pnl: String,
+    #[tabled(rename = "WAvg")]
+    weighted_avg: String,
+    #[tabled(rename = "Avg Cost")]
+    avg_cost: String,
+    #[tabled(rename = "Price")]
+    price: String,
+    #[tabled(rename = "Shares")]
+    shares: String,
+}
+
+impl PerfRow {
+    fn from_perf(
+        perf: &Performance,
+        format: &alere_lib::formatters::Formatter,
+    ) -> Self {
+        let mv = |val: &Option<MultiValue>| {
+            val.as_ref().map(|a| a.display(format)).unwrap_or_default()
+        };
+        PerfRow {
+            account: perf.account.name(AccountNameDepth::unlimited()),
+            equity: perf.equity.display(format),
+            invested: perf.invested.display(format),
+            realized: perf.realized.display(format),
+            roi: returns(&perf.roi),
+            pnl: perf.pnl.display(format),
+            weighted_avg: mv(&perf.weighted_average),
+            avg_cost: mv(&perf.average_cost),
+            price: mv(&perf.price),
+            shares: perf.shares.display(format),
+        }
+    }
 }
 
 pub fn perfs_view(
@@ -23,109 +70,22 @@ pub fn perfs_view(
         repo,
         alere_lib::perf::Settings {
             commodity: globals.commodity.clone(),
-            //            intervals: vec![
-            //                Intv::Yearly {
-            //                    begin: Instant::StartYear(2022),
-            //                    end: Instant::EndYear(2024),
-            //                },
-            //                Intv::LastNYears(1),
-            //                Intv::YearToDate,
-            //            ],
         },
         globals.reftime,
     )?;
 
-    let mv = |val: &Option<MultiValue>| {
-        if let Some(a) = val {
-            a.display(&globals.format)
-        } else {
-            "".to_string()
-        }
-    };
-    let account_image = |row: &Performance, _idx: &usize| {
-        Ok(row.account.name(AccountNameDepth::unlimited()))
-    };
-    let equity_image = |row: &Performance, _idx: &usize| {
-        Ok(row.equity.display(&globals.format))
-    };
-    let shares_image = |row: &Performance, _idx: &usize| {
-        Ok(row.shares.display(&globals.format))
-    };
-    let invested_image = |row: &Performance, _idx: &usize| {
-        Ok(row.invested.display(&globals.format))
-    };
-    let realized_image = |row: &Performance, _idx: &usize| {
-        Ok(row.realized.display(&globals.format))
-    };
-    let roi_image = |row: &Performance, _idx: &usize| Ok(returns(&row.roi));
-    let pnl_image =
-        |row: &Performance, _idx: &usize| Ok(row.pnl.display(&globals.format));
-    let weighted_avg_image =
-        |row: &Performance, _idx: &usize| Ok(mv(&row.weighted_average));
-    let avg_cost_image =
-        |row: &Performance, _idx: &usize| Ok(mv(&row.average_cost));
-    let price_image = |row: &Performance, _idx: &usize| Ok(mv(&row.price));
+    perfs.sort_by_key(|p| p.account.name(AccountNameDepth::unlimited()));
 
-    let columns = vec![
-        Column::new(0, &account_image)
-            .show_indent()
-            .with_title("Account")
-            .with_footer(ColumnFooter::Hide)
-            .with_width(Width::ExpandWithMin(15))
-            .with_truncate(Truncate::Left),
-        Column::new(0, &equity_image)
-            .with_title("Equity")
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &invested_image)
-            .with_title("Invested")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &realized_image)
-            .with_title("Realized")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &roi_image)
-            .with_title("Return")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &pnl_image)
-            .with_title("P&L")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &weighted_avg_image)
-            .with_title("WAvg")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &avg_cost_image)
-            .with_title("Avg Cost")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &price_image)
-            .with_title("Price")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-        Column::new(0, &shares_image)
-            .with_title("Shares")
-            .with_footer(ColumnFooter::Hide)
-            .with_align(Align::Right)
-            .with_truncate(Truncate::Left),
-    ];
+    let rows: Vec<PerfRow> = perfs
+        .iter()
+        .filter(|p| !p.invested.is_zero())
+        .map(|p| PerfRow::from_perf(p, &globals.format))
+        .collect();
 
-    let mut table = Table::new(columns, &globals.table).with_col_headers();
-    perfs.sort_by_key(|p| account_image(p, &0).unwrap());
-    for row in &perfs {
-        if !row.invested.is_zero() {
-            table.add_row(row, 0);
-        }
-    }
+    let mut table = Table::new(rows);
+    table
+        .with(Style::modern())
+        .with(Modify::new(Columns::new(1..)).with(Alignment::right()));
 
-    Ok(table.to_string(Term::stdout().size().1 as usize))
+    Ok(table.to_string())
 }

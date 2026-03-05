@@ -7,8 +7,8 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::{DateTime, Local};
-use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 pub struct Settings {
     pub commodity: Option<Commodity>,
@@ -24,7 +24,7 @@ struct PerfArgs {
     // total number of shares times the price.  But users might also simply
     // track with some "unrealized" credits.
     unrealized: MultiValue,
-    
+
     first_tx: Option<DateTime<Local>>,
     cash_flows: Vec<(DateTime<Local>, Decimal)>,
 }
@@ -47,52 +47,60 @@ pub struct Performance {
 }
 
 impl Performance {
-    fn calculate_irr(cash_flows: &[(DateTime<Local>, Decimal)], final_value: Decimal, now: DateTime<Local>) -> Option<Decimal> {
+    fn calculate_irr(
+        cash_flows: &[(DateTime<Local>, Decimal)],
+        final_value: Decimal,
+        now: DateTime<Local>,
+    ) -> Option<Decimal> {
         if cash_flows.is_empty() {
             return None;
         }
-        
+
         // Newton-Raphson method to find IRR
         let mut rate = Decimal::from_f64_retain(0.1).unwrap(); // Initial guess: 10%
         let max_iterations = 100;
         let tolerance = Decimal::from_f64_retain(0.0001).unwrap();
-        
+
         for _ in 0..max_iterations {
             let mut npv = Decimal::ZERO;
             let mut npv_derivative = Decimal::ZERO;
-            
+
             for (date, amount) in cash_flows {
-                let years = Decimal::from_f64_retain((now - *date).num_days() as f64 / 365.25).unwrap();
+                let years = Decimal::from_f64_retain(
+                    (now - *date).num_days() as f64 / 365.25,
+                )
+                .unwrap();
                 if let (Some(y), Some(r)) = (years.to_f64(), rate.to_f64()) {
-                    let discount = (1.0 + r).powf(y.into());
+                    let discount = (1.0 + r).powf(y);
                     let pv = amount.to_f64().unwrap() / discount;
                     npv += Decimal::from_f64_retain(pv).unwrap();
-                    npv_derivative -= Decimal::from_f64_retain(pv * y / (1.0 + r)).unwrap();
+                    npv_derivative -=
+                        Decimal::from_f64_retain(pv * y / (1.0 + r)).unwrap();
                 }
             }
-            
+
             // Add final value (current equity)
             npv += final_value;
-            
+
             if npv.abs() < tolerance {
                 return Some(rate);
             }
-            
+
             if npv_derivative.is_zero() {
                 return None;
             }
-            
-            rate = rate - npv / npv_derivative;
-            
+
+            rate -= npv / npv_derivative;
+
             // Prevent unrealistic rates
             if rate < Decimal::from(-1) || rate > Decimal::from(10) {
                 return None;
             }
         }
-        
+
         None
     }
-    
+
     fn new(
         account: &Account,
         args: PerfArgs,
@@ -107,18 +115,24 @@ impl Performance {
 
         let shares = args.shares.iter().next().map(|v| v.amount);
         let roi = (&equity + &args.realized) / &args.invested;
-        
-        let annualized_roi = if let (Some(r), Some(first)) = (roi, args.first_tx) {
-            let years = (now - first).num_days() as f64 / 365.25;
-            if years > 0.0 {
-                Some(Decimal::from_f64_retain(r.to_f64().unwrap().powf(1.0 / years)).unwrap())
+
+        let annualized_roi =
+            if let (Some(r), Some(first)) = (roi, args.first_tx) {
+                let years = (now - first).num_days() as f64 / 365.25;
+                if years > 0.0 {
+                    Some(
+                        Decimal::from_f64_retain(
+                            r.to_f64().unwrap().powf(1.0 / years),
+                        )
+                        .unwrap(),
+                    )
+                } else {
+                    None
+                }
             } else {
                 None
-            }
-        } else {
-            None
-        };
-        
+            };
+
         let irr = if !args.cash_flows.is_empty() {
             if let Some(final_val) = (&equity + &args.realized).iter().next() {
                 Self::calculate_irr(&args.cash_flows, final_val.amount, now)
@@ -181,7 +195,7 @@ impl Performance {
                 if args.first_tx.is_none() {
                     args.first_tx = tx.splits().first().map(|s| s.post_ts);
                 }
-                
+
                 let mut external_amount = MultiValue::zero();
                 let mut internal_unrealized = MultiValue::zero();
                 let mut is_unrealized = false;
@@ -227,7 +241,8 @@ impl Performance {
                                     args.unrealized += &v2;
                                 } else {
                                     if let Some(val) = v2.iter().next() {
-                                        args.cash_flows.push((s.post_ts, -val.amount));
+                                        args.cash_flows
+                                            .push((s.post_ts, -val.amount));
                                     }
                                     args.invested += v2;
                                 }
@@ -241,14 +256,14 @@ impl Performance {
                                 if !qty.is_negative() {
                                     let invested_val = prices
                                         .convert_value(amount, &s.post_ts);
-                                    let fees = prices
-                                        .convert_multi_value(
-                                            &external_amount,
-                                            &s.post_ts,
-                                        );
+                                    let fees = prices.convert_multi_value(
+                                        &external_amount,
+                                        &s.post_ts,
+                                    );
                                     let net = &invested_val - &fees;
                                     if let Some(val) = net.iter().next() {
-                                        args.cash_flows.push((s.post_ts, -val.amount));
+                                        args.cash_flows
+                                            .push((s.post_ts, -val.amount));
                                     }
                                     args.invested += invested_val;
                                     args.invested -= fees;
@@ -277,7 +292,8 @@ impl Performance {
                                 );
                                 let net = &invested_val - &fees;
                                 if let Some(val) = net.iter().next() {
-                                    args.cash_flows.push((s.post_ts, -val.amount));
+                                    args.cash_flows
+                                        .push((s.post_ts, -val.amount));
                                 }
                                 args.invested -= fees;
                                 args.invested += invested_val;

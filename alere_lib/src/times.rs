@@ -12,14 +12,14 @@ use std::str::FromStr;
 ///
 /// ```
 /// # use std::str::FromStr;
-/// # use alere_lib::Instant;
+/// # use alere_lib::times::Instant;
 /// assert!(matches!(Instant::from_str("now").unwrap(), Instant::Now));
 /// assert!(matches!(Instant::from_str("epoch").unwrap(), Instant::Epoch));
 /// assert!(matches!(Instant::from_str("7d").unwrap(), Instant::DaysAgo(7)));
 /// assert!(matches!(Instant::from_str("3m").unwrap(), Instant::MonthsAgo(3)));
 /// assert!(matches!(Instant::from_str("2y").unwrap(), Instant::YearsAgo(2)));
 /// assert!(matches!(
-///     Instant::from_str("start-2024-01-01").unwrap(),
+///     Instant::from_str("start of 2024-01-01").unwrap(),
 ///     Instant::StartDay(_)
 /// ));
 /// assert!(matches!(
@@ -316,7 +316,7 @@ impl TimeInterval {
 ///
 /// ```
 /// # use std::str::FromStr;
-/// # use alere_lib::Intv;
+/// # use alere_lib::times::Intv;
 /// assert!(matches!(Intv::from_str("7d").unwrap(), Intv::LastNDays(7)));
 /// assert!(matches!(Intv::from_str("3m").unwrap(), Intv::LastNMonths(3)));
 /// assert!(matches!(Intv::from_str("2y").unwrap(), Intv::LastNYears(2)));
@@ -602,6 +602,7 @@ mod test {
     use super::*;
     use crate::times::Instant;
     use chrono::{DateTime, FixedOffset, Local, TimeZone, Utc};
+    use chrono_tz::Europe::Paris;
 
     fn intv_to_string(intv: Intv, now: DateTime<Local>) -> Result<Vec<String>> {
         Ok(intv
@@ -616,61 +617,61 @@ mod test {
         // Output timezone uses a fixed offset so the tests succeed wherever
         // we run them.
         let tz = FixedOffset::east_opt(4 * 3600).unwrap();
-        let sep_10 = "2024-09-10 12:00:00Z".parse::<DateTime<Local>>().unwrap();
-        let aug_31 = "2024-08-31 12:00:00Z".parse::<DateTime<Local>>().unwrap();
+        let sep_10 = Paris.with_ymd_and_hms(2024, 9, 10, 12, 0, 0).unwrap().with_timezone(&Local);
+        let aug_31 = Paris.with_ymd_and_hms(2024, 8, 31, 12, 0, 0).unwrap().with_timezone(&Local);
 
         assert_eq!(
             Instant::Now.to_time(sep_10)?.with_timezone(&tz).to_string(),
-            "2024-09-10 16:00:00 +04:00",
+            "2024-09-10 14:00:00 +04:00",
         );
         assert_eq!(
             Instant::DaysAgo(1)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-09-09 16:00:00 +04:00",
+            "2024-09-09 14:00:00 +04:00",
         );
         assert_eq!(
             Instant::DaysAgo(-5)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-09-15 16:00:00 +04:00",
+            "2024-09-15 14:00:00 +04:00",
         );
         assert_eq!(
             Instant::MonthsAgo(1)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-08-10 16:00:00 +04:00",
+            "2024-08-10 14:00:00 +04:00",
         );
         assert_eq!(
             Instant::MonthsAgo(-5)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2025-02-10 17:00:00 +04:00",
+            "2025-02-10 15:00:00 +04:00",
         );
         assert_eq!(
             Instant::MonthsAgo(2)
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-06-30 16:00:00 +04:00", // closest day
+            "2024-06-30 14:00:00 +04:00", // closest day
         );
         assert_eq!(
             Instant::MonthsAgo(6)
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-02-29 17:00:00 +04:00", // closest day
+            "2024-02-29 15:00:00 +04:00", // closest day
         );
         assert_eq!(
             Instant::StartMonthsAgo(6)
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-02-01 03:00:00 +04:00", // closest day
+            "2024-02-01 04:00:00 +04:00", // closest day
         );
 
         // End of month: in the local timezone, it is 2024-02-29, but we output
@@ -680,28 +681,28 @@ mod test {
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-03-01 02:59:59.999999999 +04:00", // closest day
+            "2024-03-01 03:59:59.999999999 +04:00", // closest day
         );
         assert_eq!(
             Instant::YearsAgo(1)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2023-09-10 16:00:00 +04:00",
+            "2023-09-10 14:00:00 +04:00",
         );
         assert_eq!(
             Instant::YearsAgo(-5)
                 .to_time(sep_10)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2029-09-10 16:00:00 +04:00",
+            "2029-09-10 14:00:00 +04:00",
         );
         Ok(())
     }
 
     #[test]
     fn test_interval() -> Result<()> {
-        let sep01 = "2024-09-01 12:00:00Z".parse::<DateTime<Local>>().unwrap();
+        let sep01 = Paris.with_ymd_and_hms(2024, 9, 1, 12, 0, 0).unwrap().with_timezone(&Local);
         assert_eq!(
             intv_to_string(
                 Intv::Yearly {
@@ -711,39 +712,39 @@ mod test {
                 sep01
             )?,
             vec![
-                "[2022-01-01 00:00:00 +01:00, 2023-01-01 00:00:00 +01:00)"
+                "[2022-01-01 00:00:00 +00:00, 2023-01-01 00:00:00 +00:00)"
                     .to_string(),
-                "[2023-01-01 00:00:00 +01:00, 2024-01-01 00:00:00 +01:00)"
+                "[2023-01-01 00:00:00 +00:00, 2024-01-01 00:00:00 +00:00)"
                     .to_string(),
-                "[2024-01-01 00:00:00 +01:00, 2025-01-01 00:00:00 +01:00)"
+                "[2024-01-01 00:00:00 +00:00, 2025-01-01 00:00:00 +00:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::MonthAgo(2), sep01)?,
             vec![
-                "[2024-07-01 00:00:00 +02:00, 2024-08-01 00:00:00 +02:00)"
+                "[2024-07-01 00:00:00 +01:00, 2024-08-01 00:00:00 +01:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::YearAgo(2), sep01)?,
             vec![
-                "[2022-01-01 00:00:00 +01:00, 2023-01-01 00:00:00 +01:00)"
+                "[2022-01-01 00:00:00 +00:00, 2023-01-01 00:00:00 +00:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::SpecificYear(1999), sep01)?,
             vec![
-                "[1999-01-01 00:00:00 +01:00, 2000-01-01 00:00:00 +01:00)"
+                "[1999-01-01 00:00:00 +00:00, 2000-01-01 00:00:00 +00:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::LastNYears(10), sep01)?,
             vec![
-                "[2014-09-01 14:00:00 +02:00, 2024-09-01 14:00:00 +02:00)"
+                "[2014-09-01 11:00:00 +01:00, 2024-09-01 11:00:00 +01:00)"
                     .to_string(),
             ],
         );
@@ -756,13 +757,13 @@ mod test {
                 sep01
             )?,
             vec![
-                "[2024-07-01 00:00:00 +02:00, 2024-08-01 00:00:00 +02:00)"
+                "[2024-07-01 00:00:00 +01:00, 2024-08-01 00:00:00 +01:00)"
                     .to_string(),
-                "[2024-08-01 00:00:00 +02:00, 2024-09-01 00:00:00 +02:00)"
+                "[2024-08-01 00:00:00 +01:00, 2024-09-01 00:00:00 +01:00)"
                     .to_string(),
-                "[2024-09-01 00:00:00 +02:00, 2024-10-01 00:00:00 +02:00)"
+                "[2024-09-01 00:00:00 +01:00, 2024-10-01 00:00:00 +01:00)"
                     .to_string(),
-                "[2024-10-01 00:00:00 +02:00, 2024-11-01 00:00:00 +01:00)"
+                "[2024-10-01 00:00:00 +01:00, 2024-11-01 00:00:00 +00:00)"
                     .to_string(),
             ],
         );

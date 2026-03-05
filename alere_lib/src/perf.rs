@@ -38,6 +38,7 @@ pub struct Performance {
     pub roi: Option<Decimal>,
     pub period_roi: Option<Decimal>,
     pub annualized_roi: Option<Decimal>,
+    pub irr: Option<Decimal>,
     pub pnl: MultiValue,
     pub period_pnl: MultiValue,
     pub average_cost: Option<MultiValue>,
@@ -107,7 +108,18 @@ impl Performance {
         let shares = args.shares.iter().next().map(|v| v.amount);
         let roi = (&equity + &args.realized) / &args.invested;
         
-        let annualized_roi = if !args.cash_flows.is_empty() {
+        let annualized_roi = if let (Some(r), Some(first)) = (roi, args.first_tx) {
+            let years = (now - first).num_days() as f64 / 365.25;
+            if years > 0.0 {
+                Some(Decimal::from_f64_retain(r.to_f64().unwrap().powf(1.0 / years)).unwrap())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let irr = if !args.cash_flows.is_empty() {
             if let Some(final_val) = (&equity + &args.realized).iter().next() {
                 Self::calculate_irr(&args.cash_flows, final_val.amount, now)
             } else {
@@ -122,6 +134,7 @@ impl Performance {
             roi,
             period_roi: None,
             annualized_roi,
+            irr,
             pnl: &equity - &args.invested + &args.realized,
             period_pnl: MultiValue::default(),
             average_cost: shares.map(|s| (&args.invested - &args.realized) / s),

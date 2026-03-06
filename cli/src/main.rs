@@ -60,8 +60,12 @@ fn metrics(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
 }
 
 /// Display stock performance
-fn perfs(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
-    let output = perfs_view(repo, globals)?;
+fn perfs(
+    repo: &Repository,
+    globals: &GlobalSettings,
+    columns: Option<Vec<crate::perfs_view::PerfColumn>>,
+) -> Result<()> {
+    let output = perfs_view(repo, globals, columns)?;
     println!("{}", output);
     Ok(())
 }
@@ -161,8 +165,8 @@ fn run_subcommand(
         Commands::Metrics => {
             metrics(repo, settings)?;
         }
-        Commands::Perf => {
-            perfs(repo, settings)?;
+        Commands::Perf { columns } => {
+            perfs(repo, settings, columns.clone())?;
         }
         Commands::Batch { file } => {
             let content = std::fs::read_to_string(file)?;

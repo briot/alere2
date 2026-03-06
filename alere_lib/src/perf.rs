@@ -55,6 +55,7 @@ impl Performance {
     //
     // Newton-Raphson iteratively solves: r_new = r_old - NPV / NPV'
     // where NPV' is the derivative of NPV with respect to r
+    #[allow(dead_code)]
     fn calculate_irr(
         cash_flows: &[(DateTime<Local>, Decimal)],
         final_value: Decimal,
@@ -96,6 +97,7 @@ impl Performance {
 
     // Try to find IRR with a specific initial guess
     // Returns None if convergence fails or result is unrealistic
+    #[allow(dead_code, clippy::question_mark)]
     fn try_irr_with_guess(
         cash_flows: &[(DateTime<Local>, Decimal)],
         final_value: Decimal,
@@ -423,7 +425,6 @@ impl Performance {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,15 +436,20 @@ mod tests {
         // Invest $1000, get back $1100 after 1 year
         // Expected IRR: 10%
         let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
-        let cash_flows = vec![
-            (Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(), Decimal::from(-1000)),
-        ];
+        let cash_flows = vec![(
+            Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            Decimal::from(-1000),
+        )];
         let final_value = Decimal::from(1100);
-        
+
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        assert!((irr_val - 0.10).abs() < 0.01, "Expected ~10%, got {}", irr_val);
+        assert!(
+            (irr_val - 0.10).abs() < 0.01,
+            "Expected ~10%, got {}",
+            irr_val
+        );
     }
 
     #[test]
@@ -453,15 +459,25 @@ mod tests {
         // Expected IRR: ~8-9%
         let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
         let cash_flows = vec![
-            (Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(), Decimal::from(-1000)),
-            (Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(), Decimal::from(-500)),
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-500),
+            ),
         ];
         let final_value = Decimal::from(1650);
-        
+
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        assert!(irr_val > 0.0 && irr_val < 0.15, "Expected positive IRR ~8-9%, got {}", irr_val);
+        assert!(
+            irr_val > 0.0 && irr_val < 0.15,
+            "Expected positive IRR ~8-9%, got {}",
+            irr_val
+        );
     }
 
     #[test]
@@ -470,15 +486,20 @@ mod tests {
         // Invest $1000, get back $900 after 1 year
         // Expected IRR: -10%
         let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
-        let cash_flows = vec![
-            (Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(), Decimal::from(-1000)),
-        ];
+        let cash_flows = vec![(
+            Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            Decimal::from(-1000),
+        )];
         let final_value = Decimal::from(900);
-        
+
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        assert!((irr_val + 0.10).abs() < 0.01, "Expected ~-10%, got {}", irr_val);
+        assert!(
+            (irr_val + 0.10).abs() < 0.01,
+            "Expected ~-10%, got {}",
+            irr_val
+        );
     }
 
     #[test]
@@ -487,14 +508,19 @@ mod tests {
         // Invest $1000, get back $2000 after 10 years
         // Expected IRR: ~7.2% (rule of 72: 72/10 = 7.2)
         let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
-        let cash_flows = vec![
-            (Local.with_ymd_and_hms(2015, 1, 1, 0, 0, 0).unwrap(), Decimal::from(-1000)),
-        ];
+        let cash_flows = vec![(
+            Local.with_ymd_and_hms(2015, 1, 1, 0, 0, 0).unwrap(),
+            Decimal::from(-1000),
+        )];
         let final_value = Decimal::from(2000);
-        
+
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        assert!((irr_val - 0.072).abs() < 0.01, "Expected ~7.2%, got {}", irr_val);
+        assert!(
+            (irr_val - 0.072).abs() < 0.01,
+            "Expected ~7.2%, got {}",
+            irr_val
+        );
     }
 }

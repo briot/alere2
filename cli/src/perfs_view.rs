@@ -27,6 +27,10 @@ struct PerfRow {
     realized: String,
     #[tabled(rename = "Return")]
     roi: String,
+    #[tabled(rename = "Annualized")]
+    annualized: String,
+    #[tabled(rename = "IRR")]
+    irr: String,
     #[tabled(rename = "P&L")]
     pnl: String,
     #[tabled(rename = "WAvg")]
@@ -53,6 +57,8 @@ impl PerfRow {
             invested: perf.invested.display(format),
             realized: perf.realized.display(format),
             roi: returns(&perf.roi),
+            annualized: returns(&perf.annualized_roi),
+            irr: returns(&perf.irr),
             pnl: perf.pnl.display(format),
             weighted_avg: mv(&perf.weighted_average),
             avg_cost: mv(&perf.average_cost),

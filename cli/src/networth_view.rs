@@ -173,5 +173,8 @@ where
 
     let mut table = builder.build();
     globals.style.apply(&mut table);
+    table.with(tabled::settings::Modify::new(tabled::settings::object::Columns::new(1..))
+        .with(tabled::settings::Alignment::right()));
+    crate::global_settings::limit_table_width(&mut table, 0);
     Ok(table.to_string())
 }

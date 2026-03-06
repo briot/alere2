@@ -166,11 +166,19 @@ fn run_subcommand(
         }
         Commands::Batch { file } => {
             let content = std::fs::read_to_string(file)?;
+            let mut first = true;
             for line in content.lines() {
                 let line = line.trim();
                 if line.is_empty() || line.starts_with('#') {
                     continue;
                 }
+                
+                if !first {
+                    println!();
+                }
+                first = false;
+                println!("=== {} ===", line);
+                
                 let args = shlex::split(line).ok_or_else(|| {
                     anyhow::anyhow!("invalid quoting: {}", line)
                 })?;

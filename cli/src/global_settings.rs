@@ -4,7 +4,39 @@ use alere_lib::{
     repositories::Repository,
 };
 use chrono::{DateTime, Local};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use tabled::settings::Style;
+
+#[derive(Clone, ValueEnum)]
+pub enum TableStyle {
+    Modern,
+    Markdown,
+    Ascii,
+    Sharp,
+    Rounded,
+    Extended,
+    Psql,
+    ReStructuredText,
+    Dots,
+    Blank,
+}
+
+impl TableStyle {
+    pub fn apply(&self, table: &mut tabled::Table) {
+        match self {
+            TableStyle::Modern => table.with(Style::modern()),
+            TableStyle::Markdown => table.with(Style::markdown()),
+            TableStyle::Ascii => table.with(Style::ascii()),
+            TableStyle::Sharp => table.with(Style::sharp()),
+            TableStyle::Rounded => table.with(Style::rounded()),
+            TableStyle::Extended => table.with(Style::extended()),
+            TableStyle::Psql => table.with(Style::psql()),
+            TableStyle::ReStructuredText => table.with(Style::re_structured_text()),
+            TableStyle::Dots => table.with(Style::dots()),
+            TableStyle::Blank => table.with(Style::blank()),
+        };
+    }
+}
 
 #[derive(Parser)]
 pub struct GlobalSettings {
@@ -15,6 +47,10 @@ pub struct GlobalSettings {
     /// Show rows with only zero values
     #[arg(long, global = true)]
     pub empty: bool,
+
+    /// Table style
+    #[arg(long, global = true, default_value = "modern")]
+    pub style: TableStyle,
 
     #[clap(skip)]
     pub commodity: Option<Commodity>,
@@ -49,6 +85,7 @@ impl Default for GlobalSettings {
             commodity: None,
             reftime: Local::now(),
             empty: false,
+            style: TableStyle::Modern,
             format: Formatter {
                 quote_symbol: SymbolQuote::UnquotedSymbol,
                 hide_symbol_if: None,

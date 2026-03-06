@@ -182,6 +182,7 @@ fn run_subcommand(
                         .commodity_str
                         .or(settings.commodity_str.clone()),
                     empty: cli.global.empty || settings.empty,
+                    style: settings.style.clone(),
                     ..GlobalSettings::default()
                 };
                 global.postprocess(repo);

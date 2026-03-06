@@ -21,7 +21,11 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Show metrics
-    Metrics,
+    Metrics {
+        /// Periods to display (e.g 1y or 2m..now)
+        #[arg(short, long, value_delimiter = ',', default_value = "1y,ytd")]
+        periods: Vec<Intv>,
+    },
 
     /// Show stock performance
     Perf {
@@ -47,6 +51,10 @@ pub enum Commands {
     Networth {
         #[command(flatten)]
         settings: crate::networth_view::Settings,
+        
+        /// Periods to display (e.g 1y or 2m..now)
+        #[arg(short, long, value_delimiter = ',', default_value = "1y,ytd")]
+        periods: Vec<Intv>,
     },
 
     /// Show cashflow

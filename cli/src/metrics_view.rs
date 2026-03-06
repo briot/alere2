@@ -2,12 +2,11 @@ use crate::global_settings::GlobalSettings;
 use alere_lib::{
     metrics::Metrics,
     repositories::Repository,
-    times::{Instant, Intv},
+    times::Intv,
 };
 use anyhow::Result;
 use rust_decimal::Decimal;
 use tabled::{
-    Table, Tabled,
     settings::{Alignment, Modify, object::Columns},
 };
 
@@ -27,32 +26,19 @@ fn duration(val: &Option<Decimal>) -> String {
     .unwrap_or("n/a".to_string())
 }
 
-#[derive(Tabled)]
 struct MetricRow {
-    #[tabled(rename = "Metric")]
     name: String,
-    #[tabled(rename = "")]
-    col1: String,
-    #[tabled(rename = "")]
-    col2: String,
-    #[tabled(rename = "")]
-    col3: String,
-    #[tabled(rename = "")]
-    col4: String,
+    values: Vec<String>,
 }
 
 impl MetricRow {
-    fn new<F>(name: &str, metrics: &[Metrics], get: F) -> Self
+    fn new<F>(name: &str, metrics: &[Metrics], mut get: F) -> Self
     where
         F: FnMut(&Metrics) -> String,
     {
-        let values: Vec<String> = metrics.iter().map(get).collect();
         MetricRow {
             name: name.to_string(),
-            col1: values.first().cloned().unwrap_or_default(),
-            col2: values.get(1).cloned().unwrap_or_default(),
-            col3: values.get(2).cloned().unwrap_or_default(),
-            col4: values.get(3).cloned().unwrap_or_default(),
+            values: metrics.iter().map(|m| get(m)).collect(),
         }
     }
 }
@@ -60,20 +46,13 @@ impl MetricRow {
 pub fn metrics_view(
     repo: &Repository,
     globals: &GlobalSettings,
+    periods: Vec<Intv>,
 ) -> Result<String> {
     let m = Metrics::load(
         repo,
         alere_lib::metrics::Settings {
             commodity: globals.commodity.clone(),
-            intervals: vec![
-                Intv::Yearly {
-                    begin: Instant::StartYear(2022),
-                    end: Instant::EndYear(2025),
-                },
-                Intv::LastNMonths(1),
-                Intv::LastNYears(1),
-                Intv::YearToDate,
-            ],
+            intervals: periods,
         },
         globals.reftime,
     )?;
@@ -131,19 +110,44 @@ pub fn metrics_view(
         MetricRow::new("Income Tax Rate", &m, |s| percent(&s.income_tax_rate)),
     ];
 
-    let mut table = Table::new(rows);
+    // Build table dynamically
+    let mut builder = tabled::builder::Builder::default();
+    
+    // Header row
+    let mut header = vec!["Metric".to_string()];
+    header.extend(m.iter().map(|metric| metric.interval.descr.clone()));
+    builder.push_record(header);
+    
+    // Data rows
+    for row in rows {
+        let mut record = vec![row.name];
+        record.extend(row.values);
+        builder.push_record(record);
+    }
+    
+    let mut table = builder.build();
     globals.style.apply(&mut table);
     table.with(Modify::new(Columns::new(1..)).with(Alignment::right()));
-
-    // Set column headers
-    if let Some((first, _)) = m.split_first() {
-        table.modify(
-            tabled::settings::object::Rows::first(),
-            tabled::settings::Format::content(|_| first.interval.descr.clone()),
-        );
-    }
 
     crate::global_settings::limit_table_width(&mut table, 0);
 
     Ok(table.to_string())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metric_row_dynamic_columns() {
+        let metrics = vec![];
+        let row = MetricRow::new("Test", &metrics, |_| "value".to_string());
+        assert_eq!(row.name, "Test");
+        assert_eq!(row.values.len(), 0);
+
+        // Test with multiple columns
+        let row = MetricRow::new("Test", &metrics, |_| "value".to_string());
+        assert_eq!(row.values.len(), 0);
+    }
 }

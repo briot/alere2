@@ -284,6 +284,10 @@ impl ::core::str::FromStr for Instant {
                 if let Some(d) = check_regexp!(s, r"end of year (\d+)", u16) {
                     return Ok(Instant::EndYear(d));
                 }
+                // Support 4-digit year as shorthand for start of year
+                if let Some(d) = check_regexp!(s, r"^(\d{4})$", u16) {
+                    return Ok(Instant::StartYear(d));
+                }
                 Ok(Instant::Timestamp(s.to_string()))
             }
         }
@@ -550,8 +554,12 @@ impl FromStr for Intv {
 
         // Range syntax: begin..end
         if let Some((b, e)) = s.split_once("..") {
-            let begin = b.trim().parse()?;
-            let end = e.trim().parse()?;
+            let begin: Instant = b.trim().parse()?;
+            let end: Instant = e.trim().parse()?;
+            // If both are years, create Yearly interval
+            if matches!(begin, Instant::StartYear(_)) && matches!(end, Instant::StartYear(_)) {
+                return Ok(Intv::Yearly { begin, end });
+            }
             return Ok(Intv::Monthly { begin, end });
         }
 
@@ -799,6 +807,23 @@ mod test {
             add_days(dt, -2),
             Utc.with_ymd_and_hms(2024, 1, 29, 12, 00, 00).unwrap(),
         );
+    }
+
+    #[test]
+    fn test_year_range_parsing() -> Result<()> {
+        // Test that "2022..2025" creates a Yearly interval
+        let intv = Intv::from_str("2022..2025")?;
+        assert!(matches!(intv, Intv::Yearly { .. }));
+
+        // Test that single year creates SpecificYear
+        let intv = Intv::from_str("2022")?;
+        assert!(matches!(intv, Intv::SpecificYear(2022)));
+
+        // Test that 4-digit year parses as Instant::StartYear
+        let instant = Instant::from_str("2022")?;
+        assert!(matches!(instant, Instant::StartYear(2022)));
+
+        Ok(())
     }
 
     #[test]

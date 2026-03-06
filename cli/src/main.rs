@@ -53,8 +53,8 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
 }
 
 /// Display metrics
-fn metrics(repo: &Repository, globals: &GlobalSettings) -> Result<()> {
-    let output = metrics_view(repo, globals)?;
+fn metrics(repo: &Repository, globals: &GlobalSettings, periods: Vec<Intv>) -> Result<()> {
+    let output = metrics_view(repo, globals, periods)?;
     println!("{}", output);
     Ok(())
 }
@@ -75,6 +75,7 @@ fn networth(
     repo: &mut Repository,
     globals: &GlobalSettings,
     _settings: &crate::networth_view::Settings,
+    periods: Vec<Intv>,
 ) -> Result<()> {
     let output = networth_view(
         repo,
@@ -87,11 +88,7 @@ fn networth(
             subtotals: true,
             commodity: globals.commodity.clone(),
             elide_boring_accounts: true,
-            intervals: vec![
-                Intv::UpTo(Instant::YearsAgo(1)),
-                Intv::UpTo(Instant::MonthsAgo(1)),
-                Intv::UpTo(Instant::Now),
-            ],
+            intervals: periods,
         },
         &crate::networth_view::Settings {
             column_value: true,
@@ -156,14 +153,15 @@ fn run_subcommand(
         },
         Commands::Networth {
             settings: networth_settings,
+            periods,
         } => {
-            networth(repo, settings, networth_settings)?;
+            networth(repo, settings, networth_settings, periods.clone())?;
         }
         Commands::Cashflow { periods } => {
             cashflow(repo, settings, periods)?;
         }
-        Commands::Metrics => {
-            metrics(repo, settings)?;
+        Commands::Metrics { periods } => {
+            metrics(repo, settings, periods.clone())?;
         }
         Commands::Perf { columns } => {
             perfs(repo, settings, columns.clone())?;

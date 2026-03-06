@@ -204,7 +204,7 @@ pub mod test {
         let mut coll = CommodityCollection::default();
         let eur = create_currency(&mut coll, "EUR", 2, true);
         let aapl = create_security(&mut coll, "AAPL");
-        assert_eq!(coll.list_currencies(), &[eur.clone()]);
+        assert_eq!(coll.list_currencies(), std::slice::from_ref(&eur));
         assert_eq!(coll.find("EUR"), Some(eur));
         assert_eq!(coll.find("AAPL"), Some(aapl));
         assert_eq!(coll.find("FOO"), None);

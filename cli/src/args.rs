@@ -24,7 +24,11 @@ pub enum Commands {
     Metrics,
 
     /// Show stock performance
-    Perf,
+    Perf {
+        /// Columns to display (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        columns: Option<Vec<crate::perfs_view::PerfColumn>>,
+    },
 
     /// Generate shell completions
     /// Use: eval "$(alere completions zsh)"

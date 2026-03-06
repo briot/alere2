@@ -7,7 +7,7 @@ use anyhow::Result;
 use rust_decimal::Decimal;
 use tabled::{
     Table, Tabled,
-    settings::{Alignment, Modify, Style, object::Columns},
+    settings::{Alignment, Modify, object::Columns},
 };
 
 fn returns(val: &Option<Decimal>) -> String {
@@ -83,9 +83,8 @@ pub fn perfs_view(
         .collect();
 
     let mut table = Table::new(rows);
-    table
-        .with(Style::modern())
-        .with(Modify::new(Columns::new(1..)).with(Alignment::right()));
+    globals.style.apply(&mut table);
+    table.with(Modify::new(Columns::new(1..)).with(Alignment::right()));
 
     Ok(table.to_string())
 }

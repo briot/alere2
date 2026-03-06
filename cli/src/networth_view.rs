@@ -9,7 +9,7 @@ use alere_lib::{
 use anyhow::Result;
 use clap::Parser;
 use itertools::Itertools;
-use tabled::{builder::Builder, settings::Style};
+use tabled::builder::Builder;
 
 #[derive(Parser, Default)]
 pub struct Settings {
@@ -172,6 +172,6 @@ where
     builder.push_record(footer);
 
     let mut table = builder.build();
-    table.with(Style::modern());
+    globals.style.apply(&mut table);
     Ok(table.to_string())
 }

@@ -85,6 +85,7 @@ pub fn perfs_view(
     let mut table = Table::new(rows);
     globals.style.apply(&mut table);
     table.with(Modify::new(Columns::new(1..)).with(Alignment::right()));
+    crate::global_settings::limit_table_width(&mut table, 0);
 
     Ok(table.to_string())
 }

@@ -143,5 +143,7 @@ pub fn metrics_view(
         );
     }
 
+    crate::global_settings::limit_table_width(&mut table, 0);
+
     Ok(table.to_string())
 }

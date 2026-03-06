@@ -33,7 +33,9 @@ impl TableStyle {
             TableStyle::Rounded => table.with(Style::rounded()),
             TableStyle::Extended => table.with(Style::extended()),
             TableStyle::Psql => table.with(Style::psql()),
-            TableStyle::ReStructuredText => table.with(Style::re_structured_text()),
+            TableStyle::ReStructuredText => {
+                table.with(Style::re_structured_text())
+            }
             TableStyle::Dots => table.with(Style::dots()),
             TableStyle::Blank => table.with(Style::blank()),
         };
@@ -41,36 +43,42 @@ impl TableStyle {
 }
 
 pub fn limit_table_width(table: &mut tabled::Table, text_column: usize) {
-    use tabled::settings::{Width, Modify, object::Columns};
-    
-    let Some((terminal_size::Width(w), _)) = terminal_size::terminal_size() else {
+    use tabled::settings::{Modify, Width, object::Columns};
+
+    let Some((terminal_size::Width(w), _)) = terminal_size::terminal_size()
+    else {
         return;
     };
     let width = w as usize;
-    
+
     let table_str = table.to_string();
     let max_line_width = table_str.lines().map(|l| l.len()).max().unwrap_or(0);
-    
+
     if max_line_width <= width {
         return;
     }
-    
+
     for text_width in (MIN_COLUMN_WIDTH..=30).rev() {
         let mut test_table = table.clone();
-        test_table.with(Modify::new(Columns::single(text_column))
-            .with(Width::truncate(text_width).suffix("...")));
-        
+        test_table.with(
+            Modify::new(Columns::single(text_column))
+                .with(Width::truncate(text_width).suffix("...")),
+        );
+
         let table_str = test_table.to_string();
-        let current_width = table_str.lines().map(|l| l.len()).max().unwrap_or(0);
-        
+        let current_width =
+            table_str.lines().map(|l| l.len()).max().unwrap_or(0);
+
         if current_width <= width {
             *table = test_table;
             return;
         }
     }
-    
-    table.with(Modify::new(Columns::single(text_column))
-        .with(Width::truncate(MIN_COLUMN_WIDTH).suffix("...")));
+
+    table.with(
+        Modify::new(Columns::single(text_column))
+            .with(Width::truncate(MIN_COLUMN_WIDTH).suffix("...")),
+    );
 }
 
 #[derive(Parser)]

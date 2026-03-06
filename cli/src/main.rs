@@ -172,13 +172,13 @@ fn run_subcommand(
                 if line.is_empty() || line.starts_with('#') {
                     continue;
                 }
-                
+
                 if !first {
                     println!();
                 }
                 first = false;
                 println!("=== {} ===", line);
-                
+
                 let args = shlex::split(line).ok_or_else(|| {
                     anyhow::anyhow!("invalid quoting: {}", line)
                 })?;

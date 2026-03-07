@@ -45,6 +45,11 @@ fn returns(val: &Option<Decimal>) -> String {
         .unwrap_or("n/a".to_string())
 }
 
+fn rate(val: &Option<Decimal>) -> String {
+    val.map(|p| format!("{:.2}%", (p * Decimal::ONE_HUNDRED)))
+        .unwrap_or("n/a".to_string())
+}
+
 #[derive(Tabled)]
 struct PerfRow {
     #[tabled(rename = "Account")]
@@ -88,7 +93,7 @@ impl PerfRow {
             realized: perf.realized.display(format),
             roi: returns(&perf.roi),
             annualized: returns(&perf.annualized_roi),
-            irr: returns(&perf.irr),
+            irr: rate(&perf.irr),
             pnl: perf.pnl.display(format),
             weighted_avg: mv(&perf.weighted_average),
             avg_cost: mv(&perf.average_cost),

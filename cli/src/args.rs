@@ -14,6 +14,10 @@ pub struct Cli {
     #[command(flatten)]
     pub global: crate::global_settings::GlobalSettings,
 
+    /// Input file (KMyMoney format)
+    #[arg(short, long, default_value = "./Comptes.kmy")]
+    pub input: PathBuf,
+
     #[command(subcommand)]
     pub command: Commands,
 }

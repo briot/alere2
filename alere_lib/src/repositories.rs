@@ -25,6 +25,14 @@ pub struct Repository {
 }
 
 impl Repository {
+    pub fn transactions(&self) -> &TransactionCollection {
+        &self.transactions
+    }
+
+    pub fn prices(&self) -> &PriceCollection {
+        &self.prices
+    }
+
     pub fn add_transaction(&mut self, tx: Transaction) -> Result<()> {
         for s in tx.splits().iter() {
             // Register prices from transactions

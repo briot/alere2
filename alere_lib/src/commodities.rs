@@ -49,7 +49,10 @@ impl Commodity {
 
     #[must_use]
     pub fn matches(&self, name: &str) -> bool {
-        self.0.borrow().name == name
+        let details = self.0.borrow();
+        details.name == name 
+            || details.symbol == name
+            || details._quote_symbol.as_deref() == Some(name)
     }
 }
 

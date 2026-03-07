@@ -1,4 +1,4 @@
-use alere_lib::times::Intv;
+use alere_lib::times::{Instant, Intv};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -130,6 +130,29 @@ pub enum Commands {
 
     /// Run all commands found in the file
     Batch { file: PathBuf },
+
+    /// Show ledger (transaction list) for accounts
+    Ledger {
+        /// Account name to filter (optional, shows all if not specified)
+        #[arg(short, long)]
+        account: Option<String>,
+
+        /// Show only account basename instead of full path
+        #[arg(long)]
+        short_name: bool,
+
+        /// Columns to display (comma-separated: balance, memo, splits)
+        #[arg(long, value_delimiter = ',')]
+        columns: Option<Vec<String>>,
+
+        /// Only show transactions since this date (e.g., "3m", "2024")
+        #[arg(long)]
+        since: Option<Instant>,
+
+        /// Only show transactions before this date (e.g., "now", "2024")
+        #[arg(long)]
+        before: Option<Instant>,
+    },
 }
 
 #[derive(Subcommand)]

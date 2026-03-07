@@ -55,13 +55,12 @@ impl Performance {
     //
     // Newton-Raphson iteratively solves: r_new = r_old - NPV / NPV'
     // where NPV' is the derivative of NPV with respect to r
-    #[allow(dead_code)]
     fn calculate_irr(
         cash_flows: &[(DateTime<Local>, Decimal)],
         final_value: Decimal,
         now: DateTime<Local>,
     ) -> Option<Decimal> {
-        if cash_flows.is_empty() || final_value.is_zero() {
+        if cash_flows.is_empty() {
             return None;
         }
 
@@ -97,7 +96,6 @@ impl Performance {
 
     // Try to find IRR with a specific initial guess
     // Returns None if convergence fails or result is unrealistic
-    #[allow(dead_code, clippy::question_mark)]
     fn try_irr_with_guess(
         cash_flows: &[(DateTime<Local>, Decimal)],
         final_value: Decimal,
@@ -124,22 +122,24 @@ impl Performance {
             for (date, amount) in cash_flows {
                 let years = (now - *date).num_days() as f64 / 365.25;
 
-                let discount = (1.0 + r).powf(years);
-                if !discount.is_finite() || discount == 0.0 {
+                let compound = (1.0 + r).powf(years);
+                if !compound.is_finite() || compound == 0.0 {
                     return None;
                 }
 
                 let Some(amt) = amount.to_f64() else {
                     continue;
                 };
-                let pv = amt / discount;
+                // Compound the past cash flow forward to now
+                let fv = amt * compound;
 
-                let Some(pv_dec) = Decimal::from_f64_retain(pv) else {
+                let Some(fv_dec) = Decimal::from_f64_retain(fv) else {
                     return None;
                 };
-                npv += pv_dec;
+                npv += fv_dec;
 
-                let deriv_val = -pv * years / (1.0 + r);
+                // Derivative: d/dr[amt * (1+r)^t] = amt * t * (1+r)^(t-1)
+                let deriv_val = fv * years / (1.0 + r);
                 let Some(deriv_dec) = Decimal::from_f64_retain(deriv_val)
                 else {
                     return None;
@@ -175,6 +175,7 @@ impl Performance {
         account: &Account,
         args: PerfArgs,
         prices: &mut MarketPrices,
+        target_commodity: Option<&Commodity>,
         now: DateTime<Local>,
     ) -> Self {
         let equity = if account.get_kind().is_stock() {
@@ -203,36 +204,22 @@ impl Performance {
                 None
             };
 
-        // TODO: Fix IRR calculation
-        //
-        // Current issue: IRR calculation returns incorrect negative values (around -100%)
-        // even for investments with positive returns.
-        //
-        // Root cause: The cash_flows array only contains investment outflows (negative values).
-        // When stocks are sold, the proceeds are added to args.realized but NOT added as
-        // positive cash inflows to cash_flows. This means the IRR calculation sees:
-        //   - Negative cash flows (investments)
-        //   - Positive final value (current equity)
-        //   - Missing: positive cash flows from sales (realized gains)
-        //
-        // The Newton-Raphson method converges to -100% because it's trying to find a rate
-        // where NPV = 0, but without the sale proceeds as cash inflows, the only way to
-        // balance the equation is with an extreme negative rate.
-        //
-        // Attempted fixes that didn't work:
-        //   1. Using equity + realized as final value: This double-counts realized gains
-        //      and produces wrong results when equity is in non-currency commodities
-        //   2. Multiple initial guesses: All converge to the same wrong answer
-        //   3. Using simple ROI as initial guess: Still converges to wrong answer
-        //
-        // Proper fix would require:
-        //   1. Add positive cash inflows to cash_flows when stocks are sold (in the
-        //      BuyAmount operation when qty.is_negative())
-        //   2. Only use current equity (not equity + realized) as final value
-        //   3. Ensure all values are in the same currency (handle MultiValue properly)
-        //
-        // For now, IRR is disabled and shows "n/a"
-        let irr = None;
+        // Calculate IRR using cash flows and current equity
+        // IRR requires all values in the same currency
+        let irr = if !args.cash_flows.is_empty() {
+            if let (Some(equity_val), Some(target)) = (equity.iter().next(), target_commodity) {
+                // Check if equity is in the target currency (not shares)
+                if equity_val.commodity == *target {
+                    Self::calculate_irr(&args.cash_flows, equity_val.amount, now)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         Performance {
             account: account.clone(),
@@ -345,6 +332,7 @@ impl Performance {
                                 args.shares += qty;
 
                                 if !qty.is_negative() {
+                                    // Buying shares
                                     let invested_val = prices
                                         .convert_value(amount, &s.post_ts);
                                     let fees = prices.convert_multi_value(
@@ -359,6 +347,30 @@ impl Performance {
                                     args.invested += invested_val;
                                     args.invested -= fees;
                                 } else {
+                                    // Selling shares
+                                    // Compute sale proceeds from transaction balance
+                                    // Transaction is balanced, so sum of all splits = 0
+                                    // Sale proceeds = -(sum of non-investment account splits)
+                                    let mut sale_proceeds = MultiValue::zero();
+                                    for split in tx.splits().iter() {
+                                        if split.account != acc {
+                                            match &split.operation {
+                                                Operation::Credit(v) => {
+                                                    sale_proceeds += v;
+                                                }
+                                                Operation::BuyAmount { qty: q, .. } => {
+                                                    sale_proceeds += &MultiValue::new(q.amount, &q.commodity);
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                    
+                                    let proceeds = prices.convert_multi_value(&sale_proceeds, &s.post_ts);
+                                    if let Some(val) = proceeds.iter().next() {
+                                        args.cash_flows.push((s.post_ts, val.amount));
+                                    }
+                                    
                                     args.realized -= prices
                                         .convert_value(amount, &s.post_ts);
                                     args.realized += prices
@@ -418,7 +430,7 @@ impl Performance {
                 //dbg!(tx, &args.shares, &args.invested, &args.realized);
             }
 
-            result.push(Performance::new(&acc, args, &mut prices, now));
+            result.push(Performance::new(&acc, args, &mut prices, settings.commodity.as_ref(), now));
         }
 
         Ok(result)
@@ -431,7 +443,6 @@ mod tests {
     use chrono::TimeZone;
 
     #[test]
-    #[ignore] // TODO: Enable when IRR calculation is fixed
     fn test_irr_simple_investment() {
         // Invest $1000, get back $1100 after 1 year
         // Expected IRR: 10%
@@ -453,7 +464,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Enable when IRR calculation is fixed
     fn test_irr_multiple_investments() {
         // Invest $1000 at start, $500 after 6 months, get back $1650 after 1 year
         // Expected IRR: ~8-9%
@@ -481,7 +491,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Enable when IRR calculation is fixed
     fn test_irr_loss() {
         // Invest $1000, get back $900 after 1 year
         // Expected IRR: -10%
@@ -503,7 +512,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Enable when IRR calculation is fixed
     fn test_irr_long_term() {
         // Invest $1000, get back $2000 after 10 years
         // Expected IRR: ~7.2% (rule of 72: 72/10 = 7.2)
@@ -520,6 +528,172 @@ mod tests {
         assert!(
             (irr_val - 0.072).abs() < 0.01,
             "Expected ~7.2%, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_with_sale() {
+        // Invest $1000, sell for $1100 after 1 year (all shares sold, final value = 0)
+        // Expected IRR: 10%
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Investment
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(1100),  // Sale proceeds
+            ),
+        ];
+        let final_value = Decimal::ZERO;  // All shares sold
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        assert!(
+            (irr_val - 0.10).abs() < 0.01,
+            "Expected ~10%, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_partial_sale() {
+        // Invest $1000, sell half for $600 after 6 months, remaining equity $500
+        // Total value: $600 + $500 = $1100, so 10% return over 1 year
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
+                Decimal::from(600),
+            ),
+        ];
+        let final_value = Decimal::from(500);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        assert!(
+            irr_val > 0.0 && irr_val < 0.20,
+            "Expected positive IRR, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_no_cash_flows() {
+        // No cash flows - should return None
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![];
+        let final_value = Decimal::from(1000);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_none());
+    }
+
+    #[test]
+    fn test_irr_zero_final_value_with_loss() {
+        // Invest $1000, sell for $500 (50% loss), all shares sold
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(500),
+            ),
+        ];
+        let final_value = Decimal::ZERO;
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        assert!(
+            irr_val < 0.0 && irr_val > -0.60,
+            "Expected negative IRR ~-50%, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_multiple_buys_and_sells() {
+        // Buy $1000, buy $500, sell $800, remaining equity $800
+        // Total invested: $1500, total value: $800 + $800 = $1600
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 4, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-500),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap(),
+                Decimal::from(800),
+            ),
+        ];
+        let final_value = Decimal::from(800);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        assert!(
+            irr_val > 0.0,
+            "Expected positive IRR, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_extreme_loss() {
+        // Invest $1000, lose almost everything (99% loss)
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![(
+            Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            Decimal::from(-1000),
+        )];
+        let final_value = Decimal::from(10);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        assert!(
+            irr_val < -0.90,
+            "Expected very negative IRR ~-99%, got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_formatting_bug() {
+        // Test that IRR is formatted correctly (not as ROI)
+        // IRR of 10% should display as "10.00%", not "9.00%" (which would be (1.10 - 1) * 100)
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![(
+            Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            Decimal::from(-1000),
+        )];
+        let final_value = Decimal::from(1100);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap();
+        
+        // IRR should be around 0.10 (10%), not 1.10
+        assert!(
+            irr_val > Decimal::from_f64_retain(0.09).unwrap() && 
+            irr_val < Decimal::from_f64_retain(0.11).unwrap(),
+            "Expected IRR around 0.10, got {}",
             irr_val
         );
     }

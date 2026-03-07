@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     version = "0.1",
-    subcommand_precedence_over_arg = true,
     flatten_help = true,
     arg_required_else_help = true
 )]
@@ -15,7 +14,7 @@ pub struct Cli {
     pub global: crate::global_settings::GlobalSettings,
 
     /// Input file (KMyMoney format)
-    #[arg(short, long, default_value = "./Comptes.kmy")]
+    #[arg(short, long, global = true, default_value = "./Comptes.kmy")]
     pub input: PathBuf,
 
     #[command(subcommand)]

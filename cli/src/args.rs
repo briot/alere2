@@ -49,12 +49,41 @@ pub enum Commands {
 
     /// Show current networth
     Networth {
-        #[command(flatten)]
-        settings: crate::networth_view::Settings,
-        
         /// Periods to display (e.g 1y or 2m..now)
         #[arg(short, long, value_delimiter = ',', default_value = "1y,ytd")]
         periods: Vec<Intv>,
+
+        /// Show rows with zero values
+        #[arg(long)]
+        show_zero: bool,
+
+        /// Show rows where values haven't changed
+        #[arg(long)]
+        show_all_same: bool,
+
+        /// Disable subtotals for parent accounts
+        #[arg(long)]
+        no_subtotals: bool,
+
+        /// Don't collapse boring accounts
+        #[arg(long)]
+        no_elide: bool,
+
+        /// Show delta column
+        #[arg(long)]
+        delta: bool,
+
+        /// Show delta to last column
+        #[arg(long)]
+        delta_to_last: bool,
+
+        /// Show price column
+        #[arg(long)]
+        price: bool,
+
+        /// Show percent of total column
+        #[arg(long)]
+        percent: bool,
     },
 
     /// Show cashflow
@@ -62,6 +91,38 @@ pub enum Commands {
         /// Columns to display (e.g 1y or 2m..now)
         #[arg(short, long, value_delimiter = ',')]
         periods: Vec<Intv>,
+
+        /// Show rows with zero values
+        #[arg(long)]
+        show_zero: bool,
+
+        /// Show rows where values haven't changed
+        #[arg(long)]
+        show_all_same: bool,
+
+        /// Disable subtotals for parent accounts
+        #[arg(long)]
+        no_subtotals: bool,
+
+        /// Don't collapse boring accounts
+        #[arg(long)]
+        no_elide: bool,
+
+        /// Show delta column
+        #[arg(long)]
+        delta: bool,
+
+        /// Show delta to last column
+        #[arg(long)]
+        delta_to_last: bool,
+
+        /// Show price column
+        #[arg(long)]
+        price: bool,
+
+        /// Show percent of total column
+        #[arg(long)]
+        percent: bool,
     },
 
     /// Run all commands found in the file

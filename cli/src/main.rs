@@ -74,28 +74,35 @@ fn perfs(
 fn networth(
     repo: &mut Repository,
     globals: &GlobalSettings,
-    _settings: &crate::networth_view::Settings,
     periods: Vec<Intv>,
+    show_zero: bool,
+    show_all_same: bool,
+    no_subtotals: bool,
+    no_elide: bool,
+    delta: bool,
+    delta_to_last: bool,
+    price: bool,
+    percent: bool,
 ) -> Result<()> {
     let output = networth_view(
         repo,
         |acc| acc.get_kind().is_networth(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero_rows: !globals.empty,
-            hide_all_same: false,
+            hide_zero_rows: !show_zero,
+            hide_all_same: !show_all_same,
             group_by: GroupBy::ParentAccount,
-            subtotals: true,
+            subtotals: !no_subtotals,
             commodity: globals.commodity.clone(),
-            elide_boring_accounts: true,
+            elide_boring_accounts: !no_elide,
             intervals: periods,
         },
         &crate::networth_view::Settings {
             column_value: true,
-            column_delta: false,
-            column_delta_to_last: false,
-            column_price: false,
-            column_percent: false,
+            column_delta: delta,
+            column_delta_to_last: delta_to_last,
+            column_price: price,
+            column_percent: percent,
             account_names: AccountNameDepth::basename(),
         },
     )?;
@@ -108,6 +115,14 @@ fn cashflow(
     repo: &mut Repository,
     globals: &mut GlobalSettings,
     periods: &[Intv],
+    show_zero: bool,
+    show_all_same: bool,
+    no_subtotals: bool,
+    no_elide: bool,
+    delta: bool,
+    delta_to_last: bool,
+    price: bool,
+    percent: bool,
 ) -> Result<()> {
     globals.format.negate = true;
 
@@ -116,20 +131,20 @@ fn cashflow(
         |acc| acc.get_kind().is_expense() || acc.get_kind().is_income(),
         globals,
         alere_lib::networth::Settings {
-            hide_zero_rows: !globals.empty,
-            hide_all_same: false,
+            hide_zero_rows: !show_zero,
+            hide_all_same: !show_all_same,
             group_by: GroupBy::ParentAccount,
-            subtotals: true,
+            subtotals: !no_subtotals,
             commodity: globals.commodity.clone(),
-            elide_boring_accounts: true,
+            elide_boring_accounts: !no_elide,
             intervals: periods.to_vec(),
         },
         &crate::networth_view::Settings {
             column_value: true,
-            column_delta: false,
-            column_delta_to_last: false,
-            column_price: false,
-            column_percent: false,
+            column_delta: delta,
+            column_delta_to_last: delta_to_last,
+            column_price: price,
+            column_percent: percent,
             account_names: AccountNameDepth::basename(),
         },
     );
@@ -152,13 +167,54 @@ fn run_subcommand(
             }
         },
         Commands::Networth {
-            settings: networth_settings,
             periods,
+            show_zero,
+            show_all_same,
+            no_subtotals,
+            no_elide,
+            delta,
+            delta_to_last,
+            price,
+            percent,
         } => {
-            networth(repo, settings, networth_settings, periods.clone())?;
+            networth(
+                repo,
+                settings,
+                periods.clone(),
+                *show_zero,
+                *show_all_same,
+                *no_subtotals,
+                *no_elide,
+                *delta,
+                *delta_to_last,
+                *price,
+                *percent,
+            )?;
         }
-        Commands::Cashflow { periods } => {
-            cashflow(repo, settings, periods)?;
+        Commands::Cashflow {
+            periods,
+            show_zero,
+            show_all_same,
+            no_subtotals,
+            no_elide,
+            delta,
+            delta_to_last,
+            price,
+            percent,
+        } => {
+            cashflow(
+                repo,
+                settings,
+                periods,
+                *show_zero,
+                *show_all_same,
+                *no_subtotals,
+                *no_elide,
+                *delta,
+                *delta_to_last,
+                *price,
+                *percent,
+            )?;
         }
         Commands::Metrics { periods } => {
             metrics(repo, settings, periods.clone())?;

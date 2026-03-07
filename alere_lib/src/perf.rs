@@ -178,8 +178,11 @@ impl Performance {
         target_commodity: Option<&Commodity>,
         now: DateTime<Local>,
     ) -> Self {
+        // For closed accounts, use closed date instead of now
+        let end_date = account.get_closed_date().unwrap_or(now);
+
         let equity = if account.get_kind().is_stock() {
-            prices.convert_multi_value(&args.shares, &now)
+            prices.convert_multi_value(&args.shares, &end_date)
         } else {
             &args.invested + &args.unrealized
         };
@@ -189,7 +192,7 @@ impl Performance {
 
         let annualized_roi =
             if let (Some(r), Some(first)) = (roi, args.first_tx) {
-                let years = (now - first).num_days() as f64 / 365.25;
+                let years = (end_date - first).num_days() as f64 / 365.25;
                 if years > 0.0 {
                     Some(
                         Decimal::from_f64_retain(
@@ -210,7 +213,7 @@ impl Performance {
             if let (Some(equity_val), Some(target)) = (equity.iter().next(), target_commodity) {
                 // Check if equity is in the target currency (not shares)
                 if equity_val.commodity == *target {
-                    Self::calculate_irr(&args.cash_flows, equity_val.amount, now)
+                    Self::calculate_irr(&args.cash_flows, equity_val.amount, end_date)
                 } else {
                     None
                 }

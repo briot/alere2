@@ -251,6 +251,11 @@ impl ::core::str::FromStr for Instant {
                 {
                     return Ok(Instant::EndDay(s.to_string()));
                 }
+                if let Some(d) =
+                    check_regexp!(s, r"start of (\d+) months ago", i32)
+                {
+                    return Ok(Instant::StartMonthsAgo(d));
+                }
                 if let Some(d) = check_regexp!(s, r"(\d+) months ago", i32) {
                     return Ok(Instant::MonthsAgo(d));
                 }
@@ -258,20 +263,12 @@ impl ::core::str::FromStr for Instant {
                     return Ok(Instant::MonthsAgo(d));
                 }
                 if let Some(d) =
-                    check_regexp!(s, r"start of (\d+) months ago", i32)
-                {
-                    return Ok(Instant::StartMonthsAgo(d));
-                }
-                if let Some(d) = check_regexp!(s, r"(\d+) years ago", i32) {
-                    return Ok(Instant::YearsAgo(d));
-                }
-                if let Some(d) = check_regexp!(s, r"^(\d+)y$", i32) {
-                    return Ok(Instant::YearsAgo(d));
-                }
-                if let Some(d) =
                     check_regexp!(s, r"start of (\d+) years ago", i32)
                 {
                     return Ok(Instant::StartYearsAgo(d));
+                }
+                if let Some(d) = check_regexp!(s, r"(\d+) years ago", i32) {
+                    return Ok(Instant::YearsAgo(d));
                 }
                 if let Some(d) =
                     check_regexp!(s, r"end of (\d+) years ago", i32)
@@ -878,5 +875,38 @@ mod test {
             Local.with_ymd_and_hms(2016, 12, 31, 23, 59, 59).unwrap()
                 + chrono::Duration::nanoseconds(999_999_999)
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_instant_parsing_order() {
+        assert!(matches!(
+            Instant::from_str("start of 0 months ago").unwrap(),
+            Instant::StartMonthsAgo(0)
+        ));
+        assert!(matches!(
+            Instant::from_str("start of 3 months ago").unwrap(),
+            Instant::StartMonthsAgo(3)
+        ));
+        assert!(matches!(
+            Instant::from_str("3 months ago").unwrap(),
+            Instant::MonthsAgo(3)
+        ));
+        assert!(matches!(
+            Instant::from_str("start of 0 years ago").unwrap(),
+            Instant::StartYearsAgo(0)
+        ));
+        assert!(matches!(
+            Instant::from_str("start of 2 years ago").unwrap(),
+            Instant::StartYearsAgo(2)
+        ));
+        assert!(matches!(
+            Instant::from_str("2 years ago").unwrap(),
+            Instant::YearsAgo(2)
+        ));
     }
 }

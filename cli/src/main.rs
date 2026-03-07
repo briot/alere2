@@ -270,7 +270,7 @@ fn main() -> Result<()> {
         .unwrap();
 
     let progress = multi.add(
-        ProgressBar::new(1) //  we do not know the length
+        ProgressBar::new(1)
             .with_style(
                 ProgressStyle::with_template(
                     "[{pos:2}/{len:2}] {msg} {wide_bar} {elapsed_precise}",
@@ -281,13 +281,10 @@ fn main() -> Result<()> {
     );
 
     let mut kmy = KmyMoneyImporter::default();
-    let mut repo = block_on(kmy.import_file(
-        Path::new("./Comptes.kmy"),
-        |current, max| {
-            progress.set_length(max);
-            progress.set_position(current);
-        },
-    ))?;
+    let mut repo = block_on(kmy.import_file(&cli.input, |current, max| {
+        progress.set_length(max);
+        progress.set_position(current);
+    }))?;
     progress.finish_and_clear();
 
     settings.postprocess(&repo);

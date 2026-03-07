@@ -359,6 +359,25 @@ impl Account {
     pub fn close(&mut self) {
         self.0.borrow_mut().closed = true;
     }
+
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.0.borrow().closed
+    }
+
+    /// Get the date when the account was closed.
+    /// TODO: Store explicit closed date instead of inferring from last transaction
+    #[must_use]
+    pub fn get_closed_date(&self) -> Option<DateTime<Local>> {
+        if !self.is_closed() {
+            return None;
+        }
+        self.0
+            .borrow()
+            .transactions
+            .last()
+            .and_then(|tx| tx.splits().first().map(|s| s.post_ts))
+    }
 }
 
 impl PartialEq for Account {

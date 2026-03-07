@@ -700,4 +700,217 @@ mod tests {
             irr_val
         );
     }
+
+    #[test]
+    fn test_irr_vs_annualized_sign_mismatch_case1() {
+        // Scenario: Buy low, price increases, sell some at profit, hold rest
+        // Annualized should be positive, IRR should also be positive
+        // Buy $1000 worth at start, sell $600 after 6 months (profit), equity now $500
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Buy
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
+                Decimal::from(600),  // Sell some at profit
+            ),
+        ];
+        let final_value = Decimal::from(500);  // Remaining equity
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        
+        // Total value: $600 (sold) + $500 (equity) = $1100 vs $1000 invested = 10% gain
+        // IRR should be positive
+        assert!(
+            irr_val > 0.0,
+            "Expected positive IRR (10% gain), got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_vs_annualized_sign_mismatch_case2() {
+        // Scenario: Large early sale proceeds, small remaining equity
+        // Buy $10000, sell $11000 after 1 month (quick profit), equity drops to $100
+        // This demonstrates IRR calculation failure on profitable scenarios
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-10000),  // Buy
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 2, 1, 0, 0, 0).unwrap(),
+                Decimal::from(11000),  // Sell most at 10% profit
+            ),
+        ];
+        let final_value = Decimal::from(100);  // Small remaining equity
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        
+        // Total value: $11000 (sold) + $100 (equity) = $11100 vs $10000 invested = 11% gain
+        // NPV equation: -10000*(1+r)^1 + 11000*(1+r)^(11/12) + 100 = 0
+        // At any positive r, the early large return dominates, NPV stays positive
+        // IRR is mathematically undefined (no solution exists)
+        
+        println!("IRR result: {:?}", irr);
+        if irr.is_none() {
+            println!("IRR correctly returns None - recovered investment too quickly");
+        }
+    }
+
+    #[test]
+    fn test_irr_negative_when_annualized_positive() {
+        // Scenario that might produce negative IRR with positive simple return
+        // Invest $1000, wait 2 years, sell for $1100 (10% total gain, 4.9% annualized)
+        // But add a large late investment that skews IRR
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Initial investment
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 12, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-5000),  // Large late investment
+            ),
+        ];
+        let final_value = Decimal::from(5900);  // Total: $6000 invested, $5900 equity = -1.7% loss
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        
+        if let Some(irr_val) = irr {
+            let irr_pct = irr_val.to_f64().unwrap();
+            println!("IRR: {:.2}%", irr_pct * 100.0);
+            // This should be negative since we lost money
+            assert!(irr_pct < 0.0, "Expected negative IRR (loss), got {}", irr_pct);
+        }
+    }
+
+    #[test]
+    fn test_irr_undefined_early_recovery() {
+        // Demonstrates when IRR is mathematically undefined
+        // Invest $1000, immediately get back $1200, equity becomes $0
+        // This is instant 20% profit - no discount rate makes NPV=0
+        let now = Local.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
+                Decimal::from(1200),
+            ),
+        ];
+        let final_value = Decimal::ZERO;
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        
+        // IRR should be None - mathematically undefined
+        // NPV = -1000*(1+r)^(1/365) + 1200 ≈ -1000 + 1200 = 200 (always positive)
+        assert!(irr.is_none(), "IRR should be None for instant >100% recovery");
+    }
+
+    #[test]
+    fn test_irr_large_early_return_simplified() {
+        // Simplified version: invest $100, get back $110 after 1 month, equity $10
+        // Total: $110 + $10 = $120 vs $100 invested = 20% gain
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-100),
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 2, 1, 0, 0, 0).unwrap(),
+                Decimal::from(110),
+            ),
+        ];
+        let final_value = Decimal::from(10);
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        
+        // Manual calculation:
+        // NPV = -100*(1+r)^1 + 110*(1+r)^(11/12) + 10 = 0
+        // At r=0: NPV = -100 + 110 + 10 = 20 (positive)
+        // At r=0.2: NPV = -100*1.2 + 110*1.18 + 10 = -120 + 130 + 10 = 20 (still positive!)
+        // This means there's no solution where NPV=0, IRR is undefined
+        
+        println!("IRR result: {:?}", irr);
+        
+        // This scenario has no valid IRR because the NPV is always positive
+        // The investment recovered more than 100% very quickly
+        if irr.is_none() {
+            println!("IRR correctly returns None - no rate makes NPV=0");
+        }
+    }
+
+    #[test]
+    fn test_irr_vs_annualized_sign_mismatch_case3() {
+        // Scenario: Multiple buys and sells with net profit but timing issues
+        // Buy $1000, price doubles, sell half for $1000 (recover investment), hold $1000 equity
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Buy
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
+                Decimal::from(1000),  // Sell half (recovered full investment)
+            ),
+        ];
+        let final_value = Decimal::from(1000);  // Remaining equity (free money)
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        
+        // Net: invested $1000, got back $1000 + still have $1000 = 100% gain
+        // IRR should be very positive
+        assert!(
+            irr_val > 0.0,
+            "Expected very positive IRR (100% gain), got {}",
+            irr_val
+        );
+    }
+
+    #[test]
+    fn test_irr_vs_annualized_sign_mismatch_case4() {
+        // Scenario: Buy, add more money, sell at loss, but timing makes annualized look ok
+        // Buy $1000, add $1000 after 11 months, sell all for $2100 after 1 year
+        let now = Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let cash_flows = vec![
+            (
+                Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Initial buy
+            ),
+            (
+                Local.with_ymd_and_hms(2024, 12, 1, 0, 0, 0).unwrap(),
+                Decimal::from(-1000),  // Add more near end
+            ),
+            (
+                Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+                Decimal::from(2100),  // Sell all
+            ),
+        ];
+        let final_value = Decimal::ZERO;
+
+        let irr = Performance::calculate_irr(&cash_flows, final_value, now);
+        assert!(irr.is_some());
+        let irr_val = irr.unwrap().to_f64().unwrap();
+        
+        // Net: invested $2000, got back $2100 = 5% gain
+        // IRR should be positive
+        assert!(
+            irr_val > 0.0,
+            "Expected positive IRR (5% gain), got {}",
+            irr_val
+        );
+    }
 }

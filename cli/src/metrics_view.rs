@@ -1,18 +1,10 @@
 use crate::global_settings::GlobalSettings;
-use alere_lib::{
-    metrics::Metrics,
-    repositories::Repository,
-    times::Intv,
-};
+use alere_lib::{metrics::Metrics, repositories::Repository, times::Intv};
 use anyhow::Result;
 use rust_decimal::Decimal;
-use tabled::{
-    settings::{Alignment, Modify, object::Columns},
-};
 
 fn percent(val: &Option<Decimal>) -> String {
-    val.map(|p| format!("{:.2}%", (p * Decimal::ONE_HUNDRED)))
-        .unwrap_or("n/a".to_string())
+    crate::global_settings::format_percent(val)
 }
 
 fn duration(val: &Option<Decimal>) -> String {
@@ -32,13 +24,13 @@ struct MetricRow {
 }
 
 impl MetricRow {
-    fn new<F>(name: &str, metrics: &[Metrics], mut get: F) -> Self
+    fn new<F>(name: &str, metrics: &[Metrics], get: F) -> Self
     where
         F: FnMut(&Metrics) -> String,
     {
         MetricRow {
             name: name.to_string(),
-            values: metrics.iter().map(|m| get(m)).collect(),
+            values: metrics.iter().map(get).collect(),
         }
     }
 }
@@ -112,28 +104,21 @@ pub fn metrics_view(
 
     // Build table dynamically
     let mut builder = tabled::builder::Builder::default();
-    
+
     // Header row
     let mut header = vec!["Metric".to_string()];
     header.extend(m.iter().map(|metric| metric.interval.descr.clone()));
     builder.push_record(header);
-    
+
     // Data rows
     for row in rows {
         let mut record = vec![row.name];
         record.extend(row.values);
         builder.push_record(record);
     }
-    
-    let mut table = builder.build();
-    globals.style.apply(&mut table);
-    table.with(Modify::new(Columns::new(1..)).with(Alignment::right()));
 
-    crate::global_settings::limit_table_width(&mut table, 0);
-
-    Ok(table.to_string())
+    Ok(globals.finalize_table(builder, Some(1), false))
 }
-
 
 #[cfg(test)]
 mod tests {

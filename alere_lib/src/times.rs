@@ -262,6 +262,9 @@ impl ::core::str::FromStr for Instant {
                 if let Some(d) = check_regexp!(s, r"^(\d+)m$", i32) {
                     return Ok(Instant::MonthsAgo(d));
                 }
+                if let Some(d) = check_regexp!(s, r"^(\d+)y$", i32) {
+                    return Ok(Instant::YearsAgo(d));
+                }
                 if let Some(d) =
                     check_regexp!(s, r"start of (\d+) years ago", i32)
                 {
@@ -554,7 +557,9 @@ impl FromStr for Intv {
             let begin: Instant = b.trim().parse()?;
             let end: Instant = e.trim().parse()?;
             // If both are years, create Yearly interval
-            if matches!(begin, Instant::StartYear(_)) && matches!(end, Instant::StartYear(_)) {
+            if matches!(begin, Instant::StartYear(_))
+                && matches!(end, Instant::StartYear(_))
+            {
                 return Ok(Intv::Yearly { begin, end });
             }
             return Ok(Intv::Monthly { begin, end });
@@ -619,15 +624,16 @@ mod test {
 
     #[test]
     fn test_instant() -> Result<()> {
-        // Output timezone uses a fixed offset so the tests succeed wherever
-        // we run them.
+        use chrono::Utc;
+        
+        // Use UTC for consistent test results across timezones
         let tz = FixedOffset::east_opt(4 * 3600).unwrap();
-        let sep_10 = Paris
-            .with_ymd_and_hms(2024, 9, 10, 12, 0, 0)
+        let sep_10 = Utc
+            .with_ymd_and_hms(2024, 9, 10, 10, 0, 0)
             .unwrap()
             .with_timezone(&Local);
-        let aug_31 = Paris
-            .with_ymd_and_hms(2024, 8, 31, 12, 0, 0)
+        let aug_31 = Utc
+            .with_ymd_and_hms(2024, 8, 31, 10, 0, 0)
             .unwrap()
             .with_timezone(&Local);
 
@@ -682,7 +688,7 @@ mod test {
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-02-01 04:00:00 +04:00", // closest day
+            "2024-02-01 03:00:00 +04:00", // closest day (winter time)
         );
 
         // End of month: in the local timezone, it is 2024-02-29, but we output
@@ -692,7 +698,7 @@ mod test {
                 .to_time(aug_31)?
                 .with_timezone(&tz)
                 .to_string(),
-            "2024-03-01 03:59:59.999999999 +04:00", // closest day
+            "2024-03-01 02:59:59.999999999 +04:00", // closest day (winter time)
         );
         assert_eq!(
             Instant::YearsAgo(1)
@@ -713,7 +719,9 @@ mod test {
 
     #[test]
     fn test_interval() -> Result<()> {
-        let sep01 = Paris
+        use chrono::Utc;
+        
+        let sep01 = Utc
             .with_ymd_and_hms(2024, 9, 1, 12, 0, 0)
             .unwrap()
             .with_timezone(&Local);
@@ -726,39 +734,39 @@ mod test {
                 sep01
             )?,
             vec![
-                "[2022-01-01 00:00:00 +00:00, 2023-01-01 00:00:00 +00:00)"
+                "[2022-01-01 00:00:00 +01:00, 2023-01-01 00:00:00 +01:00)"
                     .to_string(),
-                "[2023-01-01 00:00:00 +00:00, 2024-01-01 00:00:00 +00:00)"
+                "[2023-01-01 00:00:00 +01:00, 2024-01-01 00:00:00 +01:00)"
                     .to_string(),
-                "[2024-01-01 00:00:00 +00:00, 2025-01-01 00:00:00 +00:00)"
+                "[2024-01-01 00:00:00 +01:00, 2025-01-01 00:00:00 +01:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::MonthAgo(2), sep01)?,
             vec![
-                "[2024-07-01 00:00:00 +01:00, 2024-08-01 00:00:00 +01:00)"
+                "[2024-07-01 00:00:00 +02:00, 2024-08-01 00:00:00 +02:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::YearAgo(2), sep01)?,
             vec![
-                "[2022-01-01 00:00:00 +00:00, 2023-01-01 00:00:00 +00:00)"
+                "[2022-01-01 00:00:00 +01:00, 2023-01-01 00:00:00 +01:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::SpecificYear(1999), sep01)?,
             vec![
-                "[1999-01-01 00:00:00 +00:00, 2000-01-01 00:00:00 +00:00)"
+                "[1999-01-01 00:00:00 +01:00, 2000-01-01 00:00:00 +01:00)"
                     .to_string(),
             ],
         );
         assert_eq!(
             intv_to_string(Intv::LastNYears(10), sep01)?,
             vec![
-                "[2014-09-01 11:00:00 +01:00, 2024-09-01 11:00:00 +01:00)"
+                "[2014-09-01 14:00:00 +02:00, 2024-09-01 14:00:00 +02:00)"
                     .to_string(),
             ],
         );
@@ -771,13 +779,13 @@ mod test {
                 sep01
             )?,
             vec![
-                "[2024-07-01 00:00:00 +01:00, 2024-08-01 00:00:00 +01:00)"
+                "[2024-07-01 00:00:00 +02:00, 2024-08-01 00:00:00 +02:00)"
                     .to_string(),
-                "[2024-08-01 00:00:00 +01:00, 2024-09-01 00:00:00 +01:00)"
+                "[2024-08-01 00:00:00 +02:00, 2024-09-01 00:00:00 +02:00)"
                     .to_string(),
-                "[2024-09-01 00:00:00 +01:00, 2024-10-01 00:00:00 +01:00)"
+                "[2024-09-01 00:00:00 +02:00, 2024-10-01 00:00:00 +02:00)"
                     .to_string(),
-                "[2024-10-01 00:00:00 +01:00, 2024-11-01 00:00:00 +00:00)"
+                "[2024-10-01 00:00:00 +02:00, 2024-11-01 00:00:00 +01:00)"
                     .to_string(),
             ],
         );

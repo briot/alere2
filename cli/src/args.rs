@@ -4,11 +4,7 @@ use std::path::PathBuf;
 
 /// Manage your finances
 #[derive(Parser)]
-#[command(
-    version = "0.1",
-    flatten_help = true,
-    arg_required_else_help = true
-)]
+#[command(version = "0.1", flatten_help = true, arg_required_else_help = true)]
 pub struct Cli {
     #[command(flatten)]
     pub global: crate::global_settings::GlobalSettings,
@@ -129,9 +125,9 @@ pub enum Commands {
     },
 
     /// Run all commands found in the file (or stdin if not specified)
-    Batch { 
+    Batch {
         /// File containing commands (one per line). If not specified, reads from stdin.
-        file: Option<PathBuf> 
+        file: Option<PathBuf>,
     },
 
     /// Show ledger (transaction list) for accounts

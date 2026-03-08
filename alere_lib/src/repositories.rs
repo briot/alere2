@@ -25,14 +25,17 @@ pub struct Repository {
 }
 
 impl Repository {
+    #[must_use]
     pub fn transactions(&self) -> &TransactionCollection {
         &self.transactions
     }
 
+    #[must_use]
     pub fn prices(&self) -> &PriceCollection {
         &self.prices
     }
 
+    #[must_use]
     pub fn accounts(&self) -> &AccountCollection {
         &self.accounts
     }
@@ -86,7 +89,33 @@ impl Repository {
         )
     }
 
-    pub fn add_price(&mut self, origin: &Commodity, target: &Commodity, price: Price) {
+    pub fn add_price(
+        &mut self,
+        origin: &Commodity,
+        target: &Commodity,
+        price: Price,
+    ) {
         self.prices.add(origin, target, price);
+    }
+
+    #[must_use]
+    #[allow(clippy::mutable_key_type)]
+    pub fn compute_commodity_balances(
+        &self,
+    ) -> std::collections::HashMap<Commodity, rust_decimal::Decimal> {
+        #[allow(clippy::mutable_key_type)]
+        let mut balances = std::collections::HashMap::new();
+        for account in self.accounts.iter() {
+            account.for_each_split(|split| {
+                let mut mv = crate::multi_values::MultiValue::default();
+                mv.apply(&split.operation);
+                for value in mv.iter() {
+                    *balances
+                        .entry(value.commodity.clone())
+                        .or_insert(rust_decimal::Decimal::ZERO) += value.amount;
+                }
+            });
+        }
+        balances
     }
 }

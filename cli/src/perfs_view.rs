@@ -6,11 +6,7 @@ use alere_lib::{
 use anyhow::Result;
 use clap::ValueEnum;
 use rust_decimal::Decimal;
-use tabled::{
-    Tabled,
-    builder::Builder,
-    settings::{Alignment, Modify, object::Columns},
-};
+use tabled::{Tabled, builder::Builder};
 
 #[derive(Clone, ValueEnum)]
 pub enum PerfColumn {
@@ -41,13 +37,11 @@ const DEFAULT_COLUMNS: &[PerfColumn] = &[
 ];
 
 fn returns(val: &Option<Decimal>) -> String {
-    val.map(|p| format!("{:.2}%", ((p - Decimal::ONE) * Decimal::ONE_HUNDRED)))
-        .unwrap_or("n/a".to_string())
+    crate::global_settings::format_returns(val)
 }
 
 fn rate(val: &Option<Decimal>) -> String {
-    val.map(|p| format!("{:.2}%", (p * Decimal::ONE_HUNDRED)))
-        .unwrap_or("n/a".to_string())
+    crate::global_settings::format_percent(val)
 }
 
 #[derive(Tabled)]
@@ -169,15 +163,7 @@ pub fn perfs_view(
         builder.push_record(record);
     }
 
-    let mut table = builder.build();
-    globals.style.apply(&mut table);
-
-    // Right-align all columns except the first (Account)
-    table.with(Modify::new(Columns::new(1..)).with(Alignment::right()));
-
-    crate::global_settings::limit_table_width(&mut table, 0);
-
-    Ok(table.to_string())
+    Ok(globals.finalize_table(builder, Some(1), true))
 }
 
 #[cfg(test)]

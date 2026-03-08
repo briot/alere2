@@ -111,9 +111,7 @@ impl Performance {
             let mut npv = Decimal::ZERO;
             let mut npv_derivative = Decimal::ZERO;
 
-            let Some(r) = rate.to_f64() else {
-                return None;
-            };
+            let r = rate.to_f64()?;
 
             if r <= -0.99 {
                 return None;
@@ -133,17 +131,12 @@ impl Performance {
                 // Compound the past cash flow forward to now
                 let fv = amt * compound;
 
-                let Some(fv_dec) = Decimal::from_f64_retain(fv) else {
-                    return None;
-                };
+                let fv_dec = Decimal::from_f64_retain(fv)?;
                 npv += fv_dec;
 
                 // Derivative: d/dr[amt * (1+r)^t] = amt * t * (1+r)^(t-1)
                 let deriv_val = fv * years / (1.0 + r);
-                let Some(deriv_dec) = Decimal::from_f64_retain(deriv_val)
-                else {
-                    return None;
-                };
+                let deriv_dec = Decimal::from_f64_retain(deriv_val)?;
                 npv_derivative += deriv_dec;
             }
 
@@ -210,10 +203,16 @@ impl Performance {
         // Calculate IRR using cash flows and current equity
         // IRR requires all values in the same currency
         let irr = if !args.cash_flows.is_empty() {
-            if let (Some(equity_val), Some(target)) = (equity.iter().next(), target_commodity) {
+            if let (Some(equity_val), Some(target)) =
+                (equity.iter().next(), target_commodity)
+            {
                 // Check if equity is in the target currency (not shares)
                 if equity_val.commodity == *target {
-                    Self::calculate_irr(&args.cash_flows, equity_val.amount, end_date)
+                    Self::calculate_irr(
+                        &args.cash_flows,
+                        equity_val.amount,
+                        end_date,
+                    )
                 } else {
                     None
                 }
@@ -361,19 +360,34 @@ impl Performance {
                                                 Operation::Credit(v) => {
                                                     sale_proceeds += v;
                                                 }
-                                                Operation::BuyAmount { qty: q, .. } => {
-                                                    sale_proceeds += &MultiValue::new(q.amount, &q.commodity);
+                                                Operation::BuyAmount {
+                                                    qty: q,
+                                                    ..
+                                                } => {
+                                                    sale_proceeds +=
+                                                        &MultiValue::new(
+                                                            q.amount,
+                                                            &q.commodity,
+                                                        );
                                                 }
-                                                _ => {}
+                                                Operation::BuyPrice { .. }
+                                                | Operation::AddShares { .. }
+                                                | Operation::Reinvest { .. }
+                                                | Operation::Dividend
+                                                | Operation::Split { .. } => {}
                                             }
                                         }
                                     }
-                                    
-                                    let proceeds = prices.convert_multi_value(&sale_proceeds, &s.post_ts);
+
+                                    let proceeds = prices.convert_multi_value(
+                                        &sale_proceeds,
+                                        &s.post_ts,
+                                    );
                                     if let Some(val) = proceeds.iter().next() {
-                                        args.cash_flows.push((s.post_ts, val.amount));
+                                        args.cash_flows
+                                            .push((s.post_ts, val.amount));
                                     }
-                                    
+
                                     args.realized -= prices
                                         .convert_value(amount, &s.post_ts);
                                     args.realized += prices
@@ -433,7 +447,13 @@ impl Performance {
                 //dbg!(tx, &args.shares, &args.invested, &args.realized);
             }
 
-            result.push(Performance::new(&acc, args, &mut prices, settings.commodity.as_ref(), now));
+            result.push(Performance::new(
+                &acc,
+                args,
+                &mut prices,
+                settings.commodity.as_ref(),
+                now,
+            ));
         }
 
         Ok(result)
@@ -543,14 +563,14 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Investment
+                Decimal::from(-1000), // Investment
             ),
             (
                 Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(1100),  // Sale proceeds
+                Decimal::from(1100), // Sale proceeds
             ),
         ];
-        let final_value = Decimal::ZERO;  // All shares sold
+        let final_value = Decimal::ZERO; // All shares sold
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
@@ -650,11 +670,7 @@ mod tests {
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        assert!(
-            irr_val > 0.0,
-            "Expected positive IRR, got {}",
-            irr_val
-        );
+        assert!(irr_val > 0.0, "Expected positive IRR, got {}", irr_val);
     }
 
     #[test]
@@ -691,11 +707,11 @@ mod tests {
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap();
-        
+
         // IRR should be around 0.10 (10%), not 1.10
         assert!(
-            irr_val > Decimal::from_f64_retain(0.09).unwrap() && 
-            irr_val < Decimal::from_f64_retain(0.11).unwrap(),
+            irr_val > Decimal::from_f64_retain(0.09).unwrap()
+                && irr_val < Decimal::from_f64_retain(0.11).unwrap(),
             "Expected IRR around 0.10, got {}",
             irr_val
         );
@@ -710,19 +726,19 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Buy
+                Decimal::from(-1000), // Buy
             ),
             (
                 Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
-                Decimal::from(600),  // Sell some at profit
+                Decimal::from(600), // Sell some at profit
             ),
         ];
-        let final_value = Decimal::from(500);  // Remaining equity
+        let final_value = Decimal::from(500); // Remaining equity
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        
+
         // Total value: $600 (sold) + $500 (equity) = $1100 vs $1000 invested = 10% gain
         // IRR should be positive
         assert!(
@@ -741,25 +757,27 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-10000),  // Buy
+                Decimal::from(-10000), // Buy
             ),
             (
                 Local.with_ymd_and_hms(2024, 2, 1, 0, 0, 0).unwrap(),
-                Decimal::from(11000),  // Sell most at 10% profit
+                Decimal::from(11000), // Sell most at 10% profit
             ),
         ];
-        let final_value = Decimal::from(100);  // Small remaining equity
+        let final_value = Decimal::from(100); // Small remaining equity
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
-        
+
         // Total value: $11000 (sold) + $100 (equity) = $11100 vs $10000 invested = 11% gain
         // NPV equation: -10000*(1+r)^1 + 11000*(1+r)^(11/12) + 100 = 0
         // At any positive r, the early large return dominates, NPV stays positive
         // IRR is mathematically undefined (no solution exists)
-        
+
         println!("IRR result: {:?}", irr);
         if irr.is_none() {
-            println!("IRR correctly returns None - recovered investment too quickly");
+            println!(
+                "IRR correctly returns None - recovered investment too quickly"
+            );
         }
     }
 
@@ -772,22 +790,26 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Initial investment
+                Decimal::from(-1000), // Initial investment
             ),
             (
                 Local.with_ymd_and_hms(2024, 12, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-5000),  // Large late investment
+                Decimal::from(-5000), // Large late investment
             ),
         ];
-        let final_value = Decimal::from(5900);  // Total: $6000 invested, $5900 equity = -1.7% loss
+        let final_value = Decimal::from(5900); // Total: $6000 invested, $5900 equity = -1.7% loss
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
-        
+
         if let Some(irr_val) = irr {
             let irr_pct = irr_val.to_f64().unwrap();
             println!("IRR: {:.2}%", irr_pct * 100.0);
             // This should be negative since we lost money
-            assert!(irr_pct < 0.0, "Expected negative IRR (loss), got {}", irr_pct);
+            assert!(
+                irr_pct < 0.0,
+                "Expected negative IRR (loss), got {}",
+                irr_pct
+            );
         }
     }
 
@@ -810,10 +832,13 @@ mod tests {
         let final_value = Decimal::ZERO;
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
-        
+
         // IRR should be None - mathematically undefined
         // NPV = -1000*(1+r)^(1/365) + 1200 ≈ -1000 + 1200 = 200 (always positive)
-        assert!(irr.is_none(), "IRR should be None for instant >100% recovery");
+        assert!(
+            irr.is_none(),
+            "IRR should be None for instant >100% recovery"
+        );
     }
 
     #[test]
@@ -834,15 +859,15 @@ mod tests {
         let final_value = Decimal::from(10);
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
-        
+
         // Manual calculation:
         // NPV = -100*(1+r)^1 + 110*(1+r)^(11/12) + 10 = 0
         // At r=0: NPV = -100 + 110 + 10 = 20 (positive)
         // At r=0.2: NPV = -100*1.2 + 110*1.18 + 10 = -120 + 130 + 10 = 20 (still positive!)
         // This means there's no solution where NPV=0, IRR is undefined
-        
+
         println!("IRR result: {:?}", irr);
-        
+
         // This scenario has no valid IRR because the NPV is always positive
         // The investment recovered more than 100% very quickly
         if irr.is_none() {
@@ -858,19 +883,19 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Buy
+                Decimal::from(-1000), // Buy
             ),
             (
                 Local.with_ymd_and_hms(2024, 7, 1, 0, 0, 0).unwrap(),
-                Decimal::from(1000),  // Sell half (recovered full investment)
+                Decimal::from(1000), // Sell half (recovered full investment)
             ),
         ];
-        let final_value = Decimal::from(1000);  // Remaining equity (free money)
+        let final_value = Decimal::from(1000); // Remaining equity (free money)
 
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        
+
         // Net: invested $1000, got back $1000 + still have $1000 = 100% gain
         // IRR should be very positive
         assert!(
@@ -888,15 +913,15 @@ mod tests {
         let cash_flows = vec![
             (
                 Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Initial buy
+                Decimal::from(-1000), // Initial buy
             ),
             (
                 Local.with_ymd_and_hms(2024, 12, 1, 0, 0, 0).unwrap(),
-                Decimal::from(-1000),  // Add more near end
+                Decimal::from(-1000), // Add more near end
             ),
             (
                 Local.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
-                Decimal::from(2100),  // Sell all
+                Decimal::from(2100), // Sell all
             ),
         ];
         let final_value = Decimal::ZERO;
@@ -904,7 +929,7 @@ mod tests {
         let irr = Performance::calculate_irr(&cash_flows, final_value, now);
         assert!(irr.is_some());
         let irr_val = irr.unwrap().to_f64().unwrap();
-        
+
         // Net: invested $2000, got back $2100 = 5% gain
         // IRR should be positive
         assert!(

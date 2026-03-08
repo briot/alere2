@@ -92,7 +92,7 @@ pub struct GlobalSettings {
     pub empty: bool,
 
     /// Table style
-    #[arg(long, global = true, default_value = "modern")]
+    #[arg(long, global = true, default_value = "psql")]
     pub style: TableStyle,
 
     #[clap(skip)]

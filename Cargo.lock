@@ -594,6 +594,7 @@ dependencies = [
  "itertools",
  "kmy_editor",
  "log",
+ "regex",
  "rust_decimal",
  "shlex",
  "tabled",

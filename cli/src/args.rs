@@ -155,6 +155,10 @@ pub enum Commands {
         /// Only show transactions before this date (e.g., "now", "2024")
         #[arg(long)]
         before: Option<Instant>,
+
+        /// Filter transactions by matching any column (supports * wildcard)
+        #[arg(short, long)]
+        filter: Option<String>,
     },
 
     /// Manage accounts

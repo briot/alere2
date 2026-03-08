@@ -220,6 +220,10 @@ impl Transaction {
         Ref::map(self.0.borrow(), |tx| &tx.memo)
     }
 
+    pub fn payee(&self) -> Option<Payee> {
+        self.0.borrow().payee.clone()
+    }
+
     #[must_use]
     pub fn timestamp_for_account(
         &self,

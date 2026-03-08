@@ -227,8 +227,8 @@ fn run_subcommand(
         Commands::Perf { columns } => {
             perfs(repo, settings, columns.clone())?;
         }
-        Commands::Ledger { account, short_name, columns, since, before } => {
-            let output = ledger_view(repo, settings, account.as_deref(), *short_name, columns.as_ref(), since.as_ref(), before.as_ref())?;
+        Commands::Ledger { account, short_name, columns, since, before, filter } => {
+            let output = ledger_view(repo, settings, account.as_deref(), *short_name, columns.as_ref(), since.as_ref(), before.as_ref(), filter.as_deref())?;
             println!("{}", output);
         }
         Commands::Accounts { command } => {

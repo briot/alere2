@@ -1,0 +1,11 @@
+[package]
+name = "stock_importer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+reqwest = { version = "0.12", features = ["cookies"] }
+tokio = { version = "1", features = ["time"] }

@@ -230,7 +230,15 @@ fn run_subcommand(
             println!("{}", output);
         }
         Commands::Batch { file } => {
-            let content = std::fs::read_to_string(file)?;
+            let content = if let Some(path) = file {
+                std::fs::read_to_string(path)?
+            } else {
+                use std::io::Read;
+                let mut buffer = String::new();
+                std::io::stdin().read_to_string(&mut buffer)?;
+                buffer
+            };
+            
             let mut first = true;
             for line in content.lines() {
                 let line = line.trim();

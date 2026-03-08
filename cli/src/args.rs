@@ -128,8 +128,11 @@ pub enum Commands {
         percent: bool,
     },
 
-    /// Run all commands found in the file
-    Batch { file: PathBuf },
+    /// Run all commands found in the file (or stdin if not specified)
+    Batch { 
+        /// File containing commands (one per line). If not specified, reads from stdin.
+        file: Option<PathBuf> 
+    },
 
     /// Show ledger (transaction list) for accounts
     Ledger {

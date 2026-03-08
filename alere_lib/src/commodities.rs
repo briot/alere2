@@ -1,4 +1,3 @@
-use crate::price_sources::PriceSourceFrom;
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
@@ -43,8 +42,22 @@ impl Commodity {
         self.0.borrow().symbol_after
     }
 
+    #[must_use]
+    pub fn get_quote_symbol(&self) -> Option<String> {
+        self.0.borrow()._quote_symbol.clone()
+    }
+
+    #[must_use]
+    pub fn get_quote_source(&self) -> Option<String> {
+        self.0.borrow()._quote_source.clone()
+    }
+
     pub fn set_isin(&mut self, isin: &str) {
         self.0.borrow_mut().isin = Some(isin.to_string());
+    }
+
+    pub fn set_quote_source(&mut self, source: &str) {
+        self.0.borrow_mut()._quote_source = Some(source.to_string());
     }
 
     #[must_use]
@@ -175,7 +188,7 @@ struct CommodityDetails {
     /// So if we start with the AAPL commodity,  quote_currency might be USD if
     /// the online source gives prices in USD.
     _quote_symbol: Option<String>,
-    _quote_source: Option<PriceSourceFrom>,
+    _quote_source: Option<String>,
     _quote_currency: Option<Commodity>,
 
     /// Number of digits in the fractional part

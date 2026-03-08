@@ -5,6 +5,7 @@ mod ledger_view;
 mod metrics_view;
 mod networth_view;
 mod perfs_view;
+mod update_view;
 
 use crate::{
     accounts_view::accounts_list,
@@ -238,6 +239,10 @@ fn run_subcommand(
                     println!("{}", output);
                 }
             }
+        }
+        Commands::Update => {
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(update_view::update_prices(repo, settings))?;
         }
         Commands::Batch { file } => {
             let content = if let Some(path) = file {

@@ -166,6 +166,9 @@ pub enum Commands {
         #[command(subcommand)]
         command: AccountsCommand,
     },
+
+    /// Update stock prices and show networth changes
+    Update,
 }
 
 #[derive(Debug, Subcommand)]

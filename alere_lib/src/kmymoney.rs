@@ -429,8 +429,10 @@ impl KmyMoneyImporter {
                     "SECURITY",
                     "kmm-online-source" | "kmm-online-quote-system",
                 ) => {
-                    // Which online source to use.  This is a string referencing
-                    // some information elsewhere, unclear for now.
+                    if let Some(data) = kvp_data {
+                        let commodity = self.commodities.get_mut(kvp_id).unwrap();
+                        commodity.set_quote_source(data);
+                    }
                 }
                 ("TRANSACTION", "Imported") => {
                     // Unused

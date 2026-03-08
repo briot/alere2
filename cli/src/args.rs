@@ -156,6 +156,22 @@ pub enum Commands {
         #[arg(long)]
         before: Option<Instant>,
     },
+
+    /// Manage accounts
+    Accounts {
+        #[command(subcommand)]
+        command: AccountsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AccountsCommand {
+    /// List all accounts
+    List {
+        /// Filter accounts by partial name match (case-insensitive)
+        #[arg(short, long)]
+        filter: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

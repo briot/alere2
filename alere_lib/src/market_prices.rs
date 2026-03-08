@@ -81,9 +81,18 @@ impl<'a> MarketPrices<'a> {
         commodity: &Commodity,
         as_of: &DateTime<Local>,
     ) -> Option<Decimal> {
+        self.get_price_with_date(commodity, as_of).map(|p| p.price)
+    }
+
+    /// Return the full Price object with timestamp
+    pub fn get_price_with_date(
+        &mut self,
+        commodity: &Commodity,
+        as_of: &DateTime<Local>,
+    ) -> Option<Price> {
         match self.to_commodity.clone() {
             None => None,
-            Some(c) if c == *commodity => Some(Decimal::ONE),
+            Some(c) if c == *commodity => Some(Price::new(*as_of, Decimal::ONE, PriceSourceFrom::Transaction)),
             Some(c) => {
                 let mut result =
                     self.get_price_no_turnkey(commodity, &c, as_of);
@@ -93,27 +102,24 @@ impl<'a> MarketPrices<'a> {
                 {
                     match self.get_price_no_turnkey(commodity, turnkey, as_of) {
                         None => {}
-                        Some(p1) => match self
-                            .get_price_no_turnkey(turnkey, &c, as_of)
-                        {
-                            None => {}
-                            Some(p2) => {
-                                keep_most_recent(
-                                    &mut result,
-                                    Price::new(
-                                        std::cmp::min(
-                                            p1.timestamp,
-                                            p2.timestamp,
+                        Some(p1) => {
+                            match self.get_price_no_turnkey(turnkey, &c, as_of) {
+                                None => {}
+                                Some(p2) => {
+                                    keep_most_recent(
+                                        &mut result,
+                                        Price::new(
+                                            std::cmp::min(p1.timestamp, p2.timestamp),
+                                            p1.price * p2.price,
+                                            PriceSourceFrom::Turnkey,
                                         ),
-                                        p1.price * p2.price,
-                                        PriceSourceFrom::Turnkey,
-                                    ),
-                                );
+                                    );
+                                }
                             }
-                        },
+                        }
                     }
                 }
-                result.map(|m| m.price)
+                result
             }
         }
     }

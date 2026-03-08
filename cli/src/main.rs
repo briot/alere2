@@ -1,6 +1,7 @@
 mod accounts_view;
 mod args;
 mod global_settings;
+mod history_view;
 mod ledger_view;
 mod metrics_view;
 mod networth_view;
@@ -265,6 +266,22 @@ fn run_subcommand(
         Commands::Update => {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(update_view::update_prices(repo, settings))?;
+        }
+        Commands::History {
+            account,
+            granularity,
+            since,
+            before,
+        } => {
+            let output = history_view::history_view(
+                repo,
+                settings,
+                account.as_deref(),
+                granularity,
+                since.as_deref(),
+                before.as_deref(),
+            )?;
+            println!("{}", output);
         }
         Commands::Batch { file } => {
             let content = if let Some(path) = file {

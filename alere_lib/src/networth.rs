@@ -206,6 +206,12 @@ impl NetworthRow {
             Some(p) => Ok(format!("{:.1}%", p * Decimal::ONE_HUNDRED)),
         }
     }
+
+    /// Get the market value at a specific index
+    pub fn get_market_value(&self, idx: usize) -> Result<&MultiValue> {
+        let cell = self.0.get(idx).ok_or(AlrError::IndexError)?;
+        Ok(&cell.market_value)
+    }
 }
 
 impl core::ops::AddAssign<&NetworthRow> for NetworthRow {

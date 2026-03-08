@@ -165,6 +165,25 @@ pub enum Commands {
 
     /// Update stock prices and show networth changes
     Update,
+
+    /// Show account balance history over time
+    History {
+        /// Account name filter (partial match)
+        #[arg(long)]
+        account: Option<String>,
+
+        /// Time granularity: daily, monthly, yearly
+        #[arg(long, default_value = "monthly")]
+        granularity: String,
+
+        /// Start date (e.g., "2020-01-01", "2y", "start of 2023")
+        #[arg(long)]
+        since: Option<String>,
+
+        /// End date (defaults to now)
+        #[arg(long)]
+        before: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

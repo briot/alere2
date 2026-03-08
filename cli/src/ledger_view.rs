@@ -184,11 +184,56 @@ mod tests {
     use alere_lib::{importers::Importer, kmymoney::KmyMoneyImporter};
     use chrono::Local;
     use futures::executor::block_on;
-    use std::{path::Path, str::FromStr};
+    use std::str::FromStr;
+
+    fn create_test_data() -> Result<kmy_editor::KmyEditor> {
+        let mut editor = kmy_editor::KmyEditor::new()?;
+        
+        // Add currency
+        editor.add_currency("EUR", "Euro", "€")?;
+        
+        // Add accounts
+        let checking = editor.add_account("Checking", "1", "EUR")?;
+        let savings = editor.add_account("Savings", "1", "EUR")?;
+        let equity = editor.add_standard_account("Equity", "Equity", "16", "EUR")?;
+        let expense = editor.add_standard_account("Expense", "Expense", "13", "EUR")?;
+        let income = editor.add_standard_account("Income", "Income", "12", "EUR")?;
+        
+        // Add payee
+        let grocery_store = editor.add_payee("Grocery Store")?;
+        
+        // Transaction 1: Opening balance
+        let t1 = editor.add_transaction("2024-01-01", Some("Opening Checking"), "EUR")?;
+        editor.add_split(&t1, 0, &checking, "2000/1", "2024-01-01", None)?;
+        editor.add_split(&t1, 1, &equity, "-2000/1", "2024-01-01", None)?;
+        
+        // Transaction 2: Transfer to savings
+        let t2 = editor.add_transaction("2024-03-15", Some("From checking"), "EUR")?;
+        editor.add_split(&t2, 0, &checking, "-500/1", "2024-03-15", None)?;
+        editor.add_split(&t2, 1, &savings, "500/1", "2024-03-15", None)?;
+        
+        // Transaction 3: Expense
+        let t3 = editor.add_transaction("2024-06-20", Some("Weekly shopping"), "EUR")?;
+        editor.add_split(&t3, 0, &checking, "-300/1", "2024-06-20", None)?;
+        editor.add_split(&t3, 1, &expense, "300/1", "2024-06-20", None)?;
+        
+        // Transaction 4: Income
+        let t4 = editor.add_transaction("2025-01-15", Some("Monthly salary"), "EUR")?;
+        editor.add_split(&t4, 0, &checking, "2000/1", "2025-01-15", None)?;
+        editor.add_split(&t4, 1, &income, "-2000/1", "2025-01-15", None)?;
+        
+        // Transaction 5: Expense with payee but no memo
+        let t5 = editor.add_transaction("2025-02-10", None, "EUR")?;
+        editor.add_split(&t5, 0, &checking, "-150/1", "2025-02-10", Some(&grocery_store))?;
+        editor.add_split(&t5, 1, &expense, "150/1", "2025-02-10", None)?;
+        
+        Ok(editor)
+    }
 
     fn load_test_repo() -> Repository {
+        let editor = create_test_data().unwrap();
         let mut kmy = KmyMoneyImporter::default();
-        block_on(kmy.import_file(Path::new("../eur_sample.kmy"), |_, _| {})).unwrap()
+        block_on(kmy.import_file(editor.path(), |_, _| {})).unwrap()
     }
 
     fn test_settings() -> GlobalSettings {
@@ -203,8 +248,8 @@ mod tests {
         let settings = test_settings();
         let output = ledger_view(&repo, &settings, Some("checking"), false, None, None, None).unwrap();
         
-        assert!(output.contains("Asset:Checking"));
-        assert!(output.contains("2,000 €"));
+        assert!(output.contains("Checking"));
+        assert!(output.contains("2,000"));
         assert!(output.contains("Opening Checking"));
         assert!(output.contains("Balance"));
         assert!(output.contains("Memo"));

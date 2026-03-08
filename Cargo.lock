@@ -592,6 +592,7 @@ dependencies = [
  "indicatif",
  "indicatif-log-bridge",
  "itertools",
+ "kmy_editor",
  "log",
  "rust_decimal",
  "shlex",
@@ -1377,6 +1378,13 @@ checksum = "852f13bec5eba4ba9afbeb93fd7c13fe56147f055939ae21c43a29a0ecb2702e"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kmy_editor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

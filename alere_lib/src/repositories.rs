@@ -33,6 +33,10 @@ impl Repository {
         &self.prices
     }
 
+    pub fn accounts(&self) -> &AccountCollection {
+        &self.accounts
+    }
+
     pub fn add_transaction(&mut self, tx: Transaction) -> Result<()> {
         for s in tx.splits().iter() {
             // Register prices from transactions

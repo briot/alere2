@@ -1,3 +1,4 @@
+mod accounts_view;
 mod args;
 mod global_settings;
 mod ledger_view;
@@ -6,7 +7,8 @@ mod networth_view;
 mod perfs_view;
 
 use crate::{
-    args::{Cli, Commands, ExportFormat},
+    accounts_view::accounts_list,
+    args::{Cli, Commands, ExportFormat, AccountsCommand},
     global_settings::GlobalSettings,
     ledger_view::ledger_view,
     metrics_view::metrics_view,
@@ -228,6 +230,14 @@ fn run_subcommand(
         Commands::Ledger { account, short_name, columns, since, before } => {
             let output = ledger_view(repo, settings, account.as_deref(), *short_name, columns.as_ref(), since.as_ref(), before.as_ref())?;
             println!("{}", output);
+        }
+        Commands::Accounts { command } => {
+            match command {
+                AccountsCommand::List { filter } => {
+                    let output = accounts_list(repo, filter.as_deref())?;
+                    println!("{}", output);
+                }
+            }
         }
         Commands::Batch { file } => {
             let content = if let Some(path) = file {

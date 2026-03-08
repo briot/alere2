@@ -85,4 +85,8 @@ impl Repository {
             to_commodity,
         )
     }
+
+    pub fn add_price(&mut self, origin: &Commodity, target: &Commodity, price: Price) {
+        self.prices.add(origin, target, price);
+    }
 }

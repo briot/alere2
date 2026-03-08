@@ -430,7 +430,8 @@ impl KmyMoneyImporter {
                     "kmm-online-source" | "kmm-online-quote-system",
                 ) => {
                     if let Some(data) = kvp_data {
-                        let commodity = self.commodities.get_mut(kvp_id).unwrap();
+                        let commodity =
+                            self.commodities.get_mut(kvp_id).unwrap();
                         commodity.set_quote_source(data);
                     }
                 }

@@ -8,6 +8,7 @@ use anyhow::Result;
 
 use crate::global_settings::GlobalSettings;
 
+#[allow(clippy::too_many_arguments)]
 pub fn ledger_view(
     repo: &Repository,
     settings: &GlobalSettings,
@@ -19,19 +20,25 @@ pub fn ledger_view(
     filter: Option<&str>,
 ) -> Result<String> {
     use tabled::builder::Builder;
-    
+
     // Convert filter pattern to regex (support * wildcard)
-    let filter_regex = filter.map(|f| {
-        let pattern = regex::escape(f).replace(r"\*", ".*");
-        regex::RegexBuilder::new(&pattern)
-            .case_insensitive(true)
-            .build()
-    }).transpose()?;
-    
+    let filter_regex = filter
+        .map(|f| {
+            let pattern = regex::escape(f).replace(r"\*", ".*");
+            regex::RegexBuilder::new(&pattern)
+                .case_insensitive(true)
+                .build()
+        })
+        .transpose()?;
+
     // Default columns if none specified
-    let default_cols = vec!["balance".to_string(), "memo".to_string(), "splits".to_string()];
+    let default_cols = vec![
+        "balance".to_string(),
+        "memo".to_string(),
+        "splits".to_string(),
+    ];
     let cols = columns.unwrap_or(&default_cols);
-    
+
     // Parse column options
     let show_splits = cols.iter().any(|c| c.eq_ignore_ascii_case("splits"));
 
@@ -51,7 +58,6 @@ pub fn ledger_view(
     let since_date = since.and_then(|i| i.to_time(settings.reftime).ok());
     let before_date = before.and_then(|i| i.to_time(settings.reftime).ok());
 
-
     let mut transactions: Vec<_> = repo.transactions().iter().collect();
     transactions.sort_by_key(|tx| {
         tx.splits().first().map(|s| s.post_ts).unwrap_or_default()
@@ -65,17 +71,20 @@ pub fn ledger_view(
 
     let mut builder = Builder::default();
     builder.push_record(header);
-    
+
     let mut running_total = MultiValue::default();
 
     for tx in transactions {
         let splits = tx.splits();
         let memo = tx.memo();
-        
+
         // Always match against full name
         let matches = if let Some(filter) = account_filter {
             splits.iter().any(|s| {
-                s.account.name(AccountNameDepth::unlimited()).to_lowercase().contains(&filter.to_lowercase())
+                s.account
+                    .name(AccountNameDepth::unlimited())
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
             })
         } else {
             true
@@ -87,34 +96,53 @@ pub fn ledger_view(
 
         // Find the split for the filtered account, or prefer Asset accounts
         let main_idx = if let Some(filter) = account_filter {
-            splits.iter().position(|s| {
-                s.account.name(AccountNameDepth::unlimited()).to_lowercase().contains(&filter.to_lowercase())
-            }).unwrap()
+            splits
+                .iter()
+                .position(|s| {
+                    s.account
+                        .name(AccountNameDepth::unlimited())
+                        .to_lowercase()
+                        .contains(&filter.to_lowercase())
+                })
+                .unwrap()
         } else {
             // Prefer Asset accounts
-            splits.iter().position(|s| {
-                s.account.name(AccountNameDepth::unlimited()).starts_with("Asset:")
-            }).unwrap_or(0)
+            splits
+                .iter()
+                .position(|s| {
+                    s.account
+                        .name(AccountNameDepth::unlimited())
+                        .starts_with("Asset:")
+                })
+                .unwrap_or(0)
         };
 
-        let main_split = &splits[main_idx];
+        let main_split = splits.get(main_idx).or_else(|| splits.first()).unwrap();
 
         // Check date filters (but still update running total for all transactions)
         let in_date_range = {
             let ts = main_split.post_ts;
-            let after_since = since_date.map_or(true, |d| ts >= d);
-            let before_limit = before_date.map_or(true, |d| ts <= d);
+            let after_since = since_date.is_none_or(|d| ts >= d);
+            let before_limit = before_date.is_none_or(|d| ts <= d);
             after_since && before_limit
         };
 
         // Update running total
         let amount_mv = match &main_split.operation {
             Operation::Credit(v) => v.clone(),
-            Operation::BuyAmount { qty, .. } => MultiValue::new(qty.amount, &qty.commodity),
-            Operation::BuyPrice { qty, .. } => MultiValue::new(qty.amount, &qty.commodity),
-            Operation::AddShares { qty } => MultiValue::new(qty.amount, &qty.commodity),
+            Operation::BuyAmount { qty, .. } => {
+                MultiValue::new(qty.amount, &qty.commodity)
+            }
+            Operation::BuyPrice { qty, .. } => {
+                MultiValue::new(qty.amount, &qty.commodity)
+            }
+            Operation::AddShares { qty } => {
+                MultiValue::new(qty.amount, &qty.commodity)
+            }
             Operation::Reinvest { shares, .. } => shares.clone(),
-            Operation::Dividend | Operation::Split { .. } => MultiValue::default(),
+            Operation::Dividend | Operation::Split { .. } => {
+                MultiValue::default()
+            }
         };
         running_total += &amount_mv;
 
@@ -126,25 +154,30 @@ pub fn ledger_view(
         // Prepare all column values
         let date_str = main_split.post_ts.format("%Y-%m-%d").to_string();
         let account_str = main_split.account.name(display_depth);
-        let account_full = main_split.account.name(AccountNameDepth::unlimited());
+        let account_full =
+            main_split.account.name(AccountNameDepth::unlimited());
         let amount_str = amount_mv.display(&settings.format);
-        
+
         let balance_str = if settings.commodity.is_some() {
             let mut prices = repo.market_prices(settings.commodity.clone());
-            let converted = prices.convert_multi_value(&running_total, &main_split.post_ts);
+            let converted =
+                prices.convert_multi_value(&running_total, &main_split.post_ts);
             converted.display(&settings.format)
         } else {
             running_total.display(&settings.format)
         };
 
         let memo_str = memo.as_ref().map(|s| s.to_string()).unwrap_or_default();
-        let payee_str = tx.payee().map(|p| p.get_name().to_string()).unwrap_or_default();
+        let payee_str = tx
+            .payee()
+            .map(|p| p.get_name().to_string())
+            .unwrap_or_default();
         let what_str = if !memo_str.is_empty() {
             memo_str.clone()
         } else {
             payee_str.clone()
         };
-        
+
         // Apply filter if specified
         if let Some(ref regex) = filter_regex {
             let mut matches = regex.is_match(&date_str)
@@ -154,23 +187,24 @@ pub fn ledger_view(
                 || regex.is_match(&memo_str)
                 || regex.is_match(&payee_str)
                 || regex.is_match(&what_str);
-            
+
             // Also check all other splits' accounts
             if !matches {
                 for split in splits.iter() {
-                    let split_account = split.account.name(AccountNameDepth::unlimited());
+                    let split_account =
+                        split.account.name(AccountNameDepth::unlimited());
                     if regex.is_match(&split_account) {
                         matches = true;
                         break;
                     }
                 }
             }
-            
+
             if !matches {
                 continue;
             }
         }
-        
+
         // Build row in column order
         let mut row = vec![date_str, account_str, amount_str];
         for col in cols.iter() {
@@ -192,18 +226,34 @@ pub fn ledger_view(
                 }
                 let amount_str = match &split.operation {
                     Operation::Credit(v) => v.display(&settings.format),
-                    Operation::BuyAmount { qty, .. } => qty.display(&settings.format),
-                    Operation::BuyPrice { qty, .. } => qty.display(&settings.format),
-                    Operation::AddShares { qty } => qty.display(&settings.format),
-                    Operation::Reinvest { shares, .. } => shares.display(&settings.format),
+                    Operation::BuyAmount { qty, .. } => {
+                        qty.display(&settings.format)
+                    }
+                    Operation::BuyPrice { qty, .. } => {
+                        qty.display(&settings.format)
+                    }
+                    Operation::AddShares { qty } => {
+                        qty.display(&settings.format)
+                    }
+                    Operation::Reinvest { shares, .. } => {
+                        shares.display(&settings.format)
+                    }
                     Operation::Dividend => "dividend".to_string(),
-                    Operation::Split { ratio, .. } => format!("split {}", ratio),
+                    Operation::Split { ratio, .. } => {
+                        format!("split {}", ratio)
+                    }
                 };
-                
-                let mut row = vec![String::new(), format!("  {}", split.account.name(display_depth)), amount_str];
+
+                let mut row = vec![
+                    String::new(),
+                    format!("  {}", split.account.name(display_depth)),
+                    amount_str,
+                ];
                 for col in cols.iter() {
                     match col.to_lowercase().as_str() {
-                        "balance" if filter.is_none() => row.push(String::new()),
+                        "balance" if filter.is_none() => {
+                            row.push(String::new())
+                        }
                         "payee" | "what" | "memo" => row.push(String::new()),
                         _ => {}
                     }
@@ -212,10 +262,8 @@ pub fn ledger_view(
             }
         }
     }
-    
-    let mut table = builder.build();
-    settings.style.apply(&mut table);
-    Ok(table.to_string())
+
+    Ok(settings.finalize_table(builder, None, false))
 }
 
 #[cfg(test)]
@@ -228,45 +276,71 @@ mod tests {
 
     fn create_test_data() -> Result<kmy_editor::KmyEditor> {
         let mut editor = kmy_editor::KmyEditor::new()?;
-        
+
         // Add currency
         editor.add_currency("EUR", "Euro", "€")?;
-        
+
         // Add accounts
         let checking = editor.add_account("Checking", "1", "EUR")?;
         let savings = editor.add_account("Savings", "1", "EUR")?;
-        let equity = editor.add_standard_account("Equity", "Equity", "16", "EUR")?;
-        let expense = editor.add_standard_account("Expense", "Expense", "13", "EUR")?;
-        let income = editor.add_standard_account("Income", "Income", "12", "EUR")?;
-        
+        let equity =
+            editor.add_standard_account("Equity", "Equity", "16", "EUR")?;
+        let expense =
+            editor.add_standard_account("Expense", "Expense", "13", "EUR")?;
+        let income =
+            editor.add_standard_account("Income", "Income", "12", "EUR")?;
+
         // Add payee
         let grocery_store = editor.add_payee("Grocery Store")?;
-        
+
         // Transaction 1: Opening balance
-        let t1 = editor.add_transaction("2024-01-01", Some("Opening Checking"), "EUR")?;
+        let t1 = editor.add_transaction(
+            "2024-01-01",
+            Some("Opening Checking"),
+            "EUR",
+        )?;
         editor.add_split(&t1, 0, &checking, "2000/1", "2024-01-01", None)?;
         editor.add_split(&t1, 1, &equity, "-2000/1", "2024-01-01", None)?;
-        
+
         // Transaction 2: Transfer to savings
-        let t2 = editor.add_transaction("2024-03-15", Some("From checking"), "EUR")?;
+        let t2 = editor.add_transaction(
+            "2024-03-15",
+            Some("From checking"),
+            "EUR",
+        )?;
         editor.add_split(&t2, 0, &checking, "-500/1", "2024-03-15", None)?;
         editor.add_split(&t2, 1, &savings, "500/1", "2024-03-15", None)?;
-        
+
         // Transaction 3: Expense
-        let t3 = editor.add_transaction("2024-06-20", Some("Weekly shopping"), "EUR")?;
+        let t3 = editor.add_transaction(
+            "2024-06-20",
+            Some("Weekly shopping"),
+            "EUR",
+        )?;
         editor.add_split(&t3, 0, &checking, "-300/1", "2024-06-20", None)?;
         editor.add_split(&t3, 1, &expense, "300/1", "2024-06-20", None)?;
-        
+
         // Transaction 4: Income
-        let t4 = editor.add_transaction("2025-01-15", Some("Monthly salary"), "EUR")?;
+        let t4 = editor.add_transaction(
+            "2025-01-15",
+            Some("Monthly salary"),
+            "EUR",
+        )?;
         editor.add_split(&t4, 0, &checking, "2000/1", "2025-01-15", None)?;
         editor.add_split(&t4, 1, &income, "-2000/1", "2025-01-15", None)?;
-        
+
         // Transaction 5: Expense with payee but no memo
         let t5 = editor.add_transaction("2025-02-10", None, "EUR")?;
-        editor.add_split(&t5, 0, &checking, "-150/1", "2025-02-10", Some(&grocery_store))?;
+        editor.add_split(
+            &t5,
+            0,
+            &checking,
+            "-150/1",
+            "2025-02-10",
+            Some(&grocery_store),
+        )?;
         editor.add_split(&t5, 1, &expense, "150/1", "2025-02-10", None)?;
-        
+
         Ok(editor)
     }
 
@@ -286,8 +360,18 @@ mod tests {
     fn test_ledger_default() {
         let repo = load_test_repo();
         let settings = test_settings();
-        let output = ledger_view(&repo, &settings, Some("checking"), false, None, None, None, None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
         assert!(output.contains("Checking"));
         assert!(output.contains("2,000"));
         assert!(output.contains("Opening Checking"));
@@ -300,8 +384,18 @@ mod tests {
         let repo = load_test_repo();
         let settings = test_settings();
         let columns = vec!["payee".to_string()];
-        let output = ledger_view(&repo, &settings, Some("checking"), false, Some(&columns), None, None, None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            Some(&columns),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
         assert!(output.contains("Payee"));
         assert!(!output.contains("Balance"));
         assert!(!output.contains("Memo"));
@@ -312,8 +406,18 @@ mod tests {
         let repo = load_test_repo();
         let settings = test_settings();
         let columns = vec!["what".to_string()];
-        let output = ledger_view(&repo, &settings, Some("checking"), false, Some(&columns), None, None, None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            Some(&columns),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
         assert!(output.contains("What"));
         assert!(output.contains("Opening Checking"));
         assert!(!output.contains("Balance"));
@@ -324,8 +428,18 @@ mod tests {
         let repo = load_test_repo();
         let settings = test_settings();
         let since = Instant::from_str("start of 3 years ago").unwrap();
-        let output = ledger_view(&repo, &settings, Some("checking"), false, None, Some(&since), None, None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            None,
+            Some(&since),
+            None,
+            None,
+        )
+        .unwrap();
+
         assert!(output.contains("2024-01-01"));
         assert!(output.contains("2025-01-15"));
     }
@@ -335,8 +449,18 @@ mod tests {
         let repo = load_test_repo();
         let settings = test_settings();
         let before = Instant::from_str("1 years ago").unwrap();
-        let output = ledger_view(&repo, &settings, Some("checking"), false, None, None, Some(&before), None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            None,
+            None,
+            Some(&before),
+            None,
+        )
+        .unwrap();
+
         // All transactions are more than 1 year ago, so should show
         assert!(output.contains("2024-01-01"));
         assert!(output.contains("2025-01-15"));
@@ -346,9 +470,23 @@ mod tests {
     fn test_ledger_multiple_columns() {
         let repo = load_test_repo();
         let settings = test_settings();
-        let columns = vec!["balance".to_string(), "what".to_string(), "payee".to_string()];
-        let output = ledger_view(&repo, &settings, Some("checking"), false, Some(&columns), None, None, None).unwrap();
-        
+        let columns = vec![
+            "balance".to_string(),
+            "what".to_string(),
+            "payee".to_string(),
+        ];
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            Some(&columns),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
         assert!(output.contains("Balance"));
         assert!(output.contains("What"));
         assert!(output.contains("Payee"));
@@ -360,14 +498,24 @@ mod tests {
         let repo = load_test_repo();
         let settings = test_settings();
         let columns = vec!["what".to_string(), "payee".to_string()];
-        let output = ledger_view(&repo, &settings, Some("checking"), false, Some(&columns), None, None, None).unwrap();
-        
+        let output = ledger_view(
+            &repo,
+            &settings,
+            Some("checking"),
+            false,
+            Some(&columns),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
         // Transaction with memo should show memo in What column
         assert!(output.contains("Opening Checking"));
-        
+
         // Transaction without memo but with payee should show payee in What column
         assert!(output.contains("Grocery Store"));
-        
+
         // Verify the transaction with payee exists
         assert!(output.contains("2025-02-10"));
     }

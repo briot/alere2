@@ -28,17 +28,18 @@ impl YahooFinance {
         Ok(Self {
             price_regex: Regex::new(r#""regularMarketPrice":([0-9.]+)"#)?,
             time_regex: Regex::new(r#""regularMarketTime":([0-9]+)"#)?,
-            client: reqwest::Client::builder()
-                .cookie_store(true)
-                .build()?,
+            client: reqwest::Client::builder().cookie_store(true).build()?,
         })
     }
 }
 
 impl StockSource for YahooFinance {
     async fn fetch_price(&self, symbol: &str) -> Result<StockPrice> {
-        let url = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}", symbol);
-        
+        let url = format!(
+            "https://query1.finance.yahoo.com/v8/finance/chart/{}",
+            symbol
+        );
+
         let response = self.client.get(&url)
             .header("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
             .header("accept-language", "en-US,en;q=0.9,fr;q=0.8")
@@ -55,20 +56,26 @@ impl StockSource for YahooFinance {
             .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
             .send().await?
             .text().await?;
-        
-        let price = self.price_regex
+
+        let price = self
+            .price_regex
             .captures(&response)
             .and_then(|c| c.get(1))
             .and_then(|m| m.as_str().parse::<f64>().ok())
-            .ok_or_else(|| anyhow::anyhow!("Failed to extract price for {}", symbol))?;
-        
-        let timestamp = self.time_regex
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to extract price for {}", symbol)
+            })?;
+
+        let timestamp = self
+            .time_regex
             .captures(&response)
             .and_then(|c| c.get(1))
             .and_then(|m| m.as_str().parse::<i64>().ok())
             .and_then(|ts| Local.timestamp_opt(ts, 0).single())
-            .ok_or_else(|| anyhow::anyhow!("Failed to extract timestamp for {}", symbol))?;
-        
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to extract timestamp for {}", symbol)
+            })?;
+
         Ok(StockPrice {
             symbol: symbol.to_string(),
             price,

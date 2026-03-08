@@ -92,7 +92,11 @@ impl<'a> MarketPrices<'a> {
     ) -> Option<Price> {
         match self.to_commodity.clone() {
             None => None,
-            Some(c) if c == *commodity => Some(Price::new(*as_of, Decimal::ONE, PriceSourceFrom::Transaction)),
+            Some(c) if c == *commodity => Some(Price::new(
+                *as_of,
+                Decimal::ONE,
+                PriceSourceFrom::Transaction,
+            )),
             Some(c) => {
                 let mut result =
                     self.get_price_no_turnkey(commodity, &c, as_of);
@@ -103,13 +107,17 @@ impl<'a> MarketPrices<'a> {
                     match self.get_price_no_turnkey(commodity, turnkey, as_of) {
                         None => {}
                         Some(p1) => {
-                            match self.get_price_no_turnkey(turnkey, &c, as_of) {
+                            match self.get_price_no_turnkey(turnkey, &c, as_of)
+                            {
                                 None => {}
                                 Some(p2) => {
                                     keep_most_recent(
                                         &mut result,
                                         Price::new(
-                                            std::cmp::min(p1.timestamp, p2.timestamp),
+                                            std::cmp::min(
+                                                p1.timestamp,
+                                                p2.timestamp,
+                                            ),
                                             p1.price * p2.price,
                                             PriceSourceFrom::Turnkey,
                                         ),

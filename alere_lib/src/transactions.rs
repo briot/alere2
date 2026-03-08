@@ -220,6 +220,7 @@ impl Transaction {
         Ref::map(self.0.borrow(), |tx| &tx.memo)
     }
 
+    #[must_use]
     pub fn payee(&self) -> Option<Payee> {
         self.0.borrow().payee.clone()
     }

@@ -81,6 +81,24 @@ pub fn limit_table_width(table: &mut tabled::Table, text_column: usize) {
     );
 }
 
+/// Format a percentage value
+pub fn format_percent(val: &Option<rust_decimal::Decimal>) -> String {
+    val.map(|p| format!("{:.2}%", (p * rust_decimal::Decimal::ONE_HUNDRED)))
+        .unwrap_or("n/a".to_string())
+}
+
+/// Format a returns value (subtract 1 first)
+pub fn format_returns(val: &Option<rust_decimal::Decimal>) -> String {
+    val.map(|p| {
+        format!(
+            "{:.2}%",
+            ((p - rust_decimal::Decimal::ONE)
+                * rust_decimal::Decimal::ONE_HUNDRED)
+        )
+    })
+    .unwrap_or("n/a".to_string())
+}
+
 #[derive(Parser)]
 pub struct GlobalSettings {
     /// Show market values with this currency
@@ -118,6 +136,28 @@ impl GlobalSettings {
         {
             panic!("Unknown commodity {}", c);
         }
+    }
+
+    /// Finalize a table with style and optional formatting
+    pub fn finalize_table(
+        &self,
+        builder: tabled::builder::Builder,
+        right_align_from: Option<usize>,
+        limit_width: bool,
+    ) -> String {
+        use tabled::settings::{Alignment, Modify, object::Columns};
+
+        let mut table = builder.build();
+        self.style.apply(&mut table);
+        if let Some(col) = right_align_from {
+            table.with(
+                Modify::new(Columns::new(col..)).with(Alignment::right()),
+            );
+        }
+        if limit_width {
+            limit_table_width(&mut table, 0);
+        }
+        table.to_string()
     }
 }
 

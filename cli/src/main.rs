@@ -9,7 +9,7 @@ mod update_view;
 
 use crate::{
     accounts_view::accounts_list,
-    args::{Cli, Commands, ExportFormat, AccountsCommand},
+    args::{AccountsCommand, Cli, Commands, ExportFormat},
     global_settings::GlobalSettings,
     ledger_view::ledger_view,
     metrics_view::metrics_view,
@@ -59,7 +59,11 @@ hledger -f {} bal --value=end,€ --end=today --tree Asset Liability",
 }
 
 /// Display metrics
-fn metrics(repo: &Repository, globals: &GlobalSettings, periods: Vec<Intv>) -> Result<()> {
+fn metrics(
+    repo: &Repository,
+    globals: &GlobalSettings,
+    periods: Vec<Intv>,
+) -> Result<()> {
     let output = metrics_view(repo, globals, periods)?;
     println!("{}", output);
     Ok(())
@@ -77,6 +81,8 @@ fn perfs(
 }
 
 /// Show networth
+#[allow(clippy::fn_params_excessive_bools)]
+#[allow(clippy::too_many_arguments)]
 fn networth(
     repo: &mut Repository,
     globals: &GlobalSettings,
@@ -117,6 +123,8 @@ fn networth(
 }
 
 /// Show income-expenses
+#[allow(clippy::fn_params_excessive_bools)]
+#[allow(clippy::too_many_arguments)]
 fn cashflow(
     repo: &mut Repository,
     globals: &mut GlobalSettings,
@@ -228,18 +236,32 @@ fn run_subcommand(
         Commands::Perf { columns } => {
             perfs(repo, settings, columns.clone())?;
         }
-        Commands::Ledger { account, short_name, columns, since, before, filter } => {
-            let output = ledger_view(repo, settings, account.as_deref(), *short_name, columns.as_ref(), since.as_ref(), before.as_ref(), filter.as_deref())?;
+        Commands::Ledger {
+            account,
+            short_name,
+            columns,
+            since,
+            before,
+            filter,
+        } => {
+            let output = ledger_view(
+                repo,
+                settings,
+                account.as_deref(),
+                *short_name,
+                columns.as_ref(),
+                since.as_ref(),
+                before.as_ref(),
+                filter.as_deref(),
+            )?;
             println!("{}", output);
         }
-        Commands::Accounts { command } => {
-            match command {
-                AccountsCommand::List { filter } => {
-                    let output = accounts_list(repo, filter.as_deref())?;
-                    println!("{}", output);
-                }
+        Commands::Accounts { command } => match command {
+            AccountsCommand::List { filter } => {
+                let output = accounts_list(repo, settings, filter.as_deref())?;
+                println!("{}", output);
             }
-        }
+        },
         Commands::Update => {
             let runtime = tokio::runtime::Runtime::new()?;
             runtime.block_on(update_view::update_prices(repo, settings))?;
@@ -253,7 +275,7 @@ fn run_subcommand(
                 std::io::stdin().read_to_string(&mut buffer)?;
                 buffer
             };
-            
+
             let mut first = true;
             for line in content.lines() {
                 let line = line.trim();

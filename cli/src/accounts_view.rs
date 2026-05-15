@@ -17,9 +17,10 @@ pub fn accounts_list(
         let name = account.name(AccountNameDepth::unlimited());
 
         if let Some(f) = filter
-            && !name.to_lowercase().contains(&f.to_lowercase()) {
-                continue;
-            }
+            && !name.to_lowercase().contains(&f.to_lowercase())
+        {
+            continue;
+        }
 
         let closed = if account.is_closed() { "Yes" } else { "No" };
         builder.push_record([name, closed.to_string()]);

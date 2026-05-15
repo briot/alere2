@@ -370,9 +370,15 @@ impl Performance {
                                                             &q.commodity,
                                                         );
                                                 }
-                                                Operation::BuyPrice { .. }
-                                                | Operation::AddShares { .. }
-                                                | Operation::Reinvest { .. }
+                                                Operation::BuyPrice {
+                                                    ..
+                                                }
+                                                | Operation::AddShares {
+                                                    ..
+                                                }
+                                                | Operation::Reinvest {
+                                                    ..
+                                                }
                                                 | Operation::Dividend
                                                 | Operation::Split { .. } => {}
                                             }

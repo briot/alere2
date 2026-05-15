@@ -11,6 +11,7 @@ use crate::{
     transactions::{Transaction, TransactionCollection},
 };
 use anyhow::Result;
+use chrono::{DateTime, Local};
 
 #[derive(Default)]
 pub struct Repository {
@@ -117,5 +118,19 @@ impl Repository {
             });
         }
         balances
+    }
+
+    /// Find earliest transaction date
+    #[must_use]
+    pub fn earliest_transaction_date(&self) -> Option<DateTime<Local>> {
+        let mut earliest = None;
+        for tx in self.transactions().iter() {
+            for split in tx.splits().iter() {
+                if earliest.is_none() || split.post_ts < earliest.unwrap() {
+                    earliest = Some(split.post_ts);
+                }
+            }
+        }
+        earliest
     }
 }

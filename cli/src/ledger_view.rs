@@ -117,7 +117,8 @@ pub fn ledger_view(
                 .unwrap_or(0)
         };
 
-        let main_split = splits.get(main_idx).or_else(|| splits.first()).unwrap();
+        let main_split =
+            splits.get(main_idx).or_else(|| splits.first()).unwrap();
 
         // Check date filters (but still update running total for all transactions)
         let in_date_range = {

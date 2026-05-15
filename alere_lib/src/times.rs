@@ -1,6 +1,9 @@
 use crate::errors::AlrError;
 use anyhow::Result;
-use chrono::{DateTime, Datelike, Local, MappedLocalTime, NaiveDate, TimeZone};
+use chrono::{
+    DateTime, Datelike, Local, LocalResult, MappedLocalTime, NaiveDate,
+    TimeZone,
+};
 use regex::Regex;
 use rust_intervals::Interval;
 use std::str::FromStr;
@@ -53,6 +56,43 @@ pub enum Instant {
 }
 
 impl Instant {
+    fn parse_flexible_date(s: &str) -> Option<DateTime<Local>> {
+        // YYYY-MM-DD
+        if let Ok(date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+            let dt = date.and_hms_opt(0, 0, 0)?;
+            return match Local.from_local_datetime(&dt) {
+                LocalResult::Single(v) => Some(v),
+                LocalResult::Ambiguous(..) | LocalResult::None => None,
+            };
+        }
+
+        // YYYY-MM
+        if let Ok(date) =
+            NaiveDate::parse_from_str(&format!("{s}-01"), "%Y-%m-%d")
+        {
+            let dt = date.and_hms_opt(0, 0, 0)?;
+
+            return match Local.from_local_datetime(&dt) {
+                LocalResult::Single(v) => Some(v),
+                LocalResult::Ambiguous(..) | LocalResult::None => None,
+            };
+        }
+
+        // YYYY
+        if let Ok(date) =
+            NaiveDate::parse_from_str(&format!("{s}-01-01"), "%Y-%m-%d")
+        {
+            let dt = date.and_hms_opt(0, 0, 0)?;
+
+            return match Local.from_local_datetime(&dt) {
+                LocalResult::Single(v) => Some(v),
+                LocalResult::Ambiguous(..) | LocalResult::None => None,
+            };
+        }
+
+        s.parse().ok()
+    }
+
     /// Convert self to an actual timestamp.
     pub fn to_time(&self, now: DateTime<Local>) -> Result<DateTime<Local>> {
         let r = match self {
@@ -109,9 +149,8 @@ impl Instant {
                 .unwrap()
                 .and_local_timezone(Local)
                 .unwrap(),
-            Instant::Timestamp(ts) => ts
-                .parse::<DateTime<Local>>()
-                .unwrap_or_else(|_| panic!("Invalid timestamp {}", &ts)),
+            Instant::Timestamp(ts) => Instant::parse_flexible_date(ts)
+                .unwrap_or_else(|| panic!("Invalid timestamp {}", &ts)),
         };
         Ok(r)
     }
@@ -227,9 +266,9 @@ impl ::core::str::FromStr for Instant {
                 if let Some(d) = check_regexp!(s, r"(\d+) days ago", i32) {
                     return Ok(Instant::DaysAgo(d));
                 }
-                if let Some(d) = check_regexp!(s, r"^(\d+)d$", i32) {
-                    return Ok(Instant::DaysAgo(d));
-                }
+                //if let Some(d) = check_regexp!(s, r"^(\d+)d$", i32) {
+                //    return Ok(Instant::DaysAgo(d));
+                //}
                 if let Some(d) =
                     check_regexp!(s, r"start of (\d+) days ago", i32)
                 {
@@ -551,6 +590,9 @@ impl FromStr for Intv {
         if let Some(rest) = s.strip_prefix("upto ") {
             return Ok(Intv::UpTo(rest.parse()?));
         }
+        if let Some(rest) = s.strip_prefix("up to ") {
+            return Ok(Intv::UpTo(rest.parse()?));
+        }
 
         // Range syntax: begin..end
         if let Some((b, e)) = s.split_once("..") {
@@ -572,14 +614,14 @@ impl FromStr for Intv {
             ));
         }
 
-        // m0, m-1
+        // m0, m1
         if let Some(num) = s.strip_prefix('m') {
             return Ok(Intv::MonthAgo(
                 num.parse().map_err(|_| AlrError::InvalidNumber)?,
             ));
         }
 
-        // y0, y-1
+        // y0, y1
         if let Some(num) = s.strip_prefix('y') {
             return Ok(Intv::YearAgo(
                 num.parse().map_err(|_| AlrError::InvalidNumber)?,
@@ -603,7 +645,7 @@ impl FromStr for Intv {
             ));
         }
 
-        Err(AlrError::InvalidFormat)
+        Ok(Intv::UpTo(s.parse()?))
     }
 }
 
@@ -612,7 +654,6 @@ mod test {
     use super::*;
     use crate::times::Instant;
     use chrono::{DateTime, FixedOffset, Local, TimeZone, Utc};
-    use chrono_tz::Europe::Paris;
 
     fn intv_to_string(intv: Intv, now: DateTime<Local>) -> Result<Vec<String>> {
         Ok(intv
@@ -625,7 +666,7 @@ mod test {
     #[test]
     fn test_instant() -> Result<()> {
         use chrono::Utc;
-        
+
         // Use UTC for consistent test results across timezones
         let tz = FixedOffset::east_opt(4 * 3600).unwrap();
         let sep_10 = Utc
@@ -720,7 +761,7 @@ mod test {
     #[test]
     fn test_interval() -> Result<()> {
         use chrono::Utc;
-        
+
         let sep01 = Utc
             .with_ymd_and_hms(2024, 9, 1, 12, 0, 0)
             .unwrap()

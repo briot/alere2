@@ -7,7 +7,11 @@ use tabled::builder::Builder;
 
 use crate::global_settings::GlobalSettings;
 
-type PriceUpdate = (alere_lib::commodities::Commodity, rust_decimal::Decimal, chrono::DateTime<chrono::Local>);
+type PriceUpdate = (
+    alere_lib::commodities::Commodity,
+    rust_decimal::Decimal,
+    chrono::DateTime<chrono::Local>,
+);
 
 fn show_current_networth(
     repo: &mut Repository,

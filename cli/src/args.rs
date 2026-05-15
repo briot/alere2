@@ -49,16 +49,52 @@ pub enum Commands {
     /// Show current networth
     Networth {
         /// Periods to display (e.g 1y or 2m..now)
-        #[arg(short, long, value_delimiter = ',', default_value = "1y,ytd")]
+        ///
+        /// Total networth:
+        ///     upto <date>      Total networth as of date
+        ///     up to <date>
+        ///     <date>           Same as upto <date>
+        /// Networth evolution:
+        ///     ytd                 Year to Date
+        ///     <date>..<date>
+        ///     <year>              Specific year
+        ///     m0                  Current month
+        ///     m1                  Previous month
+        ///     y0                  Current year
+        ///     y1                  Previous year
+        ///     7d                  Over 7 days
+        ///     3m                  Over 3 months
+        ///     2y                  Over 2 years
+        ///
+        /// <date> can be one of:
+        ///     epoch               Since the start of times
+        ///     now
+        ///     end                 Until forever
+        ///     <year>              January 1st on that year
+        ///     <year-month>        First day of the month
+        ///     <year-month-day>    Specific day
+        ///     yesterday
+        ///     last month          Same day last month
+        ///     last year
+        ///     N days ago
+        ///     start of <date>
+        ///     end of <date>
+        #[arg(
+            short,
+            long,
+            value_delimiter = ',',
+            default_value = "now,1y,ytd",
+            verbatim_doc_comment
+        )]
         periods: Vec<Intv>,
 
         /// Show rows with zero values
         #[arg(long)]
         show_zero: bool,
 
-        /// Show rows where values haven't changed
+        /// Hide rows where no value has changed
         #[arg(long)]
-        show_all_same: bool,
+        hide_all_same: bool,
 
         /// Disable subtotals for parent accounts
         #[arg(long)]
@@ -88,16 +124,16 @@ pub enum Commands {
     /// Show cashflow
     Cashflow {
         /// Columns to display (e.g 1y or 2m..now)
-        #[arg(short, long, value_delimiter = ',')]
+        #[arg(short, long, value_delimiter = ',', default_value = "1m")]
         periods: Vec<Intv>,
 
         /// Show rows with zero values
         #[arg(long)]
         show_zero: bool,
 
-        /// Show rows where values haven't changed
+        /// Hide rows where no value has changed
         #[arg(long)]
-        show_all_same: bool,
+        hide_all_same: bool,
 
         /// Disable subtotals for parent accounts
         #[arg(long)]

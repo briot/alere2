@@ -9,6 +9,24 @@ use tabled::builder::Builder;
 
 use crate::global_settings::GlobalSettings;
 
+fn month_num_to_name(num: &str) -> &'static str {
+    match num.trim() {
+        "1" => "Jan",
+        "2" => "Feb",
+        "3" => "Mar",
+        "4" => "Apr",
+        "5" => "May",
+        "6" => "Jun",
+        "7" => "Jul",
+        "8" => "Aug",
+        "9" => "Sep",
+        "10" => "Oct",
+        "11" => "Nov",
+        "12" => "Dec",
+        _ => "???",
+    }
+}
+
 pub fn history_view(
     repo: &Repository,
     settings: &GlobalSettings,
@@ -19,24 +37,12 @@ pub fn history_view(
 ) -> Result<String> {
     let start = if let Some(s) = since {
         s.parse::<Instant>()?
+    } else if let Some(date) = repo.earliest_transaction_date() {
+        Instant::Timestamp(date.to_rfc3339())
     } else {
-        // Find earliest transaction date
-        let mut earliest = None;
-        for tx in repo.transactions().iter() {
-            for split in tx.splits().iter() {
-                if earliest.is_none() || split.post_ts < earliest.unwrap() {
-                    earliest = Some(split.post_ts);
-                }
-            }
-        }
-        
-        if let Some(date) = earliest {
-            Instant::Timestamp(date.to_rfc3339())
-        } else {
-            Instant::YearsAgo(1)
-        }
+        Instant::YearsAgo(1)
     };
-    
+
     let end = before
         .map(|s| s.parse::<Instant>())
         .transpose()?
@@ -75,18 +81,18 @@ pub fn history_view(
 
     let mut builder = Builder::default();
     builder.push_record(["Date", "Total"]);
-    
+
     let mut cumulative = alere_lib::multi_values::MultiValue::default();
     let mut prev_cumulative = alere_lib::multi_values::MultiValue::default();
-    
+
     for (idx, intv) in networth.intervals.iter().enumerate() {
         let change = networth.total.get_market_value(idx)?;
         cumulative += change;
-        
+
         // Skip if no change
         if cumulative != prev_cumulative {
             let total = cumulative.display(&settings.format);
-            
+
             if !total.trim().is_empty() {
                 // Format date
                 let date_str = if granularity == "yearly" {
@@ -94,24 +100,18 @@ pub fn history_view(
                 } else {
                     // Convert "2026-3" to "2026 Mar"
                     if let Some((year, month)) = intv.descr.split_once('-') {
-                        let month_name = match month.trim() {
-                            "1" => "Jan", "2" => "Feb", "3" => "Mar", "4" => "Apr",
-                            "5" => "May", "6" => "Jun", "7" => "Jul", "8" => "Aug",
-                            "9" => "Sep", "10" => "Oct", "11" => "Nov", "12" => "Dec",
-                            _ => month,
-                        };
-                        format!("{} {}", year, month_name)
+                        format!("{} {}", year, month_num_to_name(month))
                     } else {
                         intv.descr.clone()
                     }
                 };
-                
+
                 builder.push_record([&date_str, &total]);
                 prev_cumulative = cumulative.clone();
             }
         }
     }
-    
+
     // Add current total if different from last shown
     let current_networth = Networth::new(
         repo,
@@ -138,12 +138,14 @@ pub fn history_view(
             }
         },
     )?;
-    
+
     if let Ok(current_value) = current_networth.total.get_market_value(0)
-        && current_value != &prev_cumulative && !current_value.display(&settings.format).trim().is_empty() {
-            let total = current_value.display(&settings.format);
-            builder.push_record(["Current", &total]);
-        }
+        && current_value != &prev_cumulative
+        && !current_value.display(&settings.format).trim().is_empty()
+    {
+        let total = current_value.display(&settings.format);
+        builder.push_record(["Current", &total]);
+    }
 
     Ok(settings.finalize_table(builder, Some(1), false))
 }
@@ -157,27 +159,31 @@ mod tests {
 
     fn create_test_data() -> Result<kmy_editor::KmyEditor> {
         let mut editor = kmy_editor::KmyEditor::new()?;
-        
+
         editor.add_currency("EUR", "Euro", "€")?;
-        
+
         let checking = editor.add_account("Checking", "1", "EUR")?;
-        let equity = editor.add_standard_account("Equity", "Equity", "16", "EUR")?;
-        
+        let equity =
+            editor.add_standard_account("Equity", "Equity", "16", "EUR")?;
+
         // Jan 2024: 1000
-        let t1 = editor.add_transaction("2024-01-15", Some("Opening"), "EUR")?;
+        let t1 =
+            editor.add_transaction("2024-01-15", Some("Opening"), "EUR")?;
         editor.add_split(&t1, 0, &checking, "1000/1", "2024-01-15", None)?;
         editor.add_split(&t1, 1, &equity, "-1000/1", "2024-01-15", None)?;
-        
+
         // Feb 2024: +500 = 1500
-        let t2 = editor.add_transaction("2024-02-10", Some("Deposit"), "EUR")?;
+        let t2 =
+            editor.add_transaction("2024-02-10", Some("Deposit"), "EUR")?;
         editor.add_split(&t2, 0, &checking, "500/1", "2024-02-10", None)?;
         editor.add_split(&t2, 1, &equity, "-500/1", "2024-02-10", None)?;
-        
+
         // Mar 2024: +200 = 1700
-        let t3 = editor.add_transaction("2024-03-20", Some("Deposit"), "EUR")?;
+        let t3 =
+            editor.add_transaction("2024-03-20", Some("Deposit"), "EUR")?;
         editor.add_split(&t3, 0, &checking, "200/1", "2024-03-20", None)?;
         editor.add_split(&t3, 1, &equity, "-200/1", "2024-03-20", None)?;
-        
+
         Ok(editor)
     }
 
@@ -197,13 +203,14 @@ mod tests {
     fn test_history_monthly() -> Result<()> {
         let repo = load_test_repo();
         let settings = test_settings();
-        
-        let output = history_view(&repo, &settings, None, "monthly", Some("1y"), None)?;
-        
+
+        let output =
+            history_view(&repo, &settings, None, "monthly", Some("1y"), None)?;
+
         // Just verify it runs and contains some data
         assert!(output.contains("Date"));
         assert!(output.contains("Total"));
-        
+
         Ok(())
     }
 
@@ -211,12 +218,13 @@ mod tests {
     fn test_history_yearly() -> Result<()> {
         let repo = load_test_repo();
         let settings = test_settings();
-        
-        let output = history_view(&repo, &settings, None, "yearly", Some("2y"), None)?;
-        
+
+        let output =
+            history_view(&repo, &settings, None, "yearly", Some("2y"), None)?;
+
         assert!(output.contains("Date"));
         assert!(output.contains("Total"));
-        
+
         Ok(())
     }
 
@@ -224,12 +232,19 @@ mod tests {
     fn test_history_account_filter() -> Result<()> {
         let repo = load_test_repo();
         let settings = test_settings();
-        
-        let output = history_view(&repo, &settings, Some("Checking"), "monthly", Some("1y"), None)?;
-        
+
+        let output = history_view(
+            &repo,
+            &settings,
+            Some("Checking"),
+            "monthly",
+            Some("1y"),
+            None,
+        )?;
+
         assert!(output.contains("Date"));
         assert!(output.contains("Total"));
-        
+
         Ok(())
     }
 
@@ -237,13 +252,14 @@ mod tests {
     fn test_history_date_format() -> Result<()> {
         let repo = load_test_repo();
         let settings = test_settings();
-        
-        let output = history_view(&repo, &settings, None, "monthly", Some("1y"), None)?;
-        
+
+        let output =
+            history_view(&repo, &settings, None, "monthly", Some("1y"), None)?;
+
         // Should not contain raw format like "2024-1"
         assert!(!output.contains("-1 "));
         assert!(!output.contains("-2 "));
-        
+
         Ok(())
     }
 }

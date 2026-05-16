@@ -74,7 +74,7 @@ pub fn ledger_view(
 
     let mut running_total = MultiValue::default();
 
-    for tx in transactions {
+    'transactions: for tx in transactions {
         let splits = tx.splits();
         let memo = tx.memo();
 
@@ -94,172 +94,160 @@ pub fn ledger_view(
             continue;
         }
 
-        // Find the split for the filtered account, or prefer Asset accounts
-        let main_idx = if let Some(filter) = account_filter {
-            splits
-                .iter()
-                .position(|s| {
-                    s.account
-                        .name(AccountNameDepth::unlimited())
-                        .to_lowercase()
-                        .contains(&filter.to_lowercase())
-                })
-                .unwrap()
-        } else {
-            // Prefer Asset accounts
-            splits
-                .iter()
-                .position(|s| {
-                    s.account
-                        .name(AccountNameDepth::unlimited())
-                        .starts_with("Asset:")
-                })
-                .unwrap_or(0)
-        };
+        let mut valid_splits = vec![];
 
-        let main_split =
-            splits.get(main_idx).or_else(|| splits.first()).unwrap();
+        for s in splits.iter() {
+            // Update running total with all splits that match the account
+            // filter (so an internal transfer, for instance, would not move
+            // the total if both accounts are valid for the filter)
+            let for_total = if let Some(filter) = account_filter {
+                s.account
+                    .name(AccountNameDepth::unlimited())
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
+            } else {
+                s.account
+                    .name(AccountNameDepth::unlimited())
+                    .starts_with("Asset:")
+            };
 
-        // Check date filters (but still update running total for all transactions)
-        let in_date_range = {
-            let ts = main_split.post_ts;
-            let after_since = since_date.is_none_or(|d| ts >= d);
-            let before_limit = before_date.is_none_or(|d| ts <= d);
-            after_since && before_limit
-        };
-
-        // Update running total
-        let amount_mv = match &main_split.operation {
-            Operation::Credit(v) => v.clone(),
-            Operation::BuyAmount { qty, .. } => {
-                MultiValue::new(qty.amount, &qty.commodity)
-            }
-            Operation::BuyPrice { qty, .. } => {
-                MultiValue::new(qty.amount, &qty.commodity)
-            }
-            Operation::AddShares { qty } => {
-                MultiValue::new(qty.amount, &qty.commodity)
-            }
-            Operation::Reinvest { shares, .. } => shares.clone(),
-            Operation::Dividend | Operation::Split { .. } => {
-                MultiValue::default()
-            }
-        };
-        running_total += &amount_mv;
-
-        // Skip display if outside date range
-        if !in_date_range {
-            continue;
-        }
-
-        // Prepare all column values
-        let date_str = main_split.post_ts.format("%Y-%m-%d").to_string();
-        let account_str = main_split.account.name(display_depth);
-        let account_full =
-            main_split.account.name(AccountNameDepth::unlimited());
-        let amount_str = amount_mv.display(&settings.format);
-
-        let balance_str = if settings.commodity.is_some() {
-            let mut prices = repo.market_prices(settings.commodity.clone());
-            let converted =
-                prices.convert_multi_value(&running_total, &main_split.post_ts);
-            converted.display(&settings.format)
-        } else {
-            running_total.display(&settings.format)
-        };
-
-        let memo_str = memo.as_ref().map(|s| s.to_string()).unwrap_or_default();
-        let payee_str = tx
-            .payee()
-            .map(|p| p.get_name().to_string())
-            .unwrap_or_default();
-        let what_str = if !memo_str.is_empty() {
-            memo_str.clone()
-        } else {
-            payee_str.clone()
-        };
-
-        // Apply filter if specified
-        if let Some(ref regex) = filter_regex {
-            let mut matches = regex.is_match(&date_str)
-                || regex.is_match(&account_full)
-                || regex.is_match(&amount_str)
-                || regex.is_match(&balance_str)
-                || regex.is_match(&memo_str)
-                || regex.is_match(&payee_str)
-                || regex.is_match(&what_str);
-
-            // Also check all other splits' accounts
-            if !matches {
-                for split in splits.iter() {
-                    let split_account =
-                        split.account.name(AccountNameDepth::unlimited());
-                    if regex.is_match(&split_account) {
-                        matches = true;
-                        break;
-                    }
-                }
-            }
-
-            if !matches {
-                continue;
-            }
-        }
-
-        // Build row in column order
-        let mut row = vec![date_str, account_str, amount_str];
-        for col in cols.iter() {
-            match col.to_lowercase().as_str() {
-                "balance" if filter.is_none() => row.push(balance_str.clone()),
-                "payee" => row.push(payee_str.clone()),
-                "what" => row.push(what_str.clone()),
-                "memo" => row.push(memo_str.clone()),
-                _ => {}
-            }
-        }
-        builder.push_record(row);
-
-        // Other splits (indented)
-        if show_splits {
-            for (idx, split) in splits.iter().enumerate() {
-                if idx == main_idx {
-                    continue;
-                }
-                let amount_str = match &split.operation {
-                    Operation::Credit(v) => v.display(&settings.format),
+            // Update running total
+            let amount_mv = if for_total {
+                let v = match &s.operation {
+                    Operation::Credit(v) => v.clone(),
                     Operation::BuyAmount { qty, .. } => {
-                        qty.display(&settings.format)
+                        MultiValue::new(qty.amount, &qty.commodity)
                     }
                     Operation::BuyPrice { qty, .. } => {
-                        qty.display(&settings.format)
+                        MultiValue::new(qty.amount, &qty.commodity)
                     }
                     Operation::AddShares { qty } => {
-                        qty.display(&settings.format)
+                        MultiValue::new(qty.amount, &qty.commodity)
                     }
-                    Operation::Reinvest { shares, .. } => {
-                        shares.display(&settings.format)
-                    }
-                    Operation::Dividend => "dividend".to_string(),
-                    Operation::Split { ratio, .. } => {
-                        format!("split {}", ratio)
+                    Operation::Reinvest { shares, .. } => shares.clone(),
+                    Operation::Dividend | Operation::Split { .. } => {
+                        MultiValue::default()
                     }
                 };
+                running_total += &v;
+                v
+            } else {
+                MultiValue::zero()
+            };
 
-                let mut row = vec![
-                    String::new(),
-                    format!("  {}", split.account.name(display_depth)),
-                    amount_str,
-                ];
+            let ts = s.post_ts;
+            let after_since = since_date.is_none_or(|d| ts >= d);
+            let before_limit = before_date.is_none_or(|d| ts <= d);
+            if for_total && after_since && before_limit {
+                valid_splits.push((s, amount_mv));
+            }
+        }
+
+        // Now chose which of the remaining splits with be used as the main
+        // one: it should be one that matches the filter, and among those it
+        // doesn't matter which one.  If none match the filter, hide the
+        // transaction.
+        for (s, amount_mv) in valid_splits.iter() {
+            let date_str = s.post_ts.format("%Y-%m-%d").to_string();
+            let account_str = s.account.name(display_depth);
+            let account_full = s.account.name(AccountNameDepth::unlimited());
+            let amount_str = amount_mv.display(&settings.format);
+
+            let balance_str = if settings.commodity.is_some() {
+                let mut prices = repo.market_prices(settings.commodity.clone());
+                let converted =
+                    prices.convert_multi_value(&running_total, &s.post_ts);
+                converted.display(&settings.format)
+            } else {
+                running_total.display(&settings.format)
+            };
+
+            let memo_str =
+                memo.as_ref().map(|s| s.to_string()).unwrap_or_default();
+            let payee_str = tx
+                .payee()
+                .map(|p| p.get_name().to_string())
+                .unwrap_or_default();
+            let what_str = if !memo_str.is_empty() {
+                memo_str.clone()
+            } else {
+                payee_str.clone()
+            };
+
+            let matches = if let Some(ref regex) = filter_regex {
+                regex.is_match(&date_str)
+                    || regex.is_match(&account_full)
+                    || regex.is_match(&amount_str)
+                    || regex.is_match(&balance_str)
+                    || regex.is_match(&memo_str)
+                    || regex.is_match(&payee_str)
+                    || regex.is_match(&what_str)
+            } else {
+                true
+            };
+
+            if matches {
+                // Build row in column order
+                let mut row = vec![date_str, account_str, amount_str];
                 for col in cols.iter() {
                     match col.to_lowercase().as_str() {
                         "balance" if filter.is_none() => {
-                            row.push(String::new())
+                            row.push(balance_str.clone())
                         }
-                        "payee" | "what" | "memo" => row.push(String::new()),
+                        "payee" => row.push(payee_str.clone()),
+                        "what" => row.push(what_str.clone()),
+                        "memo" => row.push(memo_str.clone()),
                         _ => {}
                     }
                 }
                 builder.push_record(row);
+
+                // Other splits (indented)
+                if show_splits {
+                    for split in splits.iter() {
+                        // if split == s {
+                        //     continue;
+                        // }
+                        let amount_str = match &split.operation {
+                            Operation::Credit(v) => v.display(&settings.format),
+                            Operation::BuyAmount { qty, .. } => {
+                                qty.display(&settings.format)
+                            }
+                            Operation::BuyPrice { qty, .. } => {
+                                qty.display(&settings.format)
+                            }
+                            Operation::AddShares { qty } => {
+                                qty.display(&settings.format)
+                            }
+                            Operation::Reinvest { shares, .. } => {
+                                shares.display(&settings.format)
+                            }
+                            Operation::Dividend => "dividend".to_string(),
+                            Operation::Split { ratio, .. } => {
+                                format!("split {}", ratio)
+                            }
+                        };
+
+                        let mut row = vec![
+                            String::new(),
+                            format!("  {}", split.account.name(display_depth)),
+                            amount_str,
+                        ];
+                        for col in cols.iter() {
+                            match col.to_lowercase().as_str() {
+                                "balance" if filter.is_none() => {
+                                    row.push(String::new())
+                                }
+                                "payee" | "what" | "memo" => {
+                                    row.push(String::new())
+                                }
+                                _ => {}
+                            }
+                        }
+                        builder.push_record(row);
+                    }
+                }
+                continue 'transactions; // do not add a second row for this transaction
             }
         }
     }

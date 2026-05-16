@@ -1,5 +1,5 @@
 use alere_lib::{
-    accounts::AccountNameDepth,
+    accounts::{Account, AccountNameDepth},
     networth::{GroupBy, Networth},
     repositories::Repository,
     times::{Instant, Intv},
@@ -53,6 +53,20 @@ pub fn history_view(
         _ => Intv::Monthly { begin: start, end },
     };
 
+    let filter = |acc: &Account| {
+        if !acc.get_kind().is_networth() {
+            return false;
+        }
+        if let Some(filter) = account_filter {
+            acc.name(AccountNameDepth::unlimited())
+                .to_lowercase()
+                .contains(&filter.to_lowercase())
+        } else {
+            true
+        }
+    };
+
+    println!("MANU intervals={intervals:?}");
     let networth = Networth::new(
         repo,
         alere_lib::networth::Settings {
@@ -65,18 +79,7 @@ pub fn history_view(
             intervals: vec![intervals],
         },
         settings.reftime,
-        |acc| {
-            if !acc.get_kind().is_networth() {
-                return false;
-            }
-            if let Some(filter) = account_filter {
-                acc.name(AccountNameDepth::unlimited())
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase())
-            } else {
-                true
-            }
-        },
+        filter,
     )?;
 
     let mut builder = Builder::default();
@@ -87,6 +90,7 @@ pub fn history_view(
 
     for (idx, intv) in networth.intervals.iter().enumerate() {
         let change = networth.total.get_market_value(idx)?;
+        println!("MANU {intv:?} change={change:?}");
         cumulative += change;
 
         // Skip if no change
@@ -125,18 +129,7 @@ pub fn history_view(
             intervals: vec![Intv::UpTo(Instant::Now)],
         },
         settings.reftime,
-        |acc| {
-            if !acc.get_kind().is_networth() {
-                return false;
-            }
-            if let Some(filter) = account_filter {
-                acc.name(AccountNameDepth::unlimited())
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase())
-            } else {
-                true
-            }
-        },
+        filter,
     )?;
 
     if let Ok(current_value) = current_networth.total.get_market_value(0)

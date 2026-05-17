@@ -168,9 +168,10 @@ mod tests {
     }
 
     fn test_settings() -> GlobalSettings {
-        let mut settings = GlobalSettings::default();
-        settings.reftime = Local::now();
-        settings
+        GlobalSettings {
+            reftime:Local::now(),
+            ..Default::default()
+        }
     }
 
     #[test]

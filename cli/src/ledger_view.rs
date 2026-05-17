@@ -106,8 +106,7 @@ pub fn ledger_view(
                     .to_lowercase()
                     .contains(&filter.to_lowercase())
             } else {
-                let n =s.account.name(AccountNameDepth::unlimited());
-                n.starts_with("Asset:") || n.starts_with("Liability:")
+                s.account.get_kind().is_networth()
             };
 
             // Update running total
@@ -339,9 +338,10 @@ mod tests {
     }
 
     fn test_settings() -> GlobalSettings {
-        let mut settings = GlobalSettings::default();
-        settings.reftime = Local::now();
-        settings
+        GlobalSettings {
+            reftime: Local::now(),
+            ..Default::default()
+        }
     }
 
     #[test]

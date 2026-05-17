@@ -12,7 +12,7 @@ use crate::{
     accounts_view::accounts_list,
     args::{AccountsCommand, Cli, Commands, ExportFormat},
     global_settings::GlobalSettings,
-    ledger_view::ledger_view,
+    ledger_view::{build_account_name_filter, ledger_view},
     metrics_view::metrics_view,
     networth_view::networth_view,
     perfs_view::perfs_view,
@@ -248,8 +248,12 @@ fn run_subcommand(
             let output = ledger_view(
                 repo,
                 settings,
-                account.as_deref(),
-                *short_name,
+                build_account_name_filter(account.as_deref()),
+                if *short_name {
+                    AccountNameDepth::basename()
+                } else {
+                    AccountNameDepth::unlimited()
+                },
                 columns.as_ref(),
                 since.as_ref(),
                 before.as_ref(),

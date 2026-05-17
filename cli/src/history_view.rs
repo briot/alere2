@@ -9,24 +9,6 @@ use tabled::builder::Builder;
 
 use crate::global_settings::GlobalSettings;
 
-fn month_num_to_name(num: &str) -> &'static str {
-    match num.trim() {
-        "1" => "Jan",
-        "2" => "Feb",
-        "3" => "Mar",
-        "4" => "Apr",
-        "5" => "May",
-        "6" => "Jun",
-        "7" => "Jul",
-        "8" => "Aug",
-        "9" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        _ => "???",
-    }
-}
-
 pub fn history_view(
     repo: &Repository,
     settings: &GlobalSettings,
@@ -50,6 +32,7 @@ pub fn history_view(
 
     let intervals = match granularity {
         "yearly" => Intv::Yearly { begin: start, end },
+        "daily" => Intv::Daily { begin: start, end },
         _ => Intv::Monthly { begin: start, end },
     };
 
@@ -82,42 +65,25 @@ pub fn history_view(
     )?;
 
     let mut builder = Builder::default();
-    builder.push_record(["Date", "Total"]);
+    builder.push_record(["Date", "Total at end"]);
 
     let mut cumulative = alere_lib::multi_values::MultiValue::default();
     let mut prev_month = alere_lib::multi_values::MultiValue::default();
     let mut prices = repo.market_prices(settings.commodity.clone());
 
     for (idx, intv) in networth.intervals.iter().enumerate() {
-        //MANU let change = networth.total.get_market_value(idx)?;
-        let change = networth.total.get_value(idx)?;
-        cumulative += change;
+        cumulative += networth.total.get_value(idx)?;
 
-        let this_month = prices.convert_multi_value(
+        let mkt_value_at_end = prices.convert_multi_value(
             &cumulative,
             intv.intv.upper().expect("Expect bounded interval"),
         );
 
         // Skip if no change
-        if this_month != prev_month {
-            let total = this_month.display(&settings.format);
-
-            if !total.trim().is_empty() {
-                // Format date
-                let date_str = if granularity == "yearly" {
-                    intv.descr.clone()
-                } else {
-                    // Convert "2026-3" to "2026 Mar"
-                    if let Some((year, month)) = intv.descr.split_once('-') {
-                        format!("{} {}", year, month_num_to_name(month))
-                    } else {
-                        intv.descr.clone()
-                    }
-                };
-
-                builder.push_record([&date_str, &total]);
-                prev_month = this_month.clone();
-            }
+        if mkt_value_at_end != prev_month {
+            let total = mkt_value_at_end.display(&settings.format);
+            builder.push_record([&intv.descr, &total]);
+            prev_month = mkt_value_at_end;
         }
     }
 
@@ -169,7 +135,7 @@ mod tests {
 
     fn test_settings() -> GlobalSettings {
         GlobalSettings {
-            reftime:Local::now(),
+            reftime: Local::now(),
             ..Default::default()
         }
     }

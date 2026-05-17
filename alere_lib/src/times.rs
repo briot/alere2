@@ -379,7 +379,8 @@ pub enum Intv {
     LastNDays(i32), // from same time, n days ago, to now
 
     LastNMonths(i32), // from same day and time, n months ago, to now
-    MonthAgo(i32),    // a full month: 0=current month, -1=last month,...
+    Daily { begin: Instant, end: Instant },
+    MonthAgo(i32), // a full month: 0=current month, -1=last month,...
     Monthly { begin: Instant, end: Instant },
 
     LastNYears(i32), // from same date and time, n years ago, to now
@@ -484,6 +485,26 @@ impl Intv {
                 }
                 result
             }
+            Intv::Daily { begin, end } => {
+                let mut result = Vec::new();
+                let mut current = start_of_day(begin.to_time(now)?, &Local);
+                let end = end_of_day(end.to_time(now)?, &Local);
+                while current <= end {
+                    let next_start =
+                        start_of_day(current + chrono::Days::new(1), &Local);
+                    result.push(TimeInterval {
+                        intv: Interval::new_closed_open(current, next_start),
+                        descr: format!(
+                            "{}-{:02}-{:02}",
+                            current.year(),
+                            current.month(),
+                            current.day()
+                        ),
+                    });
+                    current = next_start;
+                }
+                result
+            }
             Intv::Monthly { begin, end } => {
                 let mut result = Vec::new();
                 let mut current = start_of_month(begin.to_time(now)?, &Local)?;
@@ -498,7 +519,7 @@ impl Intv {
                         descr: format!(
                             "{}-{}",
                             current.year(),
-                            current.month()
+                            month_num_to_name(current.month()),
                         ),
                     });
                     current = next_start;
@@ -540,7 +561,7 @@ fn start_of_day<TZ: TimeZone>(d: DateTime<TZ>, tz: &TZ) -> DateTime<TZ> {
 }
 
 /// Return the end of day
-fn end_of_day<TZ: TimeZone>(d: DateTime<TZ>, tz: &TZ) -> DateTime<TZ> {
+pub fn end_of_day<TZ: TimeZone>(d: DateTime<TZ>, tz: &TZ) -> DateTime<TZ> {
     let s = match tz.with_ymd_and_hms(d.year(), d.month(), d.day(), 23, 59, 59)
     {
         MappedLocalTime::Single(t) => t,
@@ -646,6 +667,24 @@ impl FromStr for Intv {
         }
 
         Ok(Intv::UpTo(s.parse()?))
+    }
+}
+
+fn month_num_to_name(num: u32) -> &'static str {
+    match num {
+        1 => "Jan",
+        2 => "Feb",
+        3 => "Mar",
+        4 => "Apr",
+        5 => "May",
+        6 => "Jun",
+        7 => "Jul",
+        8 => "Aug",
+        9 => "Sep",
+        10 => "Oct",
+        11 => "Nov",
+        12 => "Dec",
+        _ => "???",
     }
 }
 

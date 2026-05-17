@@ -1,5 +1,5 @@
 use alere_lib::{
-    accounts::AccountNameDepth,
+    accounts::{Account, AccountNameDepth},
     multi_values::{MultiValue, Operation},
     repositories::Repository,
     times::Instant,
@@ -8,12 +8,24 @@ use anyhow::Result;
 
 use crate::global_settings::GlobalSettings;
 
+pub fn build_account_name_filter(
+    name: Option<&str>,
+) -> impl Fn(&Account) -> bool {
+    move |acc: &Account| match name {
+        None => acc.get_kind().is_networth(),
+        Some(f) => acc
+            .name(AccountNameDepth::unlimited())
+            .to_lowercase()
+            .contains(&f.to_lowercase()),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn ledger_view(
     repo: &Repository,
     settings: &GlobalSettings,
-    account_filter: Option<&str>,
-    short_name: bool,
+    account_name_filter: impl Fn(&Account) -> bool,
+    account_name_depth: AccountNameDepth,
     columns: Option<&Vec<String>>,
     since: Option<&Instant>,
     before: Option<&Instant>,
@@ -63,12 +75,6 @@ pub fn ledger_view(
         tx.splits().first().map(|s| s.post_ts).unwrap_or_default()
     });
 
-    let display_depth = if short_name {
-        AccountNameDepth::basename()
-    } else {
-        AccountNameDepth::unlimited()
-    };
-
     let mut builder = Builder::default();
     builder.push_record(header);
 
@@ -77,37 +83,13 @@ pub fn ledger_view(
     'transactions: for tx in transactions {
         let splits = tx.splits();
         let memo = tx.memo();
-
-        // Always match against full name
-        let matches = if let Some(filter) = account_filter {
-            splits.iter().any(|s| {
-                s.account
-                    .name(AccountNameDepth::unlimited())
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase())
-            })
-        } else {
-            true
-        };
-
-        if !matches {
-            continue;
-        }
-
         let mut valid_splits = vec![];
 
         for s in splits.iter() {
             // Update running total with all splits that match the account
             // filter (so an internal transfer, for instance, would not move
             // the total if both accounts are valid for the filter)
-            let for_total = if let Some(filter) = account_filter {
-                s.account
-                    .name(AccountNameDepth::unlimited())
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase())
-            } else {
-                s.account.get_kind().is_networth()
-            };
+            let for_total = account_name_filter(&s.account);
 
             // Update running total
             let amount_mv = if for_total {
@@ -147,7 +129,7 @@ pub fn ledger_view(
         // transaction.
         for (s, amount_mv) in valid_splits.iter() {
             let date_str = s.post_ts.format("%Y-%m-%d").to_string();
-            let account_str = s.account.name(display_depth);
+            let account_str = s.account.name(account_name_depth);
             let account_full = s.account.name(AccountNameDepth::unlimited());
             let amount_str = amount_mv.display(&settings.format);
 
@@ -228,7 +210,10 @@ pub fn ledger_view(
 
                         let mut row = vec![
                             String::new(),
-                            format!("  {}", split.account.name(display_depth)),
+                            format!(
+                                "  {}",
+                                split.account.name(account_name_depth)
+                            ),
                             amount_str,
                         ];
                         for col in cols.iter() {
@@ -351,8 +336,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             None,
             None,
             None,
@@ -375,8 +360,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             Some(&columns),
             None,
             None,
@@ -397,8 +382,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             Some(&columns),
             None,
             None,
@@ -419,8 +404,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             None,
             Some(&since),
             None,
@@ -440,8 +425,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             None,
             None,
             Some(&before),
@@ -466,8 +451,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             Some(&columns),
             None,
             None,
@@ -489,8 +474,8 @@ mod tests {
         let output = ledger_view(
             &repo,
             &settings,
-            Some("checking"),
-            false,
+            build_account_name_filter(Some("checking")),
+            AccountNameDepth::unlimited(),
             Some(&columns),
             None,
             None,

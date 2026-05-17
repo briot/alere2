@@ -66,7 +66,6 @@ pub fn history_view(
         }
     };
 
-    println!("MANU intervals={intervals:?}");
     let networth = Networth::new(
         repo,
         alere_lib::networth::Settings {
@@ -86,16 +85,22 @@ pub fn history_view(
     builder.push_record(["Date", "Total"]);
 
     let mut cumulative = alere_lib::multi_values::MultiValue::default();
-    let mut prev_cumulative = alere_lib::multi_values::MultiValue::default();
+    let mut prev_month = alere_lib::multi_values::MultiValue::default();
+    let mut prices = repo.market_prices(settings.commodity.clone());
 
     for (idx, intv) in networth.intervals.iter().enumerate() {
-        let change = networth.total.get_market_value(idx)?;
-        println!("MANU {intv:?} change={change:?}");
+        //MANU let change = networth.total.get_market_value(idx)?;
+        let change = networth.total.get_value(idx)?;
         cumulative += change;
 
+        let this_month = prices.convert_multi_value(
+            &cumulative,
+            intv.intv.upper().expect("Expect bounded interval"),
+        );
+
         // Skip if no change
-        if cumulative != prev_cumulative {
-            let total = cumulative.display(&settings.format);
+        if this_month != prev_month {
+            let total = this_month.display(&settings.format);
 
             if !total.trim().is_empty() {
                 // Format date
@@ -111,33 +116,9 @@ pub fn history_view(
                 };
 
                 builder.push_record([&date_str, &total]);
-                prev_cumulative = cumulative.clone();
+                prev_month = this_month.clone();
             }
         }
-    }
-
-    // Add current total if different from last shown
-    let current_networth = Networth::new(
-        repo,
-        alere_lib::networth::Settings {
-            hide_zero_rows: false,
-            hide_all_same: true,
-            group_by: GroupBy::None,
-            subtotals: true,
-            commodity: settings.commodity.clone(),
-            elide_boring_accounts: false,
-            intervals: vec![Intv::UpTo(Instant::Now)],
-        },
-        settings.reftime,
-        filter,
-    )?;
-
-    if let Ok(current_value) = current_networth.total.get_market_value(0)
-        && current_value != &prev_cumulative
-        && !current_value.display(&settings.format).trim().is_empty()
-    {
-        let total = current_value.display(&settings.format);
-        builder.push_record(["Current", &total]);
     }
 
     Ok(settings.finalize_table(builder, Some(1), false))

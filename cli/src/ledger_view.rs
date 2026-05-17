@@ -106,9 +106,8 @@ pub fn ledger_view(
                     .to_lowercase()
                     .contains(&filter.to_lowercase())
             } else {
-                s.account
-                    .name(AccountNameDepth::unlimited())
-                    .starts_with("Asset:")
+                let n =s.account.name(AccountNameDepth::unlimited());
+                n.starts_with("Asset:") || n.starts_with("Liability:")
             };
 
             // Update running total

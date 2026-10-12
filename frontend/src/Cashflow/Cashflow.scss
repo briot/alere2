@@ -1,8 +1,0 @@
-.cashflow {
-   overflow: auto;
-   flex: 1 1 300px;  /* ideally 300px, but can use more or less */
-
-   .table {
-      width: calc(100% - var(--scrollbar-width));
-   }
-}

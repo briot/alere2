@@ -1,9 +1,0 @@
-pub type AccountId = i32; //  Diesel does not provide Integer->u32 conversion
-pub type AccountKindId = i32;
-pub type CommodityId = i32;
-pub type InstitutionId = i32;
-pub type PriceSourceId = i32;
-pub type PayeeId = i32;
-pub type TransactionId = i32;
-pub type SplitId = i32;
-pub type ScalingFactor = i32;

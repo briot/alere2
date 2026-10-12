@@ -50,15 +50,25 @@ pub fn metrics_view(
     )?;
 
     let rows = vec![
-        MetricRow::new("networth at end", &m, |s| {
+        MetricRow::new("Networth at end", &m, |s| {
             s.end_networth.display(&globals.format)
         }),
-        MetricRow::new("Income", &m, |s| (-&s.income).display(&globals.format)),
-        MetricRow::new("  work", &m, |s| {
+        MetricRow::new("Income", &m, |s| (-&s.income + &s.unrealized).display(&globals.format)),
+        MetricRow::new("  Realized", &m, |s| (-&s.income).display(&globals.format)),
+        MetricRow::new("    inc work", &m, |s| {
             (-&s.work_income).display(&globals.format)
         }),
-        MetricRow::new("  passive", &m, |s| {
+        MetricRow::new("    inc passive", &m, |s| {
             (-&s.passive_income).display(&globals.format)
+        }),
+        MetricRow::new("  Unrealized", &m, |s| {
+            s.unrealized.display(&globals.format)
+        }),
+        MetricRow::new("    inc Liquid", &m, |s| {
+            s.unrealized_liquid.display(&globals.format)
+        }),
+        MetricRow::new("    inc Illiquid", &m, |s| {
+            s.unrealized_illiquid.display(&globals.format)
         }),
         MetricRow::new("Expense", &m, |s| {
             (-&s.expense).display(&globals.format)
@@ -69,25 +79,16 @@ pub fn metrics_view(
         MetricRow::new("  Misc tax", &m, |s| {
             (-&s.misc_tax).display(&globals.format)
         }),
-        MetricRow::new("Cashflow", &m, |s| {
+        MetricRow::new("P&L", &m, |s| s.pnl.display(&globals.format)),
+        MetricRow::new("  inc Realized", &m, |s| {
             (-&s.cashflow).display(&globals.format)
         }),
-        MetricRow::new("Unrealized", &m, |s| {
-            s.unrealized.display(&globals.format)
-        }),
-        MetricRow::new("  Liquid", &m, |s| {
-            s.unrealized_liquid.display(&globals.format)
-        }),
-        MetricRow::new("  Illiquid", &m, |s| {
-            s.unrealized_illiquid.display(&globals.format)
-        }),
-        MetricRow::new("P&L", &m, |s| s.pnl.display(&globals.format)),
-        MetricRow::new("  Liquid", &m, |s| {
-            s.pnl_liquid.display(&globals.format)
-        }),
-        MetricRow::new("  Illiquid", &m, |s| {
-            s.pnl_illiquid.display(&globals.format)
-        }),
+        // MetricRow::new("  Liquid", &m, |s| {
+        //     s.pnl_liquid.display(&globals.format)
+        // }),
+        // MetricRow::new("  Illiquid", &m, |s| {
+        //     s.pnl_illiquid.display(&globals.format)
+        // }),
         MetricRow::new("Saving Rate", &m, |s| percent(&s.saving_rate)),
         MetricRow::new("Financial Independence", &m, |s| {
             percent(&s.financial_independence)
@@ -96,7 +97,7 @@ pub fn metrics_view(
             percent(&s.passive_income_ratio)
         }),
         MetricRow::new("Return on Investment", &m, |s| percent(&s.roi)),
-        MetricRow::new("  Liquid", &m, |s| percent(&s.roi_liquid)),
+        MetricRow::new("  inc Liquid", &m, |s| percent(&s.roi_liquid)),
         MetricRow::new("Emergency Fund", &m, |s| duration(&s.emergency_fund)),
         MetricRow::new("Wealth", &m, |s| duration(&s.wealth)),
         MetricRow::new("Income Tax Rate", &m, |s| percent(&s.income_tax_rate)),
